@@ -1,0 +1,81 @@
+[project]
+name = "renpy-translation-studio"
+version = "0.1.0"
+description = "Desktop app for managing Ren'Py game translations"
+license = "CECILL-2.1"
+license-files = ["LICENSE.md"]
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.116.0",
+    "deepl>=1.30.0",
+    "defusedxml>=0.7.1",
+    "flet",
+    "httpx>=0.28.1",
+    "keyring>=25.7.0",
+    "mcp>=2.0.0",
+    "mistralai>=2.6.0",
+    "platformdirs>=4.10.0",
+]
+
+[tool.flet]
+org = "com.lambda-vn"
+product = "Ren'Py Translation Studio"
+company = "lambda-vn"
+copyright = "Copyright (C) 2026 lambda-vn, CeCILL-2.1"
+
+# The packaged app is src/ and nothing else, so locales/ lives there too:
+# i18n resolves them next to core/, and a build rooted anywhere else would
+# ship an application with no interface strings at all.
+[tool.flet.app]
+path = "src"
+module = "main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app", "src/core", "src/mcp_server"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# S603: false positive, subprocess.run is always called with a list, shell=False
+"src/core/renpy/cli.py" = ["S603"]
+"src/core/file_reveal.py" = ["S603"]
+# S603/S607: the build script runs uv with a fixed argument list, the only
+# variable being a target picked from a closed mapping of sys.platform
+"scripts/build.py" = ["S603", "S607"]
+# S608: false positive, query fragments are fixed literals, values are always bound via placeholders
+"src/core/storage/repositories.py" = ["S608"]
+"src/core/storage/translation_memory.py" = ["S608"]
+# S101: assert is the standard idiom in pytest test modules
+# S106: test tokens are literals by design, there is nothing to leak
+"tests/**" = ["S101", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["main", "app.views.project_setup", "app.views.export_view"]
+disallow_untyped_calls = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pre-commit>=4.6.0",
+    "pytest>=9.1.1",
+    "ruff>=0.15.20",
+    "types-defusedxml>=0.7.0.20260504",
+]
