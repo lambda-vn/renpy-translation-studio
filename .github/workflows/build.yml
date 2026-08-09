@@ -1,0 +1,85 @@
+name: Build
+
+# Each desktop target is built on its own system: flet build does not
+# cross-compile, it drives the Flutter toolchain of the machine it runs
+# on. Three runners is therefore the only way to produce three binaries.
+#
+# Never on push: a build pulls the Flutter SDK and takes minutes, where
+# the CI workflow answers in seconds and is what every commit needs.
+# Start it by hand, or tag a version.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+# Reading the code and uploading an artifact is all this does. Stated
+# rather than inherited, so a token that grows by default does not grow
+# here.
+permissions:
+  contents: read
+
+env:
+  UV_PYTHON: "3.12"
+  PYTHONUTF8: 1
+  FLET_CLI_NO_RICH_OUTPUT: 1
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux
+            runner: ubuntu-latest
+          - target: windows
+            runner: windows-latest
+          # arm64 only. serious_python packages one slice per architecture,
+          # and the x86_64 one has to build cryptography from source on an
+          # Apple Silicon runner: a Rust extension cross-compiled by a
+          # toolchain whose own cffi is x86_64 while the interpreter running
+          # it is arm64. Nothing in this repository can fix that, and Intel
+          # Macs have not been sold since 2023.
+          - target: macos
+            runner: macos-latest
+            args: --arch arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      # The list comes from flet itself rather than being copied here, so
+      # it cannot drift from the version the project actually pins.
+      - name: Install the Linux build dependencies
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update --allow-releaseinfo-change
+          deps="$(uv run python -c 'from flet.utils.linux_deps import linux_dependencies; print(" ".join(linux_dependencies))')"
+          sudo apt-get install -y --no-install-recommends $deps
+          sudo apt-get clean
+
+      # Flutter builds plugins through symlinks, which Windows only grants
+      # under Developer Mode. Whether a runner already has it on was never
+      # verified, and the check costs nothing on a throwaway machine where
+      # a build failing on it costs ten minutes.
+      - name: Allow symlinks
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name AllowDevelopmentWithoutDevLicense `
+            -Value 1 -PropertyType DWord -Force | Out-Null
+
+      - name: Build
+        shell: bash
+        run: uv run flet build ${{ matrix.target }} ${{ matrix.args }} --yes --verbose
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: build/${{ matrix.target }}
+          if-no-files-found: error

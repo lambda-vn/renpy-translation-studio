@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest something the application should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >
+        What are you trying to do, and what makes it hard today? Describe the
+        translation work itself, not the solution you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: Optional. If you already have an idea of the answer.
+  - type: input
+    id: scale
+    attributes:
+      label: Project size
+      description: >
+        How many lines and files does the game you work on have? A lot of
+        decisions here depend on that number.
+      placeholder: around 4000 lines over 30 files

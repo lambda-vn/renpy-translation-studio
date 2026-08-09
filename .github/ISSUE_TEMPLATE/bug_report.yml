@@ -1,0 +1,48 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what happened, what you expected instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Extraction (Ren'Py SDK)
+        - Review screen
+        - Translation job / provider
+        - Import or export of a bilingual file
+        - Writing the .rpy files
+        - Zip export
+        - Character glossary or universe summary
+        - Settings or onboarding
+        - Somewhere else
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      description: Which one, if the problem involves a translation. Never paste an API key.
+      placeholder: DeepL, Ollama (model name), LibreTranslate, Claude, Mistral
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11, Ubuntu 24.04, macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >
+        Verbose logging can be turned on in the settings. Providers then log
+        every request and response. Check for an API key before pasting.
+      render: text
