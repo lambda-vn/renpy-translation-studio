@@ -9,8 +9,8 @@ Version anglaise : [README.md](README.md).
 
 ## Fonctionnalités
 
-- Extraction des textes traduisibles d'un jeu Ren'Py via le SDK officiel
-  (`renpy translate`).
+- Extraction des textes traduisibles d'un jeu Ren'Py via le moteur embarqué
+  dans le jeu (`renpy translate`), à défaut via un SDK Ren'Py installé.
 - Interface de révision ligne par ligne avec statuts : `not_translated`,
   `draft`, `imported`, `ai_suggested`, `human_validated`. Une ligne
   `human_validated` n'est jamais écrasée par une suggestion IA. Toute ligne
@@ -93,8 +93,16 @@ Python 3.12+ / Flet (interface desktop Flutter) / uv / SQLite.
 - Python 3.12 ou plus récent.
 - [uv](https://docs.astral.sh/uv/) pour la gestion des dépendances et de
   l'environnement.
-- Le SDK Ren'Py. C'est la seule méthode d'extraction : il fait référence
-  pour les formats propres à Ren'Py.
+- Un moteur Ren'Py pour lancer l'extraction. Un jeu packagé embarque le sien,
+  dans la version pour laquelle ses sources ont été écrites, et c'est celui-là
+  qui est utilisé quand ce système peut l'exécuter : un build `-win` ne
+  contient que des runtimes Windows, donc un jeu Windows extrait depuis Linux
+  a besoin du recours ci-dessous. Cela exécute du code tiers, l'exécutable même
+  que vous lanceriez pour jouer.
+- Le SDK Ren'Py, facultatif. C'est le recours pour un jeu n'embarquant aucun
+  moteur exécutable sur ce système, et sa version peut différer de celle du
+  jeu : Ren'Py 8 refuse une syntaxe d'écran que Ren'Py 7 acceptait, et perd
+  alors les lignes de chaque source refusée.
 - Un compte ou un endpoint fournisseur (clé API ou serveur local) pour le
   fournisseur que vous comptez utiliser.
 
@@ -117,7 +125,7 @@ uv run flet run src/main.py
 ```
 
 Au premier lancement, un écran d'onboarding demande la langue de l'interface
-et le chemin du SDK Ren'Py. Vous pointez ensuite l'application vers un dossier
+et, facultativement, le chemin du SDK Ren'Py. Vous pointez ensuite l'application vers un dossier
 de jeu, choisissez les langues source et cible, puis passez à la révision,
 la traduction et l'export.
 

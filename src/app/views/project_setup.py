@@ -1,4 +1,4 @@
-"""Project setup view: folder selection, language and SDK extraction."""
+"""Project setup view: folder selection, language and text extraction."""
 
 import asyncio
 import logging
@@ -40,6 +40,7 @@ from core.exporter import GameNameResolver
 from core.i18n import i18n
 from core.languages import LANGUAGES, localized_label
 from core.renpy.cli import RenpyCli, RenpyCliError, parse_failed_files
+from core.renpy.engine import can_use_game_engine, resolve_engine
 from core.renpy.parser import (
     ParseError,
     TranslateBlockParser,
@@ -698,16 +699,25 @@ class ProjectSetupView:
     def _missing_requirements(self) -> list[str]:
         """List what extraction is still waiting for.
 
+        The SDK is only missing for a game that ships no engine this
+        system can run: asking for it before a folder is picked would
+        claim a requirement most games do not have.
+
         Returns:
             Localized names of the missing inputs, empty when extraction
             can proceed.
         """
         missing: list[str] = []
-        if self._state.project_path is None:
+        project = self._state.project_path
+        if project is None:
             missing.append(i18n.t("project_setup.need_folder"))
         if not validate_language_code(self._state.target_language):
             missing.append(i18n.t("project_setup.need_language"))
-        if self._sdk_path is None or not self._sdk_path.is_file():
+        if (
+            project is not None
+            and not can_use_game_engine(project)
+            and (self._sdk_path is None or not self._sdk_path.is_file())
+        ):
             missing.append(i18n.t("project_setup.need_sdk"))
         return missing
 
@@ -1518,10 +1528,10 @@ class ProjectSetupView:
         )
 
     def _run_extraction(self, project: Path, mode: _ExtractMode) -> None:
-        """Prepare the tl/ folder, run the SDK when needed and parse the result.
+        """Prepare the tl/ folder, run Ren'Py when needed and parse the result.
 
         "update" and "reset" both archive the folder already on disk and let
-        the SDK rebuild it. The SDK only ever appends to an existing folder,
+        Ren'Py rebuild it. Ren'Py only ever appends to an existing folder,
         never prunes it, so rebuilding is the only way to learn what the game
         dropped between two versions: the regenerated folder describes the
         current script and nothing else.
@@ -1538,7 +1548,8 @@ class ProjectSetupView:
                 and drops those translations.
 
         Raises:
-            RenpyCliError: If the SDK is not selected or fails.
+            EngineNotFoundError: If no Ren'Py engine can run here.
+            RenpyCliError: If the extraction command fails.
             ParseError: If a file of the existing folder cannot be read.
             ArchiveError: If the existing tl/ folder cannot be archived.
             CompiledScriptsOnlyError: If game/'s archives hold only
@@ -1556,8 +1567,7 @@ class ProjectSetupView:
         )
 
         if mode != "keep":
-            if self._sdk_path is None or not self._sdk_path.is_file():
-                raise RenpyCliError(i18n.t("renpy.sdk_not_selected"))
+            engine = resolve_engine(project, self._sdk_path)
             self._archive_tl_dir(project, tl_dir)
             self._t_extracting.value = i18n.t("project_setup.unpacking_sources")
             safe_update(self._page)
@@ -1572,7 +1582,7 @@ class ProjectSetupView:
                 )
             disable_extracted_archives(project)
             try:
-                self._translate_discarding_broken_sources(project, lang)
+                self._translate_discarding_broken_sources(engine, project, lang)
             finally:
                 restore_disabled_archives(project)
 
@@ -1582,8 +1592,13 @@ class ProjectSetupView:
             self._disk_blocks = self._state.blocks
         self._state.game_name = GameNameResolver().resolve(project)
 
-    def _translate_discarding_broken_sources(self, project: Path, lang: str) -> None:
-        """Run the SDK, dropping the unpacked sources it cannot parse.
+    def _translate_discarding_broken_sources(
+        self,
+        engine: Path,
+        project: Path,
+        lang: str,
+    ) -> None:
+        """Run the engine, dropping the unpacked sources it cannot parse.
 
         Ren'Py loads every script before generating anything, so a single
         unparseable one fails the whole run. An archive can hold such a
@@ -1609,18 +1624,17 @@ class ProjectSetupView:
         rather than tuned to the rare parse error alone.
 
         Args:
+            engine: The Ren'Py executable resolved for this project.
             project: Validated Ren'Py project root path.
             lang: Target language code.
 
         Raises:
-            RenpyCliError: If the SDK fails for any other reason, or
+            RenpyCliError: If the engine fails for any other reason, or
                 still fails once no unpacked source is left to drop.
         """
-        if self._sdk_path is None:
-            raise RenpyCliError(i18n.t("renpy.sdk_not_selected"))
         for _ in range(_MAX_DISCARD_ROUNDS):
             try:
-                RenpyCli().translate(self._sdk_path, project, lang)
+                RenpyCli().translate(engine, project, lang)
             except RenpyCliError as exc:
                 dropped = discard_unpacked_files(project, parse_failed_files(str(exc)))
                 if not dropped:
@@ -1632,7 +1646,7 @@ class ProjectSetupView:
                 )
             else:
                 return
-        RenpyCli().translate(self._sdk_path, project, lang)
+        RenpyCli().translate(engine, project, lang)
 
     @staticmethod
     def _archive_tl_dir(project: Path, tl_dir: Path) -> None:

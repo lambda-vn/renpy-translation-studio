@@ -1,4 +1,9 @@
-"""Wrapper for the Ren'Py SDK CLI."""
+"""Wrapper for the Ren'Py command line.
+
+The executable it is handed is either the game's own engine or the
+configured SDK — both answer the same `<exe> <basedir> translate <lang>`
+command, so choosing between them is left to core.renpy.engine.
+"""
 
 import re
 import subprocess
@@ -10,7 +15,7 @@ _ERROR_FILE = re.compile(r'File "([^"]+)", line \d+')
 
 
 class RenpyCliError(Exception):
-    """Raised when the Ren'Py SDK CLI command fails."""
+    """Raised when the Ren'Py CLI command fails."""
 
 
 def parse_failed_files(output: str) -> list[str]:
@@ -33,27 +38,28 @@ def parse_failed_files(output: str) -> list[str]:
 
 
 class RenpyCli:
-    """Wrapper around the Ren'Py SDK subprocess."""
+    """Wrapper around the Ren'Py engine subprocess."""
 
-    def translate(self, sdk_path: Path, project_path: Path, language: str) -> None:
-        """Run the Ren'Py SDK translation command.
+    def translate(self, engine_path: Path, project_path: Path, language: str) -> None:
+        """Run the Ren'Py translation command.
 
         Args:
-            sdk_path: Path to the Ren'Py SDK executable.
+            engine_path: Path to the Ren'Py executable to run, the game's
+                own engine or the configured SDK.
             project_path: Path to the Ren'Py project root.
             language: Target language code (e.g. "french").
 
         Raises:
-            RenpyCliError: If the SDK command exits with a non-zero code.
+            RenpyCliError: If the command exits with a non-zero code.
         """
         result = subprocess.run(
-            [str(sdk_path), str(project_path), "translate", language],
+            [str(engine_path), str(project_path), "translate", language],
             capture_output=True,
             text=True,
             timeout=120,
         )
         if result.returncode != 0:
-            prefix = i18n.t("renpy.sdk_failed").format(code=result.returncode)
+            prefix = i18n.t("renpy.engine_failed").format(code=result.returncode)
             output = "\n".join(
                 part for part in (result.stdout, result.stderr) if part.strip()
             )

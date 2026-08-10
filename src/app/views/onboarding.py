@@ -284,18 +284,27 @@ class OnboardingView:
             self._sdk_status.color = ERROR
 
     def _on_finish_clicked(self, _: Event[ft.TextButton]) -> None:
-        """Validate the SDK path, then navigate to project setup.
+        """Navigate to project setup unless the chosen SDK path is wrong.
 
-        The SDK is the only extraction method, so a valid path is required
-        before leaving onboarding.
+        A game ships the engine that extracts it, in the version its own
+        sources were written for, so leaving with no SDK at all is the
+        ordinary case and goes through. A path that was picked and does
+        not name a Ren'Py launcher is another matter: it is a mistake
+        made on this screen, and letting it through would only surface
+        the day an extraction needs the fallback.
+
+        The locale is written on the way out even when it never changed:
+        first launch is "no settings file yet", and leaving without ever
+        writing one would put this screen back up at every start.
 
         Args:
             _: Unused click event.
         """
         saved = settings.get("sdk_path")
-        if not saved or not _sdk_is_valid(Path(saved)):
-            self._sdk_status.value = i18n.t("onboarding.sdk_required")
+        if saved and not _sdk_is_valid(Path(saved)):
+            self._sdk_status.value = i18n.t("onboarding.sdk_invalid")
             self._sdk_status.color = ERROR
             self._page.update()
             return
+        settings.set("locale", i18n.locale)
         self._on_done()

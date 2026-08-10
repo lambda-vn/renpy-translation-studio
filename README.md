@@ -9,8 +9,8 @@ Read this in French: [README_FR.md](README_FR.md).
 
 ## Features
 
-- Extract translatable text from a Ren'Py game through the official Ren'Py
-  SDK (`renpy translate`).
+- Extract translatable text from a Ren'Py game through the engine the game
+  ships with (`renpy translate`), falling back on an installed Ren'Py SDK.
 - Per-line review UI with statuses: `not_translated`, `draft`, `imported`,
   `ai_suggested`, `human_validated`. A `human_validated` line is never
   overwritten by an AI suggestion. Any line can also be flagged for a
@@ -87,8 +87,16 @@ Python 3.12+ / Flet (Flutter desktop UI) / uv / SQLite.
 
 - Python 3.12 or newer.
 - [uv](https://docs.astral.sh/uv/) for dependency and environment management.
-- The Ren'Py SDK. It is the only extraction method: it is the source of
-  truth for Ren'Py's own formats.
+- A Ren'Py engine to run the extraction with. A packaged game carries its
+  own, in the version its sources were written for, and that is the one used
+  when this system can run it: a `-win` build holds Windows runtimes only,
+  so a Windows-only game extracted from Linux needs the fallback below.
+  Note that this runs third-party code, the very executable you would start
+  to play the game.
+- The Ren'Py SDK, optional. It is the fallback for a game shipping no engine
+  this system can run, and its version may differ from the game's: Ren'Py 8
+  rejects screen syntax Ren'Py 7 accepted, losing the lines of every source
+  it refuses.
 - A provider account or endpoint (API key or local server) for the provider
   you intend to use.
 
@@ -109,8 +117,8 @@ Do not activate it manually and do not commit it. Never call `pip` directly.
 uv run flet run src/main.py
 ```
 
-On first launch, an onboarding screen asks for the UI language and the Ren'Py
-SDK path. You then point the app at a game folder, pick source and target
+On first launch, an onboarding screen asks for the UI language and, optionally,
+the Ren'Py SDK path. You then point the app at a game folder, pick source and target
 languages, and move on to review, translation and export.
 
 ## Development

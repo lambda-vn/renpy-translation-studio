@@ -4,14 +4,13 @@
     "subtitle": "Configurons l'application avant de commencer.",
     "language_label": "Langue de l'interface",
     "sdk_label": "Chemin du SDK Ren'Py",
-    "sdk_hint": "Requis pour extraire les textes du jeu.",
+    "sdk_hint": "Facultatif : utilisé seulement si un jeu n'embarque pas de moteur exécutable sur ce système.",
     "sdk_download": "Vous ne l'avez pas ? Téléchargez le SDK sur renpy.org",
     "sdk_examples": "Chemins habituels : C:\\renpy-8.3.7-sdk\\renpy.exe (Windows), ~/renpy-8.3.7-sdk/renpy.sh (Linux), /Applications/renpy-8.3.7-sdk/renpy.sh (macOS).",
     "sdk_browse": "Parcourir",
     "sdk_valid": "SDK trouvé",
     "sdk_invalid": "Aucun exécutable Ren'Py trouvé à ce chemin",
-    "finish": "Commencer",
-    "sdk_required": "Le SDK Ren'Py est requis pour continuer."
+    "finish": "Commencer"
   },
   "common": {
     "browse": "Parcourir",
@@ -46,9 +45,9 @@
     "title": "Paramètres",
     "language_label": "Langue de l'interface",
     "sdk_label": "Chemin du SDK Ren'Py",
-    "sdk_hint": "Requis pour extraire les textes du jeu.",
+    "sdk_hint": "Facultatif : utilisé seulement si un jeu n'embarque pas de moteur exécutable sur ce système.",
     "sdk_browse": "Parcourir",
-    "sdk_cleared_warning": "Sans le SDK, l'extraction des textes est désactivée.",
+    "sdk_cleared_warning": "Sans le SDK, seuls les jeux embarquant un moteur utilisable peuvent être extraits.",
     "save": "Enregistrer les paramètres",
     "close": "Fermer",
     "clear": "Effacer",
@@ -196,8 +195,8 @@
     "target_hint": "Utilisé comme nom du dossier de traduction généré.",
     "target_placeholder": "Sélectionnez une langue",
     "sdk_title": "Ren'Py SDK",
-    "sdk_desc": "Utilise le SDK installé sur cette machine",
-    "sdk_file_hint": "Sélectionnez le lanceur Ren'Py (renpy.exe ou renpy.py).",
+    "sdk_desc": "Recours pour les jeux sans moteur exécutable sur ce système",
+    "sdk_file_hint": "Facultatif. Sélectionnez le lanceur Ren'Py (renpy.exe ou renpy.py).",
     "sdk_select": "Sélectionner le fichier",
     "extract": "Extraire les textes",
     "extracting": "Extraction...",
@@ -214,7 +213,7 @@
     "discarded_message": "Ren'Py a refusé d'analyser ces sources dépaquetées depuis les archives du jeu, leur texte est donc absent de cette traduction. Le jeu lui-même continue de fonctionner : il retombe sur la version compilée de chacune.",
     "discarded_continue": "Continuer",
     "invalid_project_dir": "Le dossier sélectionné ne ressemble pas à un projet Ren'Py (dossier game/ manquant).",
-    "code_execution_notice": "L'extraction passe par le SDK Ren'Py, qui exécute le code Python du jeu comme le ferait un lancement normal. N'extrayez que des jeux que vous accepteriez de lancer vous-même.",
+    "code_execution_notice": "L'extraction lance le moteur embarqué dans le jeu, à défaut le SDK Ren'Py. Dans les deux cas le code Python du jeu s'exécute comme lors d'un lancement normal, et le moteur embarqué est du code tiers. N'extrayez que des jeux que vous accepteriez de lancer vous-même.",
     "list_title": "Vos projets",
     "list_subtitle": "Reprenez une traduction existante ou configurez un nouveau projet.",
     "list_empty": "Aucun projet pour l'instant. Configurez-en un nouveau pour commencer.",
@@ -399,8 +398,9 @@
     "mistral_not_configured": "Clé API Mistral non configurée."
   },
   "renpy": {
-    "sdk_failed": "Échec du SDK Ren'Py (code {code}) :",
-    "sdk_not_selected": "Aucun exécutable SDK sélectionné."
+    "engine_failed": "Échec de Ren'Py (code {code}) :",
+    "engine_wrong_platform": "Ce jeu n'embarque qu'un moteur {platforms}, qui ne peut pas s'exécuter sur ce système. Sélectionnez un SDK Ren'Py pour l'extraire.",
+    "no_engine": "Ce jeu n'embarque aucun moteur exécutable ici, et aucun SDK Ren'Py n'est sélectionné. Sélectionnez-en un dans les paramètres."
   },
   "languages": {
     "english": "Anglais",

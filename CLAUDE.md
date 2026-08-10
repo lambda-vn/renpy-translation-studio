@@ -59,7 +59,7 @@ renpy-translation-studio/
 │   │   │   ├── settings_dialog.py     # Dialogue des paramètres généraux
 │   │   │   └── stepper.py             # Indicateur d'étapes (Setup/Review/Export)
 │   │   └── views/
-│   │       ├── onboarding.py          # Premier lancement (langue UI, SDK)
+│   │       ├── onboarding.py          # Premier lancement (langue UI, SDK facultatif)
 │   │       ├── project_setup.py       # Dossier du jeu + langues + méthode d'extraction
 │   │       ├── review_view.py         # Hub principal : révision, jobs de traduction
 │   │       ├── provider_config.py     # Config des 5 fournisseurs (accordéons + badges)
@@ -81,7 +81,8 @@ renpy-translation-studio/
 │       ├── project_actions.py         # Mémoire et détection, hors des vues
 │       ├── renpy/
 │       │   ├── parser.py              # TranslateBlockParser (lit les tl/ générés par le SDK)
-│       │   ├── cli.py                 # Wrapper subprocess du SDK Ren'Py (extraction)
+│       │   ├── cli.py                 # Wrapper subprocess de Ren'Py (extraction)
+│       │   ├── engine.py              # Moteur embarqué du jeu, sinon SDK (voir plus bas)
 │       │   ├── writer.py              # Réécriture des traductions dans les .rpy
 │       │   └── character_detector.py  # Détection auto des personnages
 │       ├── storage/
@@ -122,10 +123,11 @@ renpy-translation-studio/
 
 ### Pipeline de traduction
 
-1. **Extraction** (`project_setup`) : le SDK Ren'Py (`renpy translate` via
+1. **Extraction** (`project_setup`) : Ren'Py (`renpy translate` via
    subprocess) génère les fichiers `tl/`, relus par `TranslateBlockParser`.
-   Les blocs extraits sont insérés en base SQLite
-   (`<jeu>/.rts/translations.db`).
+   L'exécutable lancé est choisi par `renpy/engine.py` — le moteur embarqué
+   du jeu d'abord, le SDK configuré à défaut. Les blocs extraits sont insérés
+   en base SQLite (`<jeu>/.rts/translations.db`).
 2. **Base de données** : une ligne par bloc, `block_id UNIQUE`. Cinq
    statuts : `not_translated` → `ai_suggested` → `human_validated`, plus
    `draft` pour un texte édité mais non validé (compté, effaçable) et
@@ -146,6 +148,41 @@ renpy-translation-studio/
    modification.
 5. **Export** (`exporter.py`) : zip `<nom-du-jeu>/game/tl/<langue>/`,
    exclusion `.rpyc`, refus des traversées `../`.
+
+### Moteur d'extraction (`core/renpy/engine.py`)
+
+Un jeu Ren'Py packagé embarque son propre moteur, et ce moteur répond à
+la commande `translate`. C'est **le bon moteur par construction** : la
+version avec laquelle les sources du jeu ont été écrites. Le SDK
+installé sur la machine, lui, est une autre version, et le parseur
+d'écrans de Ren'Py 8 exige une valeur pour toute propriété là où Ren'Py 7
+l'acceptait sans. Mesuré sur Stormside v0.23.1.4 (Ren'Py 7.5.3) : SDK
+8.5.3, 3 sources rejetées et 40 739 unités ; moteur du jeu, 0 rejet et
+40 820 unités.
+
+Ordre de résolution : moteur du jeu utilisable, sinon SDK configuré,
+sinon `EngineNotFoundError` nommant la cause réelle.
+
+**Trouver le lanceur ne suffit pas à savoir qu'il tournera** : un build
+`-win` ne contient que des runtimes Windows. La preuve est dans `lib/`,
+un sous-dossier par plateforme visée (`py2-windows-x86_64`,
+`py3-linux-x86_64`), et c'est ce qui est testé — un `Path.is_file()` sur
+l'exécutable laisserait passer un build Windows ouvert depuis Linux, qui
+échouerait ensuite sans message clair. Le lanceur est cherché même quand
+sa plateforme ne correspond pas : c'est ce qui distingue « ce dossier
+n'embarque aucun moteur » de « ce jeu est un build Windows ».
+
+Le SDK n'est donc plus un prérequis, ni dans l'onboarding ni dans
+`project_setup` : il n'est réclamé que pour un jeu dont le moteur ne peut
+pas tourner ici. Conséquence à connaître : changer d'extracteur fait
+varier légèrement le total d'unités (40 820 contre 40 887 avec le SDK
+7.5.3), le `common.rpy` du SDK embarquant des chaînes du launcher
+absentes du jeu.
+
+**Lancer le moteur du jeu, c'est exécuter du code tiers** — l'exécutable
+même que l'utilisateur lance pour jouer, mais la posture de confiance
+diffère d'un SDK officiel. C'est dit dans les deux README et dans l'avis
+affiché au-dessus du bouton d'extraction ; ne pas le passer sous silence.
 
 ### Fournisseurs de traduction (`core/providers/`)
 
@@ -447,11 +484,12 @@ chaque commit, y compris entre deux phases d'une même roadmap.
 ## Points d'attention connus
 
 - **Générateur builtin supprimé** : `core/renpy/generator.py`
-  (`TranslateBlockGenerator`) a été retiré. Le SDK Ren'Py (`renpy translate`
-  via subprocess) est la seule méthode d'extraction. Ne pas réimplémenter un
-  générateur maison : le SDK est la source de vérité pour les formats Ren'Py.
-  `TranslateBlockParser` (`parser.py`) est conservé, mais uniquement pour lire
-  les fichiers `tl/` **générés par le SDK**, pas pour parser les sources.
+  (`TranslateBlockGenerator`) a été retiré. `renpy translate` via subprocess
+  est la seule méthode d'extraction, que l'exécutable soit le moteur embarqué
+  du jeu ou le SDK. Ne pas réimplémenter un générateur maison : Ren'Py est la
+  source de vérité pour ses propres formats. `TranslateBlockParser`
+  (`parser.py`) est conservé, mais uniquement pour lire les fichiers `tl/`
+  **générés par Ren'Py**, pas pour parser les sources.
 - **Les interpolations `[...]` sont du code Python** : Ren'Py évalue le
   contenu des crochets comme une expression (`config.interpolate_exprs`).
   `quality.check()` refuse donc toute interpolation présente dans la
