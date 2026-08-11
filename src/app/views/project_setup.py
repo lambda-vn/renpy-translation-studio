@@ -251,21 +251,6 @@ class ProjectSetupView:
         )
 
         # --- SDK section ---
-        self._t_sdk_notice = ft.Text(
-            i18n.t("project_setup.code_execution_notice"),
-            size=12,
-            color=TEXT_DIM,
-            expand=True,
-        )
-        self._sdk_notice_row = ft.Row(
-            [
-                ft.Icon(ft.Icons.INFO_OUTLINE, size=16, color=TEXT_DIM),
-                self._t_sdk_notice,
-            ],
-            spacing=8,
-            vertical_alignment=ft.CrossAxisAlignment.START,
-        )
-
         self._t_sdk_title = ft.Text(
             i18n.t("project_setup.sdk_title"),
             size=14,
@@ -339,6 +324,21 @@ class ProjectSetupView:
         )
 
         # --- extract button ---
+        self._t_sdk_notice = ft.Text(
+            i18n.t("project_setup.code_execution_notice"),
+            size=12,
+            color=TEXT_DIM,
+            expand=True,
+        )
+        self._sdk_notice_row = ft.Row(
+            [
+                ft.Icon(ft.Icons.INFO_OUTLINE, size=16, color=TEXT_DIM),
+                self._t_sdk_notice,
+            ],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.START,
+        )
+
         self._extract_btn_icon = ft.Icon(ft.Icons.DOWNLOAD, size=17, color=TEXT_HINT)
         self._extract_btn_text = ft.Text(
             i18n.t("project_setup.extract"),
@@ -514,6 +514,7 @@ class ProjectSetupView:
                 self._sdk_section,
                 ft.Column(
                     [
+                        self._sdk_notice_row,
                         ft.Row(
                             [self._extract_btn, self._extracting_row],
                             spacing=12,
@@ -629,16 +630,20 @@ class ProjectSetupView:
         )
 
     def _build_sdk_section(self) -> ft.Column:
-        """Build the SDK extraction header and code-execution warning.
+        """Build the SDK extraction header.
+
+        The code-execution notice is not part of this section: it warns
+        about what pressing the extract button does, so it sits directly
+        above that button rather than above the SDK picker, which is only
+        one of the two engines it can end up running.
 
         Returns:
-            A Column with the SDK title, description and notice row.
+            A Column with the SDK title and description.
         """
         return ft.Column(
             [
                 self._t_sdk_title,
                 self._t_sdk_desc,
-                self._sdk_notice_row,
             ],
             spacing=11,
         )
