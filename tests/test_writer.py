@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from core.renpy.parser import TranslateBlockParser
 from core.renpy.writer import TranslateBlockWriter, _escape_translation, _replace_quoted
 
 _RPY_SIMPLE = """\
@@ -28,6 +29,24 @@ _RPY_NO_MATCH = """\
 translate french other_xyz:
     # e "Something else"
     e ""
+
+"""
+
+# Exactly what `renpy translate` writes: a file-reference comment, the
+# header, a blank line, the commented source statement, then the editable
+# line seeded with the source text.
+_RPY_GENERATED = """\
+# game/script.rpy:12
+translate french start_abc:
+
+    # e "Hello world"
+    e "Hello world"
+
+# game/script.rpy:13
+translate french narr_def:
+
+    # "Narrator text."
+    "Narrator text."
 
 """
 
@@ -71,6 +90,26 @@ class TestReplaceQuoted:
     def test_trailing_backslash_does_not_swallow_closing_quote(self) -> None:
         result = _replace_quoted('    e ""\n', "chemin C:\\")
         assert result == '    e "chemin C:\\\\"\n'
+
+    def test_transition_is_preserved(self) -> None:
+        result = _replace_quoted('    MC "*Cough*" with hpunch\n', "*Toux*")
+        assert result == '    MC "*Toux*" with hpunch\n'
+
+    def test_quoted_speaker_is_preserved(self) -> None:
+        result = _replace_quoted('    "Store clerk" "" with hpunch\n', "Pas si vite !")
+        assert result == '    "Store clerk" "Pas si vite !" with hpunch\n'
+
+    def test_keyword_arguments_are_preserved(self) -> None:
+        result = _replace_quoted('    e "" (what_color="#f00")\n', "Attention.")
+        assert result == '    e "Attention." (what_color="#f00")\n'
+
+    def test_image_attributes_are_preserved(self) -> None:
+        result = _replace_quoted('    e happy ""\n', "Tu es venu !")
+        assert result == '    e happy "Tu es venu !"\n'
+
+    def test_strings_block_new_line(self) -> None:
+        result = _replace_quoted('    new ""\n', "Continuer")
+        assert result == '    new "Continuer"\n'
 
     def test_newline_injection_is_neutralized(self) -> None:
         payload = 'Bonjour"\n    $ evil()\n    e "suite'
@@ -171,6 +210,88 @@ class TestTranslateBlockWriter:
         assert (
             content == 'translate french start_abc:\n    # e "Hello"\n    e "Hello"\n\n'
         )
+
+    def test_blank_line_after_header_does_not_stop_the_write(
+        self, tmp_path: Path, backup_dir: Path
+    ) -> None:
+        """A generated file has a blank line under every header.
+
+        Skipping only comments left the writer standing on that blank
+        line, where it wrote nothing and moved on. Every real project was
+        in that shape, so the save button rewrote none of them.
+        """
+        d = tmp_path / "generated" / "french"
+        d.mkdir(parents=True)
+        (d / "script.rpy").write_text(_RPY_GENERATED, encoding="utf-8")
+        writer = TranslateBlockWriter(d, backup_dir)
+        writer.write_all({"start_abc": "Bonjour le monde", "narr_def": "Narration."})
+        content = (d / "script.rpy").read_text(encoding="utf-8")
+        assert '    e "Bonjour le monde"\n' in content
+        assert '    "Narration."\n' in content
+        assert '    # e "Hello world"\n' in content
+
+    def test_empty_block_leaves_the_next_header_alone(
+        self, tmp_path: Path, backup_dir: Path
+    ) -> None:
+        """A block with no editable line must not eat what follows it."""
+        d = tmp_path / "empty" / "french"
+        d.mkdir(parents=True)
+        (d / "script.rpy").write_text(
+            "translate french start_abc:\n\ntranslate french narr_def:\n\n"
+            '    # "Narrator text."\n    "Narrator text."\n',
+            encoding="utf-8",
+        )
+        writer = TranslateBlockWriter(d, backup_dir)
+        writer.write_all({"start_abc": "Bonjour", "narr_def": "Narration."})
+        content = (d / "script.rpy").read_text(encoding="utf-8")
+        assert "translate french narr_def:\n" in content
+        assert '    "Narration."\n' in content
+
+    def test_say_statement_survives_a_round_trip(
+        self, tmp_path: Path, backup_dir: Path
+    ) -> None:
+        """What the parser read back is what the writer put in.
+
+        The fixture holds the statement shapes a translation could be
+        written into the wrong part of: a quoted speaker, a transition,
+        keyword arguments. Parsing the rewritten file is what proves the
+        two agree, since a writer that overwrote the speaker would still
+        produce a file the parser reads without complaining.
+        """
+        source = Path(__file__).parent / "fixtures" / "say_suffixes.rpy"
+        d = tmp_path / "roundtrip" / "french"
+        d.mkdir(parents=True)
+        (d / "script.rpy").write_text(
+            source.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        writer = TranslateBlockWriter(d, backup_dir)
+        writer.write_all(
+            {
+                "clerk_1a2b3c4d": "Pas si vite !",
+                "knock_5e6f7a8b": "{b}{i}*Toc toc*{/i}{/b}",
+                "cough_9c0d1e2f": "{b}{i}*Toux*{/i}{b}",
+                "greet_3a4b5c6d": "Tu es venu !",
+            }
+        )
+        content = (d / "script.rpy").read_text(encoding="utf-8")
+        assert '    "Store clerk" "Pas si vite !" with hpunch\n' in content
+        assert '    "{b}{i}*Toc toc*{/i}{/b}" with vpunch\n' in content
+        assert '    MC "{b}{i}*Toux*{/i}{b}" with hpunch\n' in content
+        assert '    e happy "Tu es venu !" nointeract\n' in content
+
+        blocks = TranslateBlockParser().parse_file(d / "script.rpy")
+        assert [block.translated_text for block in blocks[:4]] == [
+            "Pas si vite !",
+            "{b}{i}*Toc toc*{/i}{/b}",
+            "{b}{i}*Toux*{/i}{b}",
+            "Tu es venu !",
+        ]
+        assert [block.character_variable for block in blocks[:4]] == [
+            "Store clerk",
+            None,
+            "MC",
+            "e",
+        ]
 
     def test_no_match_leaves_file_untouched(
         self, tmp_path: Path, backup_dir: Path

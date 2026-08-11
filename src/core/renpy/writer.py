@@ -4,6 +4,8 @@ import re
 import shutil
 from pathlib import Path
 
+from core.renpy.say_line import split_say_line
+
 _UNESCAPED_QUOTE_RE = re.compile(r'(\\*)"')
 _TRAILING_BACKSLASHES_RE = re.compile(r"\\+$")
 
@@ -77,6 +79,35 @@ class TranslateBlockWriter:
         backup_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, backup_path)
 
+    @staticmethod
+    def _copy_block_preamble(lines: list[str], start: int, result: list[str]) -> int:
+        """Copy what stands between a block header and its editable line.
+
+        Ren'Py writes a blank line after every header, then the commented
+        source statement. Only the comments used to be skipped here, so
+        the editable line was never reached on a real generated file and
+        nothing was ever written back to it. The parser has always
+        skipped both, which is why the two disagreed in silence: the
+        review showed lines the save button could not write.
+
+        Args:
+            lines: All lines of the file.
+            start: Index of the first line after the header.
+            result: The output the copied lines are appended to.
+
+        Returns:
+            The index of the first line that is neither blank nor a
+            comment.
+        """
+        index = start
+        while index < len(lines) and not lines[index].strip():
+            result.append(lines[index])
+            index += 1
+        while index < len(lines) and lines[index].lstrip().startswith("#"):
+            result.append(lines[index])
+            index += 1
+        return index
+
     def _apply_translations(
         self,
         content: str,
@@ -124,10 +155,8 @@ class TranslateBlockWriter:
                 result.append(line)
                 i += 1
                 if block_id in translations:
-                    while i < len(lines) and lines[i].lstrip().startswith("#"):
-                        result.append(lines[i])
-                        i += 1
-                    if i < len(lines) and lines[i].strip():
+                    i = self._copy_block_preamble(lines, i, result)
+                    if i < len(lines) and lines[i][:1] in (" ", "\t"):
                         result.append(_replace_quoted(lines[i], translations[block_id]))
                         i += 1
                 continue
@@ -199,9 +228,17 @@ def _escape_translation(text: str) -> str:
 
 
 def _replace_quoted(line: str, new_text: str) -> str:
-    """Replace the content between the first and last double-quote on a line.
+    """Replace the spoken string of an editable line with a translation.
 
-    Preserves leading indentation, character variable, and trailing newline.
+    The string is located by split_say_line(), the same way the parser
+    located the source text this translation answers, so the two cannot
+    disagree about which of a line's quoted strings belongs to the
+    translator. Everything else is kept verbatim: indentation, the
+    speaker, a `with` clause, keyword arguments, the line break. Taking
+    everything between the first and the last quote of the line instead
+    would overwrite the speaker of `"Store clerk" "Not so fast!"` and
+    swallow the arguments of `e "Hi" (what_color="#fff")`.
+
     The replacement text is sanitized with _escape_translation() first.
 
     Args:
@@ -209,10 +246,10 @@ def _replace_quoted(line: str, new_text: str) -> str:
         new_text: The replacement text (without surrounding quotes).
 
     Returns:
-        The line with the quoted content replaced by new_text.
+        The line with the spoken string replaced by new_text, unchanged
+        when the line holds none.
     """
-    first = line.find('"')
-    last = line.rfind('"')
-    if first == -1 or first == last:
+    say = split_say_line(line)
+    if say is None:
         return line
-    return line[: first + 1] + _escape_translation(new_text) + line[last:]
+    return f'{say.prefix}"{_escape_translation(new_text)}"{say.suffix}'
