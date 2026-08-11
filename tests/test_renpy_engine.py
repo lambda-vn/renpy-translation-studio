@@ -86,10 +86,37 @@ def test_finds_a_launcher_meant_for_another_platform(
     monkeypatch.setattr("sys.platform", "linux")
     game = _make_game(
         tmp_path,
-        launchers=("Stormside.exe",),
+        launchers=("Stormside.exe", "Stormside.py"),
         lib_dirs=_WIN_LIB,
     )
     assert find_game_launcher(game) == game / "Stormside.exe"
+
+
+def test_ignores_an_executable_without_its_python_twin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tool left in the folder never wins the pick over the launcher.
+
+    Sorting alone would hand it the game whenever its name comes first.
+    """
+    monkeypatch.setattr("sys.platform", "win32")
+    game = _make_game(
+        tmp_path,
+        launchers=("AAAUnRen.exe", "Stormside.exe", "Stormside.py"),
+        lib_dirs=_WIN_LIB,
+    )
+    assert find_game_launcher(game) == game / "Stormside.exe"
+
+
+def test_ignores_a_folder_holding_only_an_unpaired_executable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No launcher at all beats running something that is not one."""
+    monkeypatch.setattr("sys.platform", "win32")
+    game = _make_game(tmp_path, launchers=("UnRen.exe",), lib_dirs=_WIN_LIB)
+    assert find_game_launcher(game) is None
 
 
 def test_ignores_a_folder_without_the_engine_directories(
@@ -125,7 +152,9 @@ def test_windows_build_is_unusable_on_linux(
 ) -> None:
     """The executable exists, the runtime next to it does not."""
     monkeypatch.setattr("sys.platform", "linux")
-    game = _make_game(tmp_path, launchers=("Stormside.exe",), lib_dirs=_WIN_LIB)
+    game = _make_game(
+        tmp_path, launchers=("Stormside.exe", "Stormside.py"), lib_dirs=_WIN_LIB
+    )
     assert can_use_game_engine(game) is False
 
 
@@ -135,7 +164,9 @@ def test_windows_build_is_usable_on_windows(
 ) -> None:
     """The same build, run on the system it was made for."""
     monkeypatch.setattr("sys.platform", "win32")
-    game = _make_game(tmp_path, launchers=("Stormside.exe",), lib_dirs=_WIN_LIB)
+    game = _make_game(
+        tmp_path, launchers=("Stormside.exe", "Stormside.py"), lib_dirs=_WIN_LIB
+    )
     assert can_use_game_engine(game) is True
 
 
@@ -147,7 +178,7 @@ def test_resolves_to_the_game_engine_over_the_sdk(
     monkeypatch.setattr("sys.platform", "win32")
     game = _make_game(
         tmp_path / "game-root",
-        launchers=("Stormside.exe",),
+        launchers=("Stormside.exe", "Stormside.py"),
         lib_dirs=_WIN_LIB,
     )
     sdk = tmp_path / "renpy.exe"
@@ -163,7 +194,7 @@ def test_falls_back_to_the_sdk_for_a_foreign_build(
     monkeypatch.setattr("sys.platform", "linux")
     game = _make_game(
         tmp_path / "game-root",
-        launchers=("Stormside.exe",),
+        launchers=("Stormside.exe", "Stormside.py"),
         lib_dirs=_WIN_LIB,
     )
     sdk = tmp_path / "renpy.sh"
@@ -177,7 +208,9 @@ def test_names_the_platform_of_the_build_it_cannot_run(
 ) -> None:
     """The failure says which system the game was built for."""
     monkeypatch.setattr("sys.platform", "linux")
-    game = _make_game(tmp_path, launchers=("Stormside.exe",), lib_dirs=_WIN_LIB)
+    game = _make_game(
+        tmp_path, launchers=("Stormside.exe", "Stormside.py"), lib_dirs=_WIN_LIB
+    )
     with pytest.raises(EngineNotFoundError, match="Windows"):
         resolve_engine(game, None)
 

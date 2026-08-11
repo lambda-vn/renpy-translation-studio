@@ -33,12 +33,12 @@ _PLATFORM_LABELS = {
 }
 
 _LAUNCHER_SUFFIXES = {
-    "windows": (".exe", ".py", ".sh"),
-    "linux": (".sh", ".py", ".exe"),
-    "mac": (".sh", ".py", ".exe"),
+    "windows": (".exe", ".sh"),
+    "linux": (".sh", ".exe"),
+    "mac": (".sh", ".exe"),
 }
 
-_FALLBACK_SUFFIXES = (".exe", ".sh", ".py")
+_FALLBACK_SUFFIXES = (".exe", ".sh")
 
 
 class EngineNotFoundError(Exception):
@@ -68,6 +68,17 @@ def find_game_launcher(project: Path) -> Path | None:
     to it: a launcher found for another platform is what lets the caller
     say "this is a Windows build" rather than "nothing found here".
 
+    A file only counts as a launcher when a `<stem>.py` sits beside it,
+    the entry point every Ren'Py build ships next to its per-platform
+    launchers. Without that pairing the choice would come down to
+    alphabetical order, so an unrelated executable left in the folder,
+    an installer or an unpacking tool, could win it and then be run.
+
+    That `.py` marks the game but is never returned as the launcher: it
+    needs the interpreter the wrappers bring along, so handing it to a
+    subprocess would rely on a file association on Windows and on an
+    execute bit elsewhere.
+
     A `-32.exe` is skipped: it is the 32-bit twin of the launcher next
     to it, never the only one.
 
@@ -85,7 +96,9 @@ def find_game_launcher(project: Path) -> Path | None:
         candidates = sorted(
             path
             for path in project.glob(f"*{suffix}")
-            if path.is_file() and not path.stem.endswith("-32")
+            if path.is_file()
+            and not path.stem.endswith("-32")
+            and path.with_suffix(".py").is_file()
         )
         if candidates:
             return candidates[0]
