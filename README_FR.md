@@ -213,3 +213,9 @@ exemples.
 
 Sous licence CeCILL v2.1, une licence libre française compatible avec la GNU
 GPL. Voir [LICENSE.md](LICENSE.md).
+
+## Avertissement
+
+Ren'Py Translation Studio n'est pas affilié, ni approuvé, ni sponsorisé par
+Ren'Py. Le nom sert uniquement à désigner le moteur dont cet outil lit et écrit
+les fichiers.

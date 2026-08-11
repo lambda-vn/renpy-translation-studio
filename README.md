@@ -200,3 +200,9 @@ Conventional Commits, validated by pre-commit. See
 
 Licensed under the CeCILL Free Software License Agreement v2.1, a French
 open source license compatible with the GNU GPL. See [LICENSE.md](LICENSE.md).
+
+## Disclaimer
+
+Ren'Py Translation Studio is not affiliated with, endorsed by, or sponsored by
+Ren'Py. The name is used only to designate the engine this tool reads and
+writes files for.
