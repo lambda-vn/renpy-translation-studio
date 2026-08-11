@@ -5,17 +5,13 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.renpy.say_line import split_say_line
+
 _TRANSLATE_HEADER = re.compile(r"^translate\s+\S+\s+(\w+)\s*:")
 _STRINGS_HEADER = re.compile(r"^translate\s+\S+\s+strings\s*:")
 _OLD_LINE = re.compile(r'^    old "((?:[^"\\]|\\.)*)"$')
 _NEW_LINE = re.compile(r'^    new "((?:[^"\\]|\\.)*)"')
 _COMMENT_LINE = re.compile(r"^    #(?: (.*))?$")
-_TRANS_CHAR = re.compile(r'^    (\w+) "(.*)"$')
-_TRANS_STR_CHAR = re.compile(r'^    "((?:[^"\\]|\\.)*)" "((?:[^"\\]|\\.)*)"$')
-_TRANS_NARRATOR = re.compile(r'^    "(.*)"$')
-_SRC_CHAR_SINGLE = re.compile(r'^(\w+) "(.*)"$')
-_SRC_STR_CHAR = re.compile(r'^"((?:[^"\\]|\\.)*)" "((?:[^"\\]|\\.)*)"$')
-_SRC_NARRATOR_SINGLE = re.compile(r'^"(.*)"$')
 _SRC_MULTILINE_START = re.compile(r'^(?:(\w+) )?"""$')
 _FILE_REF = re.compile(r"^[\w./\-]+\.rpy:\d+$")
 
@@ -153,19 +149,10 @@ class TranslateBlockParser:
         char_var, source_text = self._parse_comment_source(comment_contents)
 
         translated_text = ""
-        if i < len(lines):
-            line = lines[i]
-            m_char = _TRANS_CHAR.match(line)
-            m_str_char = _TRANS_STR_CHAR.match(line)
-            m_narr = _TRANS_NARRATOR.match(line)
-            if m_char:
-                translated_text = m_char.group(2)
-                i += 1
-            elif m_str_char:
-                translated_text = m_str_char.group(2)
-                i += 1
-            elif m_narr:
-                translated_text = m_narr.group(1)
+        if i < len(lines) and lines[i][:1] in (" ", "\t"):
+            say = split_say_line(lines[i])
+            if say is not None:
+                translated_text = say.text
                 i += 1
 
         return (
@@ -187,6 +174,14 @@ class TranslateBlockParser:
 
         Leading SDK file-reference lines (e.g. "renpy/common/x.rpy:28") are
         skipped before looking for the actual source line.
+
+        The source line is the say statement Ren'Py copied verbatim, so it
+        carries whatever the script wrote after the spoken string, a `with`
+        clause typically, and whatever it wrote before it, image
+        attributes typically. split_say_line() is what tells the string
+        apart from the rest of the statement; a line it cannot read at all
+        is kept whole rather than dropped, so nothing disappears from the
+        review.
 
         Args:
             comment_contents: Lines after stripping the leading '# ' prefix.
@@ -214,17 +209,9 @@ class TranslateBlockParser:
                 inner = inner[:-1]
             return char_var, "\n".join(inner)
 
-        m_char = _SRC_CHAR_SINGLE.match(first)
-        if m_char:
-            return m_char.group(1), m_char.group(2)
-
-        m_str_char = _SRC_STR_CHAR.match(first)
-        if m_str_char:
-            return m_str_char.group(1), m_str_char.group(2)
-
-        m_narr = _SRC_NARRATOR_SINGLE.match(first)
-        if m_narr:
-            return None, m_narr.group(1)
+        say = split_say_line(first)
+        if say is not None:
+            return say.who, say.text
 
         return None, first
 

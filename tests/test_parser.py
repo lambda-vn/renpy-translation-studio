@@ -121,6 +121,65 @@ class TestTranslateBlockParserMultiline:
         assert "{b}" in self.blocks[1].source_text
 
 
+class TestTranslateBlockParserSayStatementShapes:
+    """Parser tests using say_suffixes.rpy fixture.
+
+    A say statement is not always a bare quoted string: it can end on a
+    `with` clause or keyword arguments, and start with image attributes
+    or a quoted speaker. Those used to match none of the parser's
+    patterns, which then stored the whole statement as the source text.
+
+    The shapes come from a real generated tl/ folder, where the editable
+    line repeats the statement of the comment, suffix included, seeded
+    with the source text. One game alone had 211 quoted speakers and 304
+    lines ending on a transition.
+    """
+
+    def setup_method(self) -> None:
+        """Set up parser instance."""
+        self.parser = TranslateBlockParser()
+        self.blocks = self.parser.parse_file(FIXTURES / "say_suffixes.rpy")
+
+    def test_block_count(self) -> None:
+        """Five blocks are parsed."""
+        assert len(self.blocks) == 5
+
+    def test_quoted_speaker_with_transition(self) -> None:
+        """A quoted speaker is the speaker, not part of the text."""
+        assert self.blocks[0].source_text == "Not so fast fornicator!"
+        assert self.blocks[0].character_variable == "Store clerk"
+
+    def test_narration_with_transition(self) -> None:
+        """A transition after narration is left out of the text."""
+        assert self.blocks[1].source_text == "{b}{i}*Knock knock*{/i}{/b}"
+        assert self.blocks[1].character_variable is None
+
+    def test_character_with_transition(self) -> None:
+        """A transition after a character line is left out of the text."""
+        assert self.blocks[2].source_text == "{b}{i}*Cough*{/i}{b}"
+        assert self.blocks[2].character_variable == "MC"
+
+    def test_image_attributes_and_nointeract(self) -> None:
+        """Image attributes name the speaker without joining the text."""
+        assert self.blocks[3].source_text == "You made it!"
+        assert self.blocks[3].character_variable == "e"
+
+    def test_keyword_arguments(self) -> None:
+        """Keyword arguments are read on both the source and the translation."""
+        assert self.blocks[4].source_text == "Careful."
+        assert self.blocks[4].translated_text == "Attention."
+
+    def test_seeded_line_reads_as_untranslated(self) -> None:
+        """The copy Ren'Py seeds the editable line with is not a translation."""
+        for block in self.blocks[:4]:
+            assert block.translated_text == block.source_text
+            assert not is_translated(block)
+
+    def test_translated_line_reads_as_translated(self) -> None:
+        """A suffixed line holding a real translation is recognized as one."""
+        assert is_translated(self.blocks[4])
+
+
 class TestTranslateBlockParserDirectory:
     """Parser directory scan tests."""
 
