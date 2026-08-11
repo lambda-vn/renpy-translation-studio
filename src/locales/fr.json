@@ -47,7 +47,6 @@
     "sdk_label": "Chemin du SDK Ren'Py",
     "sdk_hint": "Facultatif : utilisé seulement si un jeu n'embarque pas de moteur exécutable sur ce système.",
     "sdk_browse": "Parcourir",
-    "sdk_cleared_warning": "Sans le SDK, seuls les jeux embarquant un moteur utilisable peuvent être extraits.",
     "save": "Enregistrer les paramètres",
     "close": "Fermer",
     "clear": "Effacer",

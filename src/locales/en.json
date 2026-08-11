@@ -47,7 +47,6 @@
     "sdk_label": "Ren'Py SDK path",
     "sdk_hint": "Optional: used only when a game does not ship an engine this system can run.",
     "sdk_browse": "Browse",
-    "sdk_cleared_warning": "Without the SDK, only games shipping a usable engine can be extracted.",
     "save": "Save settings",
     "close": "Close",
     "clear": "Clear",

@@ -16,7 +16,6 @@ from app.theme import (
     TEXT_HINT,
     TEXT_MUTED,
     TEXT_PATH,
-    WARNING,
     border_all,
     focusable,
 )
@@ -49,12 +48,6 @@ def build_settings_dialog(
     """
     saved_sdk = settings.get("sdk_path")
     sdk_path_label = ft.Text(saved_sdk or "", size=13, color=TEXT_PATH)
-    sdk_warning = ft.Text(
-        i18n.t("settings.sdk_cleared_warning"),
-        size=11.5,
-        color=WARNING,
-        visible=not bool(saved_sdk),
-    )
 
     def on_locale_changed(e: Event[ft.Dropdown]) -> None:
         locale = e.control.value or "en"
@@ -74,7 +67,6 @@ def build_settings_dialog(
     def on_sdk_cleared(_: Event[ft.TextButton]) -> None:
         sdk_path_label.value = ""
         sdk_clear_btn.visible = False
-        sdk_warning.visible = True
         settings.set("sdk_path", None)
         page.update()
 
@@ -99,7 +91,6 @@ def build_settings_dialog(
         if results and results[0].path:
             sdk_path_label.value = results[0].path
             sdk_clear_btn.visible = True
-            sdk_warning.visible = False
             settings.set("sdk_path", results[0].path)
             page.update()
 
@@ -341,7 +332,6 @@ def build_settings_dialog(
                             spacing=8,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
-                        sdk_warning,
                     ],
                     spacing=8,
                 ),
