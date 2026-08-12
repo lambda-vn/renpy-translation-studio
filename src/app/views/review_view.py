@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
@@ -73,6 +75,8 @@ from core.translation.providers.registry import registry
 from core.translation.quality import LENGTH_WARNING_KIND
 from core.translation.quality import check as quality_check
 from core.validators import is_recognized_language
+
+logger = logging.getLogger(__name__)
 
 _P = ParamSpec("_P")
 
@@ -147,6 +151,7 @@ _COL_ACTIONS = (
     + (_ROW_ACTIONS - 1) * _ROW_SPACING
 )
 _EDIT_DEBOUNCE = 0.35  # delai avant d'ecrire une saisie en base (s)
+_JOB_REFRESH_INTERVAL = 1.0  # intervalle min. entre deux rebuilds pendant un job (s)
 _CONTEXT_RADIUS = 2  # lignes voisines montrees de chaque cote d'une ligne
 _CONTEXT_MARKER = 14  # gouttiere du reperage de la ligne courante (px)
 
@@ -360,6 +365,8 @@ class ReviewView:
         self._page.run_task(self._start_live)
         self._pending_edit: _PendingEdit | None = None
         self._edit_timer: threading.Timer | None = None
+        self._words_counted_for: tuple[int, int] | None = None
+        self._panel_refreshed_at = 0.0
 
         # ── Controles mutables (persistent across page/filter changes) ── #
         self._file_list_col = ft.Column(
@@ -1181,7 +1188,7 @@ class ReviewView:
             page = self._vstate.current_page + (1 if target >= len(self._rows) else -1)
             if page < 0 or page >= total_pages:
                 return
-            self._go_to_page(page)
+            self._go_to_page(page, keep_scroll=True)
             if not self._rows:
                 return
             target = 0 if step > 0 else len(self._rows) - 1
@@ -1220,7 +1227,7 @@ class ReviewView:
         self._search_field.value = ""
         self._vstate.search_query = ""
         self._vstate.current_page = 0
-        self._load_page()
+        self._load_page(scroll_to_top=True)
         self._load_files()
         self._safe_update()
 
@@ -1277,7 +1284,7 @@ class ReviewView:
             total_pages = max(1, -(-self._vstate.total_units // _PAGE_SIZE))
             if self._vstate.current_page + 1 >= total_pages:
                 return
-            self._go_to_page(self._vstate.current_page + 1)
+            self._go_to_page(self._vstate.current_page + 1, keep_scroll=True)
             target = 0
         if not self._rows:
             return
@@ -1297,10 +1304,17 @@ class ReviewView:
         only ever answer for the open file. Both narrow the same way:
         without the panel, a speaker who says nothing in the file being
         read looks like a speaker who says nothing at all.
+
+        The whole-project bar is fed from the counts fetched here rather
+        than from a query of its own: they cover every file, so summing
+        them is the same figure for nothing. It used to cost a 44 ms scan
+        of every unit, under every keystroke of the search field and
+        every change of filter, neither of which can move it.
         """
+        started = time.perf_counter()
         stats = self._repo.get_files()
         self._vstate.file_stats = {s["source_file"]: s for s in stats}
-        self._update_project_progress()
+        self._update_project_progress(stats)
         matches = self._repo.count_matches_by_file(
             self._vstate.search_query,
             self._vstate.status_filter or None,
@@ -1323,6 +1337,11 @@ class ReviewView:
             indent=_INDENT_BASE,
             matches=matches,
             filtering=filtering,
+        )
+        logger.debug(
+            "File panel rebuilt in %.0f ms (%d files)",
+            (time.perf_counter() - started) * 1000,
+            len(stats),
         )
 
     def _render_folder(
@@ -1831,12 +1850,12 @@ class ReviewView:
         self._vstate.selected_file = source_file
         self._vstate.current_page = 0
         self._load_files()
-        self._load_page()
+        self._load_page(scroll_to_top=True)
         self._safe_update()
 
     # ── Chargement page de blocs ──────────────────────────────────────────── #
 
-    def _load_page(self) -> None:
+    def _load_page(self, *, scroll_to_top: bool = False) -> None:
         """Load the current page of blocks and rebuild the block list.
 
         The rows, the focused index and the editing flag are dropped up
@@ -1853,7 +1872,16 @@ class ReviewView:
         so it can come back to a project whose lines were translated
         elsewhere in the meantime, and "no result" on page forty of a
         file that now has three is not something to page out of by hand.
+
+        Args:
+            scroll_to_top: Whether to put the list back at its first
+                line. Asked for by the moves that change what the list
+                shows, never by a refresh happening under the reader: a
+                translation job rebuilds this every chunk, and yanking
+                the page up under someone reading it is worse than the
+                stale row it was refreshing.
         """
+        started = time.perf_counter()
         self._rows = []
         self._focused_row = None
         self._editing = False
@@ -1907,6 +1935,26 @@ class ReviewView:
 
         total_pages = max(1, -(-total // _PAGE_SIZE))
         self._build_pagination(total_pages)
+        if scroll_to_top:
+            self._scroll_blocks_to_top()
+        logger.debug(
+            "Block list rebuilt in %.0f ms (%d rows of %d)",
+            (time.perf_counter() - started) * 1000,
+            len(units),
+            total,
+        )
+
+    def _scroll_blocks_to_top(self) -> None:
+        """Put the block list back at its first line.
+
+        Replacing the controls of a scrollable column does not move it:
+        opening a file or turning a page from halfway down a long one
+        landed on the bottom of the new list, which reads as a page that
+        did not change. Scheduled rather than awaited, since the caller
+        is not always in a coroutine and the scroll is a round trip to
+        the client.
+        """
+        self._page.run_task(self._block_list_col.scroll_to, 0)
 
     def _fetch_page(self) -> tuple[list[TranslationUnit], int]:
         """Read the page the current filters and page number point at.
@@ -2717,11 +2765,7 @@ class ReviewView:
             return False
 
         self._repo.update_translation(unit.block_id, translated, "human_validated")
-        translation_memory.remember(
-            [(unit.source_text, translated)],
-            self._state.source_language,
-            self._state.target_language,
-        )
+        self._remember_in_background(unit.source_text, translated)
         self._announce_validation(
             warnings[0].detail if warnings else None,
             self._repo.find_duplicate_block_ids(unit.source_text, unit.block_id),
@@ -2732,6 +2776,26 @@ class ReviewView:
         self._load_files()
         self._safe_update()
         return True
+
+    def _remember_in_background(self, source_text: str, translated: str) -> None:
+        """Hand a validated pair to the machine-wide translation memory.
+
+        Off the event loop because it is a second database, with a commit
+        of its own, on the path of every Ctrl+Enter. Nothing on screen
+        waits for it: the memory is read when a project asks to be
+        pre-filled, never while reviewing, and remember() swallows its
+        own failures.
+
+        Args:
+            source_text: The source the translation answers.
+            translated: The translation just validated.
+        """
+        self._page.run_thread(
+            translation_memory.remember,
+            [(source_text, translated)],
+            self._state.source_language,
+            self._state.target_language,
+        )
 
     def _show_row_error(self, warning: ft.Text, message: str) -> None:
         """Report a blocking issue on the row that carries it.
@@ -3502,6 +3566,13 @@ class ReviewView:
         field out from under someone typing in it. Whatever was typed is
         written first, and the next navigation shows the new suggestions.
 
+        The banner moves on every chunk, the two lists at most once a
+        second. A chunk is fifty units, so a whole game is eight hundred
+        of them, and rebuilding fifty rows and a hundred file entries
+        that many times is work nobody can read going by. The job's last
+        word is _on_job_complete(), which reloads unconditionally, so
+        nothing stays stale for longer than the job itself.
+
         Args:
             progress: The job's current progress.
         """
@@ -3509,9 +3580,12 @@ class ReviewView:
         self._job_counter_text.value = f"{progress.done} / {progress.total}"
         self._job_batch_text.value = ""
         self._flush_pending_edit()
-        if not self._editing:
-            self._load_page()
-        self._load_files()
+        now = time.monotonic()
+        if now - self._panel_refreshed_at >= _JOB_REFRESH_INTERVAL:
+            self._panel_refreshed_at = now
+            if not self._editing:
+                self._load_page()
+            self._load_files()
         self._safe_update()
 
     def _on_job_complete(self, progress: JobProgress) -> None:
@@ -3812,18 +3886,24 @@ class ReviewView:
             wanted = self._vstate.current_page + 1
         self._go_to_page(min(max(wanted, 1), total_pages) - 1)
 
-    def _go_to_page(self, page_index: int) -> None:
+    def _go_to_page(self, page_index: int, *, keep_scroll: bool = False) -> None:
         """Navigate to a page index.
 
         Args:
             page_index: Zero-based page index to navigate to.
+            keep_scroll: Whether to leave the scroll position alone. Set
+                by the keyboard walk, which crosses a page boundary to
+                land the caret on a line and lets that focus bring the
+                line into view; scrolling to the top first would fight
+                it, and the line it lands on is the last one on the page
+                when walking upwards.
         """
         total_pages = max(1, -(-self._vstate.total_units // _PAGE_SIZE))
         if page_index < 0 or page_index >= total_pages:
             return
         self._flush_pending_edit()
         self._vstate.current_page = page_index
-        self._load_page()
+        self._load_page(scroll_to_top=not keep_scroll)
         self._safe_update()
 
     # ── Evenements toolbar ────────────────────────────────────────────────── #
@@ -3851,7 +3931,7 @@ class ReviewView:
             else chosen or None
         )
         self._vstate.current_page = 0
-        self._load_page()
+        self._load_page(scroll_to_top=True)
         self._load_files()
         self._safe_update()
 
@@ -3864,7 +3944,7 @@ class ReviewView:
         self._flush_pending_edit()
         self._vstate.character_filter = e.control.value or None
         self._vstate.current_page = 0
-        self._load_page()
+        self._load_page(scroll_to_top=True)
         self._load_files()
         self._safe_update()
 
@@ -3900,7 +3980,7 @@ class ReviewView:
         self._flush_pending_edit()
         self._vstate.search_query = e.control.value or ""
         self._vstate.current_page = 0
-        self._load_page()
+        self._load_page(scroll_to_top=True)
         self._load_files()
         self._safe_update()
 
@@ -4055,7 +4135,7 @@ class ReviewView:
         suffix = i18n.t("review.validated")
         self._counter_text.value = f"{validated} / {total} {suffix}"
 
-    def _update_project_progress(self) -> None:
+    def _update_project_progress(self, stats: list[FileStats]) -> None:
         """Refresh the whole-project progress shown above the file list.
 
         The toolbar counter only ever speaks about the open file, which
@@ -4065,15 +4145,28 @@ class ReviewView:
         words was the one figure nothing else could be checked against.
         The word counts, which is what a translation is planned and billed
         in, stay one hover away.
+
+        The bar itself is summed from the per-file counts the panel was
+        given, so it costs nothing and is always exact. Only the words
+        need a query, and only when a line was validated or the project
+        gained lines: no filter, no search and no page turn can move
+        them, and asking anyway was 44 ms under every keystroke.
+
+        Args:
+            stats: The per-file counts the file panel is being built
+                from, covering every file of the project.
         """
-        progress = self._repo.project_progress()
-        lines = progress["lines"]
-        done = progress["validated_lines"]
+        lines = sum(int(entry["total"]) for entry in stats)
+        done = sum(int(entry["validated"]) for entry in stats)
         ratio = done / lines if lines else 0.0
         self._progress_bar.value = ratio
         self._progress_text.value = i18n.t("review.project_progress").format(
             percent=int(ratio * 100), done=done, total=lines
         )
+        if self._words_counted_for == (lines, done):
+            return
+        self._words_counted_for = (lines, done)
+        progress = self._repo.project_progress()
         self._progress_text.tooltip = i18n.t("review.project_progress_words").format(
             done=progress["validated_words"], total=progress["words"]
         )

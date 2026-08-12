@@ -1285,3 +1285,113 @@ def test_resync_without_a_parse_changes_nothing(
 
     assert repo.resync_sources([]) == {"repaired": 0, "dropped": 0, "kept": 0}
     assert repo.get_many(["block_a"])[0].source_text == "Hello"
+
+
+def test_word_total_follows_a_later_extraction(
+    repo: TranslationUnitRepository,
+) -> None:
+    """The remembered project word total is dropped when units arrive."""
+    repo.bulk_insert([_unit_with_text("a", "Three little words")])
+    assert repo.project_progress()["words"] == 3
+
+    repo.bulk_insert([_unit_with_text("b", "Two words", 2)])
+
+    assert repo.project_progress()["words"] == 5
+
+
+def test_word_total_follows_a_repaired_source(
+    repo: TranslationUnitRepository,
+) -> None:
+    repo.bulk_insert([_parsed_unit("a", 'MC "Two words" with hpunch')])
+    assert repo.project_progress()["words"] == 5
+
+    repo.resync_sources([_parsed_unit("a", "Two words", "MC")])
+
+    assert repo.project_progress()["words"] == 2
+
+
+def test_word_total_follows_a_dropped_unit(
+    repo: TranslationUnitRepository,
+) -> None:
+    repo.bulk_insert(
+        [
+            _unit_with_text("a", "Three little words"),
+            _unit_with_text("b", "Two words", 2),
+            _unit_with_text("c", "One", 3),
+        ]
+    )
+    assert repo.project_progress()["words"] == 6
+
+    repo.delete_stale({"a", "b"})
+
+    assert repo.project_progress()["words"] == 5
+
+
+def test_validating_a_line_does_not_change_the_word_total(
+    repo: TranslationUnitRepository,
+) -> None:
+    repo.bulk_insert([_unit_with_text("a", "Three little words")])
+    repo.project_progress()
+
+    repo.update_translation("a", "Trois petits mots", "human_validated")
+
+    progress = repo.project_progress()
+    assert progress["words"] == 3
+    assert progress["validated_words"] == 3
+
+
+_EXPECTED_INDEXES = {
+    "idx_status",
+    "idx_file_line",
+    "idx_file_status",
+    "idx_source_text",
+    "idx_pending",
+}
+
+
+def _indexes(db: Database) -> set[str]:
+    return {
+        row[0]
+        for row in db.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index'"
+            " AND tbl_name = 'translation_units'"
+        )
+    }
+
+
+def test_connect_creates_the_review_indexes(tmp_path: Path) -> None:
+    db = Database(tmp_path / "fresh.db")
+    db.connect()
+    names = _indexes(db)
+    db.close()
+
+    assert names >= _EXPECTED_INDEXES
+
+
+def test_connect_restores_the_indexes_after_a_table_rebuild(tmp_path: Path) -> None:
+    """The rebuild renames the table, and its indexes die with the copy."""
+    db_path = tmp_path / "legacy_indexes.db"
+    legacy = sqlite3.connect(str(db_path))
+    legacy.executescript(_LEGACY_SCHEMA)
+    legacy.commit()
+    legacy.close()
+
+    db = Database(db_path)
+    db.connect()
+    names = _indexes(db)
+    db.close()
+
+    assert names >= _EXPECTED_INDEXES
+
+
+def test_connecting_twice_keeps_one_set_of_indexes(tmp_path: Path) -> None:
+    db_path = tmp_path / "twice.db"
+    first = Database(db_path)
+    first.connect()
+    first.close()
+    second = Database(db_path)
+    second.connect()
+    names = _indexes(second)
+    second.close()
+
+    assert names >= _EXPECTED_INDEXES

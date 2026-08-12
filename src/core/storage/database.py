@@ -26,8 +26,30 @@ CREATE TABLE IF NOT EXISTS translation_units (
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
+"""
 
+# What the review screen asks on every interaction, and what it costs
+# without these on a 40 820-unit project: one page of blocks 7.6 ms,
+# the duplicate badges 18.5 ms, the unsaved-lines count 13.7 ms, the
+# lines sharing a source text 13.3 ms. About a millisecond each with
+# them. The whole-project aggregates (get_files, project_progress) scan
+# by nature and are answered by asking them less often instead.
+#
+# idx_pending is partial because count_modified_since() weighs a row
+# against itself, created_at against updated_at, which no plain index
+# can answer: SQLite reads the index for the range then opens every row
+# to check the rest, and 22 ms of the 23 are those lookups. Carrying the
+# condition in the index instead leaves nothing to check, and it costs
+# no space here since the rows it leaves out are the untouched ones.
+_CREATE_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_status ON translation_units(status);
+CREATE INDEX IF NOT EXISTS idx_file_line
+    ON translation_units(source_file, source_line);
+CREATE INDEX IF NOT EXISTS idx_file_status
+    ON translation_units(source_file, status);
+CREATE INDEX IF NOT EXISTS idx_source_text ON translation_units(source_text);
+CREATE INDEX IF NOT EXISTS idx_pending ON translation_units(updated_at)
+    WHERE translated_text != '' OR created_at != updated_at;
 """
 
 _MIGRATE_STATUS_CHECK = """
@@ -57,7 +79,6 @@ INSERT INTO translation_units
            source_text, translated_text, status, created_at, updated_at
     FROM _translation_units_old;
 DROP TABLE _translation_units_old;
-CREATE INDEX IF NOT EXISTS idx_status ON translation_units(status);
 """
 
 _MIGRATE_REVIEW_COLUMNS = """
@@ -127,7 +148,14 @@ class Database:
         self.lock: threading.Lock = threading.Lock()
 
     def connect(self) -> None:
-        """Open the connection, switch to WAL, and create tables if needed."""
+        """Open the connection, switch to WAL, and create tables if needed.
+
+        The indexes are created last, after the migrations: rebuilding the
+        table renames it, and every index attached to it dies with the
+        copy that gets dropped. Creating them here rather than beside the
+        table also means a database made before one of them existed gets
+        it on its next open, which is the only migration they need.
+        """
         self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._enable_wal()
@@ -139,6 +167,7 @@ class Database:
         )
         self._migrate_status_check()
         self._migrate_review_columns()
+        self._conn.executescript(_CREATE_INDEXES)
         self._conn.commit()
 
     def _enable_wal(self) -> None:

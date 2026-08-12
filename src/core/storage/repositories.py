@@ -147,6 +147,7 @@ class TranslationUnitRepository:
         """
         self._conn = conn
         self._lock = lock or threading.Lock()
+        self._source_words: int | None = None
 
     def bulk_insert(self, units: list[dict[str, object]]) -> None:
         """Insert a batch of new units, skipping existing block_ids.
@@ -169,6 +170,7 @@ class TranslationUnitRepository:
                 units,
             )
             self._conn.commit()
+        self._source_words = None
 
     def resync_sources(self, units: list[dict[str, object]]) -> SourceResync:
         """Replace a stored source text the parser now reads differently.
@@ -244,6 +246,7 @@ class TranslationUnitRepository:
                 [(block_id,) for block_id in drops],
             )
             self._conn.commit()
+        self._source_words = None
         return SourceResync(repaired=len(repairs), dropped=len(drops), kept=kept)
 
     def transfer_orphan_translations(self, current_block_ids: set[str]) -> int:
@@ -356,7 +359,8 @@ class TranslationUnitRepository:
             deleted = cursor.rowcount
             self._conn.execute("DROP TABLE _current_ids")
             self._conn.commit()
-            return deleted
+        self._source_words = None
+        return deleted
 
     def get_all(
         self,
@@ -813,6 +817,13 @@ class TranslationUnitRepository:
         billing-grade figure, since Ren'Py markup ({i}, [name]) counts as
         text and escaped newlines do not separate words.
 
+        Counting them is four string operations per row, which on a large
+        game is most of what this costs: 44 ms of the 47, and 27 of those
+        for the project total alone. That total is over the source texts,
+        so only an extraction can move it, and it is remembered until one
+        does. The validated share is asked every time, since that is the
+        figure the screen is watching.
+
         Returns:
             Totals over every unit of the project, validated ones apart.
         """
@@ -822,12 +833,17 @@ class TranslationUnitRepository:
             " - LENGTH(REPLACE(TRIM(source_text), ' ', '')) + 1 END"
         )
         with self._lock:
+            if self._source_words is None:
+                self._source_words = int(
+                    self._conn.execute(
+                        f"SELECT COALESCE(SUM({words}), 0) FROM translation_units"
+                    ).fetchone()[0]
+                )
             row = self._conn.execute(f"""
                 SELECT
                     COUNT(*) AS lines,
                     COALESCE(SUM(CASE WHEN status = 'human_validated'
                         THEN 1 ELSE 0 END), 0) AS validated_lines,
-                    COALESCE(SUM({words}), 0) AS words,
                     COALESCE(SUM(CASE WHEN status = 'human_validated'
                         THEN {words} ELSE 0 END), 0) AS validated_words
                 FROM translation_units
@@ -835,7 +851,7 @@ class TranslationUnitRepository:
         return ProjectProgress(
             lines=int(row["lines"]),
             validated_lines=int(row["validated_lines"]),
-            words=int(row["words"]),
+            words=self._source_words,
             validated_words=int(row["validated_words"]),
         )
 
