@@ -1727,6 +1727,15 @@ class ProjectSetupView:
             for b in self._state.blocks
         ]
         repo.bulk_insert(units)
+        resync = repo.resync_sources(units)
+        if resync["repaired"]:
+            logger.info(
+                "Repaired %d source text(s) an older parse got wrong, "
+                "dropping %d suggestion(s) and keeping %d validated line(s)",
+                resync["repaired"],
+                resync["dropped"],
+                resync["kept"],
+            )
         current_ids = {b.block_id for b in self._state.blocks}
         moved = repo.transfer_orphan_translations(current_ids)
         obsolete = repo.delete_stale(current_ids)

@@ -1200,3 +1200,88 @@ def test_get_many_without_identifiers_asks_nothing(
     repo: TranslationUnitRepository,
 ) -> None:
     assert repo.get_many([]) == []
+
+
+def _parsed_unit(block_id: str, source_text: str, speaker: str | None = None) -> dict:
+    return {
+        "block_id": block_id,
+        "source_file": "game/script.rpy",
+        "source_line": 1,
+        "character_variable": speaker,
+        "source_text": source_text,
+    }
+
+
+def test_resync_replaces_a_source_text_the_parser_now_reads_differently(
+    repo: TranslationUnitRepository,
+) -> None:
+    repo.bulk_insert([_parsed_unit("block_a", 'MC "*Cough*" with hpunch')])
+
+    outcome = repo.resync_sources([_parsed_unit("block_a", "*Cough*", "MC")])
+
+    assert outcome == {"repaired": 1, "dropped": 0, "kept": 0}
+    unit = repo.get_many(["block_a"])[0]
+    assert unit.source_text == "*Cough*"
+    assert unit.character_variable == "MC"
+
+
+def test_resync_drops_a_suggestion_answering_the_old_text(
+    repo: TranslationUnitRepository,
+) -> None:
+    repo.bulk_insert([_parsed_unit("block_a", 'MC "*Cough*" with hpunch')])
+    repo.update_translation("block_a", 'MC "*Toux*" avec hpunch', "ai_suggested")
+
+    outcome = repo.resync_sources([_parsed_unit("block_a", "*Cough*", "MC")])
+
+    assert outcome == {"repaired": 1, "dropped": 1, "kept": 0}
+    unit = repo.get_many(["block_a"])[0]
+    assert unit.translated_text == ""
+    assert unit.status == "not_translated"
+
+
+def test_resync_keeps_a_validated_translation(
+    repo: TranslationUnitRepository,
+) -> None:
+    repo.bulk_insert([_parsed_unit("block_a", 'MC "*Cough*" with hpunch')])
+    repo.update_translation("block_a", "*Toux*", "human_validated")
+
+    outcome = repo.resync_sources([_parsed_unit("block_a", "*Cough*", "MC")])
+
+    assert outcome == {"repaired": 1, "dropped": 0, "kept": 1}
+    unit = repo.get_many(["block_a"])[0]
+    assert unit.translated_text == "*Toux*"
+    assert unit.status == "human_validated"
+
+
+def test_resync_leaves_an_unchanged_source_alone(
+    repo: TranslationUnitRepository,
+) -> None:
+    repo.bulk_insert([_parsed_unit("block_a", "Hello")])
+    repo.update_translation("block_a", "Bonjour", "ai_suggested")
+
+    outcome = repo.resync_sources([_parsed_unit("block_a", "Hello")])
+
+    assert outcome == {"repaired": 0, "dropped": 0, "kept": 0}
+    unit = repo.get_many(["block_a"])[0]
+    assert unit.translated_text == "Bonjour"
+    assert unit.status == "ai_suggested"
+
+
+def test_resync_ignores_a_block_absent_from_the_parse(
+    repo: TranslationUnitRepository,
+) -> None:
+    repo.bulk_insert([_parsed_unit("block_a", "Hello")])
+
+    outcome = repo.resync_sources([_parsed_unit("block_b", "Other")])
+
+    assert outcome == {"repaired": 0, "dropped": 0, "kept": 0}
+    assert repo.get_many(["block_a"])[0].source_text == "Hello"
+
+
+def test_resync_without_a_parse_changes_nothing(
+    repo: TranslationUnitRepository,
+) -> None:
+    repo.bulk_insert([_parsed_unit("block_a", "Hello")])
+
+    assert repo.resync_sources([]) == {"repaired": 0, "dropped": 0, "kept": 0}
+    assert repo.get_many(["block_a"])[0].source_text == "Hello"

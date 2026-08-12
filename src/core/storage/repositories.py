@@ -39,6 +39,22 @@ class DuplicateStats(TypedDict):
     other_files: int
 
 
+class SourceResync(TypedDict):
+    """What realigning stored units on a fresh parse changed.
+
+    Attributes:
+        repaired: Units whose stored source text was replaced.
+        dropped: Translations cleared along with it, none of them
+            reviewed by a human.
+        kept: Repaired units whose translation was human_validated and
+            therefore left in place, for someone to look at again.
+    """
+
+    repaired: int
+    dropped: int
+    kept: int
+
+
 @dataclass
 class TranslationUnit:
     """A single row from the translation_units table.
@@ -153,6 +169,82 @@ class TranslationUnitRepository:
                 units,
             )
             self._conn.commit()
+
+    def resync_sources(self, units: list[dict[str, object]]) -> SourceResync:
+        """Replace a stored source text the parser now reads differently.
+
+        bulk_insert() ignores a block id it already knows, which is what
+        keeps a re-extraction from wiping the work. The cost is that a
+        unit inserted by an older, wronger parse keeps that text forever:
+        the say statements whose speaker and transition used to be stored
+        as part of the spoken text stayed that way in every database
+        created before the parser learned to split them.
+
+        A translation answering the old text answers a question that was
+        never asked, so it goes with it. Not a human_validated one: it may
+        have been typed by someone reading past the noise, and throwing
+        away reviewed work to fix a display bug is the worse trade. Those
+        are counted instead, so the caller can say how many lines deserve
+        a second look.
+
+        Must run before transfer_orphan_translations(), which pairs
+        orphans by source text and would otherwise pair them on the text
+        being corrected here.
+
+        Args:
+            units: The freshly parsed units, in bulk_insert() shape.
+
+        Returns:
+            What changed, per SourceResync.
+        """
+        parsed = {str(unit["block_id"]): unit for unit in units}
+        if not parsed:
+            return SourceResync(repaired=0, dropped=0, kept=0)
+
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT block_id, source_text, translated_text, status"
+                " FROM translation_units"
+            ).fetchall()
+
+        repairs: list[tuple[str, str | None, str]] = []
+        drops: list[str] = []
+        kept = 0
+        for row in rows:
+            unit = parsed.get(row["block_id"])
+            if unit is None or unit["source_text"] == row["source_text"]:
+                continue
+            character = unit["character_variable"]
+            repairs.append(
+                (
+                    str(unit["source_text"]),
+                    str(character) if character is not None else None,
+                    row["block_id"],
+                )
+            )
+            if row["status"] == "human_validated":
+                kept += 1
+            elif row["translated_text"]:
+                drops.append(row["block_id"])
+
+        if not repairs:
+            return SourceResync(repaired=0, dropped=0, kept=0)
+
+        with self._lock:
+            self._conn.executemany(
+                "UPDATE translation_units"
+                " SET source_text = ?, character_variable = ?"
+                " WHERE block_id = ?",
+                repairs,
+            )
+            self._conn.executemany(
+                "UPDATE translation_units"
+                " SET translated_text = '', status = 'not_translated'"
+                " WHERE block_id = ?",
+                [(block_id,) for block_id in drops],
+            )
+            self._conn.commit()
+        return SourceResync(repaired=len(repairs), dropped=len(drops), kept=kept)
 
     def transfer_orphan_translations(self, current_block_ids: set[str]) -> int:
         """Move translations off vanished block ids onto the lines that remain.
