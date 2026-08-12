@@ -371,6 +371,31 @@ class TestTranslateBlockParserReferenceComment:
         assert blocks[0].source_text == "Hello world"
         assert blocks[0].character_variable == "e"
 
+    def test_file_ref_comment_before_multiline(self, tmp_path: Path) -> None:
+        """The reference is dropped from a multiline source text too.
+
+        The lines were counted from the raw comments rather than from the
+        ones left after the reference was skipped, which put the `\"\"\"`
+        opener back at the top of the text a translator reads.
+        """
+        rpy = tmp_path / "multi.rpy"
+        rpy.write_text(
+            "translate french abc789:\n\n"
+            "    # game/script.rpy:351\n"
+            '    # e """\n'
+            "    # This is the first line.\n"
+            "    # This is the second line.\n"
+            '    # """\n'
+            '    e ""\n',
+            encoding="utf-8",
+        )
+        blocks = TranslateBlockParser().parse_file(rpy)
+        assert len(blocks) == 1
+        assert blocks[0].source_text == (
+            "This is the first line.\nThis is the second line."
+        )
+        assert blocks[0].character_variable == "e"
+
     def test_curly_brace_text_preserved(self, tmp_path: Path) -> None:
         """Text starting with Ren'Py tags like {i} is not treated as file ref."""
         rpy = tmp_path / "tagged.rpy"

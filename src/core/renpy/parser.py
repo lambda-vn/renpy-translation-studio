@@ -218,7 +218,7 @@ class TranslateBlockParser:
         m_multi = _SRC_MULTILINE_START.match(first)
         if m_multi:
             char_var: str | None = m_multi.group(1) or None
-            inner = comment_contents[1:]
+            inner = contents[1:]
             if inner and inner[-1] == '"""':
                 inner = inner[:-1]
             return char_var, "\n".join(inner)
