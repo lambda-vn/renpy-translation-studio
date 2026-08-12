@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from core.translation.job import JobProgress, TranslationJob
+from core.translation.job import JobProgress, TranslationJob, group_by_source
 from core.translation.providers.base import (
     TranslateBatchRequest,
     TranslateBatchResult,
@@ -531,3 +531,138 @@ def test_cancel_stops_before_next_chunk() -> None:
     _run_job(job, provider, _units(150))
 
     assert completions[-1].done < 150
+
+
+def _repeating_units() -> list[dict[str, str]]:
+    """Five units for three distinct texts, the first repeated twice.
+
+    None of them is punctuation only: a text with no letter never
+    reaches a provider at all, it is copied as-is before the grouping.
+    """
+    return [
+        {"block_id": "a", "source_text": "Yes."},
+        {"block_id": "b", "source_text": "What?"},
+        {"block_id": "c", "source_text": "Yes."},
+        {"block_id": "d", "source_text": "Good girl."},
+        {"block_id": "e", "source_text": "Yes."},
+    ]
+
+
+class TestGroupBySource:
+    """Which units are sent, and who is waiting on them."""
+
+    def test_first_occurrence_is_the_one_sent(self) -> None:
+        sent, followers = group_by_source(_repeating_units())
+
+        assert [unit["block_id"] for unit in sent] == ["a", "b", "d"]
+        assert followers == {"a": ["c", "e"], "b": [], "d": []}
+
+    def test_order_is_preserved(self) -> None:
+        sent, _ = group_by_source(_repeating_units())
+
+        assert [unit["source_text"] for unit in sent] == [
+            "Yes.",
+            "What?",
+            "Good girl.",
+        ]
+
+    def test_nothing_to_group(self) -> None:
+        assert group_by_source([]) == ([], {})
+
+
+def test_a_repeated_text_is_sent_once_and_answered_for_all() -> None:
+    """The provider sees three texts, the caller gets five translations."""
+    chunks: list[TranslateBatchResult] = []
+    provider = _FakeProvider()
+    job = TranslationJob(
+        on_chunk=chunks.append,
+        on_progress=lambda _p: None,
+        on_complete=lambda _p: None,
+    )
+    _run_job(job, provider, _repeating_units())
+
+    assert [u["block_id"] for u in provider.requests[0].units] == ["a", "b", "d"]
+    translated = {t["block_id"]: t["translated_text"] for t in chunks[0].translations}
+    assert translated == {
+        "a": "Yes.!",
+        "b": "What?!",
+        "c": "Yes.!",
+        "d": "Good girl.!",
+        "e": "Yes.!",
+    }
+    assert job.progress.done == 5
+    assert job.progress.failed == 0
+
+
+def test_a_failure_is_reported_for_every_unit_sharing_the_text() -> None:
+    """done + failed must still cover the whole job."""
+
+    class _AlwaysFailingProvider(_FakeProvider):
+        def translate_batch(
+            self, request: TranslateBatchRequest
+        ) -> TranslateBatchResult:
+            self.requests.append(request)
+            return TranslateBatchResult(
+                translations=[],
+                failed_ids=[u["block_id"] for u in request.units],
+            )
+
+    chunks: list[TranslateBatchResult] = []
+    job = TranslationJob(
+        on_chunk=chunks.append,
+        on_progress=lambda _p: None,
+        on_complete=lambda _p: None,
+    )
+    _run_job(job, _AlwaysFailingProvider(), _repeating_units())
+
+    assert sorted(chunks[0].failed_ids) == ["a", "b", "c", "d", "e"]
+    assert job.progress.done == 0
+    assert job.progress.failed == 5
+
+
+def test_retry_sends_the_text_once_more_not_once_per_unit() -> None:
+    """Retrying the followers would be sending the same text again."""
+
+    class _FailsOnceProvider(_FakeProvider):
+        def translate_batch(
+            self, request: TranslateBatchRequest
+        ) -> TranslateBatchResult:
+            self.requests.append(request)
+            if len(self.requests) == 1:
+                return TranslateBatchResult(
+                    translations=[],
+                    failed_ids=[u["block_id"] for u in request.units],
+                )
+            translations = [
+                {"block_id": u["block_id"], "translated_text": f"{u['source_text']}!"}
+                for u in request.units
+            ]
+            return TranslateBatchResult(translations=translations, failed_ids=[])
+
+    provider = _FailsOnceProvider()
+    job = TranslationJob(
+        on_chunk=lambda _c: None,
+        on_progress=lambda _p: None,
+        on_complete=lambda _p: None,
+    )
+    _run_job(job, provider, _repeating_units())
+
+    retried = [
+        unit["block_id"] for request in provider.requests[1:] for unit in request.units
+    ]
+    assert sorted(retried) == ["a", "b", "d"]
+    assert job.progress.done == 5
+    assert job.progress.failed == 0
+
+
+def test_sharing_units_are_announced() -> None:
+    events: list[str] = []
+    job = TranslationJob(
+        on_chunk=lambda _c: None,
+        on_progress=lambda _p: None,
+        on_complete=lambda _p: None,
+        on_event=events.append,
+    )
+    _run_job(job, _FakeProvider(), _repeating_units())
+
+    assert any("2" in event for event in events)

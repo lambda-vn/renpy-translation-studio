@@ -57,6 +57,74 @@ def needs_translation(source_text: str) -> bool:
     return any(ch.isalpha() for ch in stripped)
 
 
+def group_by_source(
+    units: list[TranslationUnitPayload],
+) -> tuple[list[TranslationUnitPayload], dict[str, list[str]]]:
+    """Keep one unit per distinct source text, and note who shares it.
+
+    A game repeats itself: 40 820 units of one script hold 22 997
+    distinct texts, and "..." alone appears 1 607 times. Sending each
+    occurrence is 44% of the requests spent asking the same question, and
+    on a paid provider it is 44% of the bill. It also produces 1 607
+    answers that may not agree with each other, where a human correcting
+    the first one expects to have corrected them all.
+
+    The first occurrence is the one sent. Its neighbours and its speaker
+    are the ones the provider sees, so an LLM prompted with the line
+    before and after gets those of the first occurrence rather than of
+    each: a small loss on the exact context, against a request that is
+    not sent at all.
+
+    Args:
+        units: The units to translate, in the order they will be sent.
+
+    Returns:
+        Tuple of (the units to actually send, the block ids waiting on
+        each of them). A text occurring once has an empty list.
+    """
+    representatives: list[TranslationUnitPayload] = []
+    followers: dict[str, list[str]] = {}
+    leader_of: dict[str, str] = {}
+    for unit in units:
+        leader = leader_of.get(unit["source_text"])
+        if leader is None:
+            leader_of[unit["source_text"]] = unit["block_id"]
+            representatives.append(unit)
+            followers[unit["block_id"]] = []
+        else:
+            followers[leader].append(unit["block_id"])
+    return representatives, followers
+
+
+def spread_to_followers(
+    result: TranslateBatchResult, followers: dict[str, list[str]]
+) -> TranslateBatchResult:
+    """Hand each answer to every unit that was waiting on it.
+
+    Args:
+        result: What came back for the units actually sent.
+        followers: Block ids sharing each sent unit's source text.
+
+    Returns:
+        The same outcome, stated for every unit of the job. A failure
+        spreads too: a unit whose text could not be translated has no
+        translation either, and counting it as anything else would leave
+        done and failed short of the total.
+    """
+    translations: list[dict[str, str]] = []
+    for translation in result.translations:
+        translations.append(translation)
+        translations.extend(
+            {"block_id": block_id, "translated_text": translation["translated_text"]}
+            for block_id in followers.get(translation["block_id"], ())
+        )
+    failed_ids: list[str] = []
+    for block_id in result.failed_ids:
+        failed_ids.append(block_id)
+        failed_ids.extend(followers.get(block_id, ()))
+    return TranslateBatchResult(translations=translations, failed_ids=failed_ids)
+
+
 @dataclass
 class JobProgress:
     """Snapshot of a translation job's progress.
@@ -88,6 +156,11 @@ class TranslationJob:
     job stops, successfully or not. Units still failing after the main
     pass get up to _MAX_RETRY_PASSES additional attempts in smaller
     chunks (see _retry_failed_units) before being reported as failed.
+
+    A source text is only ever sent once, however many units carry it
+    (see group_by_source): the answer is handed to all of them, so what
+    on_chunk and the progress report is every unit of the job, while what
+    the provider was asked is only the distinct texts.
     """
 
     def __init__(
@@ -252,6 +325,7 @@ class TranslationJob:
         self,
         failed_ids: list[str],
         units_by_id: dict[str, TranslationUnitPayload],
+        followers: dict[str, list[str]],
         provider: TranslationProvider,
         source_lang: str,
         target_lang: str,
@@ -266,10 +340,15 @@ class TranslationJob:
         progress.done; a unit still failing after the last pass stays
         counted as failed, keeping done + failed == total.
 
+        What is retried is the unit that was sent, never the ones that
+        were waiting on its answer: retrying those would be sending the
+        same text again, which is what the deduplication exists to avoid.
+
         Args:
             failed_ids: block_ids to retry, from the main translation pass.
             units_by_id: Every translatable unit in this job, keyed by
                 block_id, so retried units can be looked back up.
+            followers: Block ids sharing each retried unit's source text.
             provider: The translation provider to use.
             source_lang: Source language code.
             target_lang: Target language code.
@@ -299,8 +378,9 @@ class TranslationJob:
                 result, events = self._verify_quality(chunk, result)
                 for event in events:
                     self._emit_event(event)
-                self._on_chunk(result)
-                recovered = len(result.translations)
+                spread = spread_to_followers(result, followers)
+                self._on_chunk(spread)
+                recovered = len(spread.translations)
                 self.progress.done += recovered
                 self.progress.failed -= recovered
                 remaining.extend(result.failed_ids)
@@ -338,8 +418,19 @@ class TranslationJob:
         )
         try:
             skipped = [u for u in units if not needs_translation(u["source_text"])]
-            translatable = [u for u in units if needs_translation(u["source_text"])]
+            translatable, followers = group_by_source(
+                [u for u in units if needs_translation(u["source_text"])]
+            )
             units_by_id = {u["block_id"]: u for u in translatable}
+            shared = sum(len(ids) for ids in followers.values())
+            if shared:
+                logger.info(
+                    "%d unit(s) share a source text with another and are not sent",
+                    shared,
+                )
+                self._emit_event(
+                    i18n.t("job_events.duplicates_shared").format(n=shared)
+                )
 
             if skipped:
                 logger.info(
@@ -391,15 +482,21 @@ class TranslationJob:
                     )
                 for event in events:
                     self._emit_event(event)
-                self._on_chunk(result)
-                self.progress.done += len(result.translations)
-                self.progress.failed += len(result.failed_ids)
+                spread = spread_to_followers(result, followers)
+                self._on_chunk(spread)
+                self.progress.done += len(spread.translations)
+                self.progress.failed += len(spread.failed_ids)
                 failed_ids.extend(result.failed_ids)
                 self._on_progress(self.progress)
 
             if failed_ids and not self._cancelled.is_set():
                 self._retry_failed_units(
-                    failed_ids, units_by_id, provider, source_lang, target_lang
+                    failed_ids,
+                    units_by_id,
+                    followers,
+                    provider,
+                    source_lang,
+                    target_lang,
                 )
         except TranslationProviderError as exc:
             logger.warning("Translation job stopped: %s", exc)

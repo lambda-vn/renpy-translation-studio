@@ -373,6 +373,7 @@
     "translation_accepted_with_warning": "Traduction acceptée avec avertissement ({block_id}) : {reason}",
     "retry_in_progress": "Nouvelle tentative pour {n} traduction(s) en échec",
     "skipped_copied": "{n} message(s) sans texte à traduire copié(s) automatiquement",
+    "duplicates_shared": "{n} message(s) identiques à un autre reprendront sa traduction",
     "provider_failed": "{n} traduction(s) en échec (réponse incomplète ou erreur du fournisseur)",
     "model_loading": "Chargement du modèle en cours...",
     "cpu_offload_warning": "Modèle exécuté à {percent}% sur CPU : traduction ralentie. Réduisez la taille de batch ou utilisez un modèle plus petit."

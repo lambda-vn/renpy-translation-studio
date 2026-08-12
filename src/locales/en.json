@@ -373,6 +373,7 @@
     "translation_accepted_with_warning": "Translation accepted with warning ({block_id}): {reason}",
     "retry_in_progress": "Retrying {n} failed translation(s)",
     "skipped_copied": "{n} message(s) with nothing to translate copied automatically",
+    "duplicates_shared": "{n} message(s) repeat another one and will reuse its translation",
     "provider_failed": "{n} translation(s) failed (incomplete response or provider error)",
     "model_loading": "Loading model...",
     "cpu_offload_warning": "Model running at {percent}% on CPU: translation slowed down. Reduce batch size or use a smaller model."
