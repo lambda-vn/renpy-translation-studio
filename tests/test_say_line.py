@@ -1,6 +1,6 @@
 """Tests for core/renpy/say_line.py."""
 
-from core.renpy.say_line import split_say_line
+from core.renpy.say_line import block_lines, find_say, split_say_line
 
 
 class TestSpokenString:
@@ -121,3 +121,76 @@ class TestSpeakerResolution:
         say = split_say_line('    @ "Hello"')
         assert say is not None
         assert say.who is None
+
+
+class TestFindSay:
+    """Which line of a block carries the dialogue."""
+
+    def test_single_statement(self) -> None:
+        found = find_say(['    e "Hello"\n'])
+        assert found is not None
+        assert (found[0], found[1].text) == (0, "Hello")
+
+    def test_voice_is_not_taken_for_the_dialogue(self) -> None:
+        """A `voice` answers split_say_line() just as a say does.
+
+        Taking the first line put its audio path where the dialogue was
+        supposed to be: read as the text to translate, and overwritten
+        with the translation on the way back out.
+        """
+        found = find_say(['    voice "voice/e01.ogg"\n', '    e "Hello"\n'])
+        assert found is not None
+        assert (found[0], found[1].text, found[1].who) == (1, "Hello", "e")
+
+    def test_statement_without_a_string_is_skipped(self) -> None:
+        found = find_say(["    nvl clear\n", '    e "Hello"\n'])
+        assert found is not None
+        assert (found[0], found[1].text) == (1, "Hello")
+
+    def test_comments_are_never_taken(self) -> None:
+        found = find_say(["\n", '    # e "Hello"\n', '    e ""\n'])
+        assert found is not None
+        assert (found[0], found[1].text) == (2, "")
+
+    def test_comment_contents_are_read_the_same_way(self) -> None:
+        """The comments mirror the statements, so the rule is the same."""
+        found = find_say(['voice "voice/e01.ogg"', 'e "Hello"'])
+        assert found is not None
+        assert (found[0], found[1].text) == (1, "Hello")
+
+    def test_block_without_a_say(self) -> None:
+        assert find_say(["\n", "    nvl clear\n"]) is None
+
+    def test_multiline_block_is_refused(self) -> None:
+        """Its text spans lines, so no single line can be pointed at.
+
+        The closing `\"\"\"` reads as an empty string and would be taken
+        as the last say of the block if the opener did not stop this.
+        """
+        assert find_say(['    e """\n', "    Hello\n", '    """\n']) is None
+
+    def test_empty_block(self) -> None:
+        assert find_say([]) is None
+
+
+class TestBlockLines:
+    """Where a translate block's body ends."""
+
+    def test_stops_at_the_next_header(self) -> None:
+        lines = [
+            "translate french a:\n",
+            "\n",
+            '    # e "Hello"\n',
+            '    e ""\n',
+            "\n",
+            "translate french b:\n",
+        ]
+        assert block_lines(lines, 1) == lines[1:5]
+
+    def test_stops_at_a_file_reference_comment(self) -> None:
+        lines = ['    e ""\n', "# game/script.rpy:13\n", "translate french b:\n"]
+        assert block_lines(lines, 0) == ['    e ""\n']
+
+    def test_last_block_runs_to_the_end(self) -> None:
+        lines = ['    # e "Hello"\n', '    e ""\n']
+        assert block_lines(lines, 0) == lines

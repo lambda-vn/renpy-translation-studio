@@ -230,6 +230,76 @@ class TestTranslateBlockWriter:
         assert '    "Narration."\n' in content
         assert '    # e "Hello world"\n' in content
 
+    def test_voice_statement_is_not_written_over(
+        self, tmp_path: Path, backup_dir: Path
+    ) -> None:
+        """Ren'Py groups the voice of a line with the line itself.
+
+        Writing into the first statement of the block replaced the audio
+        path with the translation, so the line lost its voice and kept
+        its English text.
+        """
+        d = tmp_path / "voiced" / "french"
+        d.mkdir(parents=True)
+        (d / "script.rpy").write_text(
+            "translate french start_abc:\n\n"
+            '    # voice "voice/e01.ogg"\n'
+            '    # e "Hello world"\n'
+            '    voice "voice/e01.ogg"\n'
+            '    e "Hello world"\n',
+            encoding="utf-8",
+        )
+        writer = TranslateBlockWriter(d, backup_dir)
+        writer.write_all({"start_abc": "Bonjour le monde"})
+        content = (d / "script.rpy").read_text(encoding="utf-8")
+        assert '    voice "voice/e01.ogg"\n' in content
+        assert '    e "Bonjour le monde"\n' in content
+
+    def test_statement_without_a_string_does_not_stop_the_write(
+        self, tmp_path: Path, backup_dir: Path
+    ) -> None:
+        """An `nvl clear` under the header used to swallow the write."""
+        d = tmp_path / "nvl" / "french"
+        d.mkdir(parents=True)
+        (d / "script.rpy").write_text(
+            "translate french start_abc:\n\n"
+            "    # nvl clear\n"
+            '    # e "Hello world"\n'
+            "    nvl clear\n"
+            '    e "Hello world"\n',
+            encoding="utf-8",
+        )
+        writer = TranslateBlockWriter(d, backup_dir)
+        writer.write_all({"start_abc": "Bonjour le monde"})
+        content = (d / "script.rpy").read_text(encoding="utf-8")
+        assert "    nvl clear\n" in content
+        assert '    e "Bonjour le monde"\n' in content
+
+    def test_multiline_block_is_left_alone(
+        self, tmp_path: Path, backup_dir: Path
+    ) -> None:
+        """Its text spans lines, so no single line can be replaced.
+
+        The closing `\"\"\"` reads as an empty string, and writing the
+        translation there would leave a literal running to the end of the
+        file.
+        """
+        original = (
+            "translate french multi_abc:\n\n"
+            '    # e """\n'
+            "    # Hello world.\n"
+            '    # """\n'
+            '    e """\n'
+            "    Hello world.\n"
+            '    """\n'
+        )
+        d = tmp_path / "multi" / "french"
+        d.mkdir(parents=True)
+        (d / "script.rpy").write_text(original, encoding="utf-8")
+        writer = TranslateBlockWriter(d, backup_dir)
+        writer.write_all({"multi_abc": "Bonjour le monde."})
+        assert (d / "script.rpy").read_text(encoding="utf-8") == original
+
     def test_empty_block_leaves_the_next_header_alone(
         self, tmp_path: Path, backup_dir: Path
     ) -> None:

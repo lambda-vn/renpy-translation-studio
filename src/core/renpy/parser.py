@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.renpy.say_line import split_say_line
+from core.renpy.say_line import block_lines, find_say, split_say_line
 
 _TRANSLATE_HEADER = re.compile(r"^translate\s+\S+\s+(\w+)\s*:")
 _STRINGS_HEADER = re.compile(r"^translate\s+\S+\s+strings\s*:")
@@ -119,6 +119,12 @@ class TranslateBlockParser:
     ) -> tuple[TranslationBlock | None, int]:
         """Parse the indented body of a translate block.
 
+        The translation is read from the block's say statement, which
+        find_say() picks out of everything Ren'Py wrote under the header:
+        a `voice` grouped with the dialogue answers to split_say_line()
+        just as well, and reading the first line took its audio path for
+        the translation.
+
         Args:
             lines: All lines of the file.
             start: Index of the first body line (after the header).
@@ -149,11 +155,11 @@ class TranslateBlockParser:
         char_var, source_text = self._parse_comment_source(comment_contents)
 
         translated_text = ""
-        if i < len(lines) and lines[i][:1] in (" ", "\t"):
-            say = split_say_line(lines[i])
-            if say is not None:
-                translated_text = say.text
-                i += 1
+        found = find_say(block_lines(lines, i))
+        if found is not None:
+            offset, say = found
+            translated_text = say.text
+            i += offset + 1
 
         return (
             TranslationBlock(
@@ -175,13 +181,17 @@ class TranslateBlockParser:
         Leading SDK file-reference lines (e.g. "renpy/common/x.rpy:28") are
         skipped before looking for the actual source line.
 
-        The source line is the say statement Ren'Py copied verbatim, so it
-        carries whatever the script wrote after the spoken string, a `with`
-        clause typically, and whatever it wrote before it, image
-        attributes typically. split_say_line() is what tells the string
-        apart from the rest of the statement; a line it cannot read at all
-        is kept whole rather than dropped, so nothing disappears from the
-        review.
+        The comments are the statements of the block copied verbatim, and
+        the block holds more than the dialogue when Ren'Py grouped a
+        `voice` or an `nvl clear` with it, so find_say() is what picks the
+        one line a translator answers rather than the first one written.
+
+        That line carries whatever the script wrote after the spoken
+        string, a `with` clause typically, and whatever it wrote before
+        it, image attributes typically. split_say_line() is what tells
+        the string apart from the rest of the statement; a line it cannot
+        read at all is kept whole rather than dropped, so nothing
+        disappears from the review.
 
         Args:
             comment_contents: Lines after stripping the leading '# ' prefix.
@@ -198,6 +208,10 @@ class TranslateBlockParser:
 
         if not contents:
             return None, ""
+
+        found = find_say(contents)
+        if found is not None:
+            return found[1].who, found[1].text
 
         first = contents[0]
 

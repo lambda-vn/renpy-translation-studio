@@ -385,6 +385,65 @@ class TestTranslateBlockParserReferenceComment:
         assert "{i}" in blocks[0].source_text
 
 
+class TestTranslateBlockParserGroupedStatements:
+    """Blocks holding more than the say statement."""
+
+    def test_voice_is_not_read_as_the_dialogue(self, tmp_path: Path) -> None:
+        """Ren'Py groups the voice of a line with the line itself.
+
+        Reading the first statement of the block stored the audio path as
+        the text to translate, and the dialogue never reached the review
+        at all.
+        """
+        rpy = tmp_path / "voiced.rpy"
+        rpy.write_text(
+            "translate french start_abc:\n\n"
+            '    # voice "voice/e01.ogg"\n'
+            '    # e "Hello world"\n'
+            '    voice "voice/e01.ogg"\n'
+            '    e "Hello world"\n',
+            encoding="utf-8",
+        )
+        blocks = TranslateBlockParser().parse_file(rpy)
+        assert len(blocks) == 1
+        assert blocks[0].source_text == "Hello world"
+        assert blocks[0].character_variable == "e"
+        assert blocks[0].translated_text == "Hello world"
+
+    def test_statement_without_a_string_is_skipped(self, tmp_path: Path) -> None:
+        """An `nvl clear` opening the block is not the source text."""
+        rpy = tmp_path / "nvl.rpy"
+        rpy.write_text(
+            "translate french start_abc:\n\n"
+            "    # nvl clear\n"
+            '    # e "Hello world"\n'
+            "    nvl clear\n"
+            '    e "Bonjour"\n',
+            encoding="utf-8",
+        )
+        blocks = TranslateBlockParser().parse_file(rpy)
+        assert len(blocks) == 1
+        assert blocks[0].source_text == "Hello world"
+        assert blocks[0].translated_text == "Bonjour"
+
+    def test_next_block_is_still_found(self, tmp_path: Path) -> None:
+        """Walking past the say statement must not swallow what follows."""
+        rpy = tmp_path / "two.rpy"
+        rpy.write_text(
+            "translate french a1:\n\n"
+            '    # voice "voice/e01.ogg"\n'
+            '    # e "First"\n'
+            '    voice "voice/e01.ogg"\n'
+            '    e ""\n\n'
+            "translate french a2:\n\n"
+            '    # e "Second"\n'
+            '    e ""\n',
+            encoding="utf-8",
+        )
+        blocks = TranslateBlockParser().parse_file(rpy)
+        assert [block.source_text for block in blocks] == ["First", "Second"]
+
+
 class TestTranslateBlockParserErrors:
     """Parser error handling tests."""
 

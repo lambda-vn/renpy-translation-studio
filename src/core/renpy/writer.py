@@ -4,7 +4,7 @@ import re
 import shutil
 from pathlib import Path
 
-from core.renpy.say_line import split_say_line
+from core.renpy.say_line import block_lines, find_say, split_say_line
 
 _UNESCAPED_QUOTE_RE = re.compile(r'(\\*)"')
 _TRAILING_BACKSLASHES_RE = re.compile(r"\\+$")
@@ -80,33 +80,32 @@ class TranslateBlockWriter:
         shutil.copy2(path, backup_path)
 
     @staticmethod
-    def _copy_block_preamble(lines: list[str], start: int, result: list[str]) -> int:
-        """Copy what stands between a block header and its editable line.
+    def _find_editable_line(lines: list[str], start: int) -> int | None:
+        """Return the index of the line a translation is written into.
 
-        Ren'Py writes a blank line after every header, then the commented
-        source statement. Only the comments used to be skipped here, so
-        the editable line was never reached on a real generated file and
-        nothing was ever written back to it. The parser has always
-        skipped both, which is why the two disagreed in silence: the
-        review showed lines the save button could not write.
+        The block's say statement, which is neither its first line nor
+        always its only statement. Ren'Py writes a blank line under every
+        header, then the commented source, and it groups the `voice`
+        playing under a line of dialogue, or the `nvl clear` before it,
+        into the same block. Stopping at the first line that was neither
+        blank nor a comment therefore landed on `voice "v/e01.ogg"` and
+        replaced the audio path with the dialogue's translation.
+
+        find_say() is what the parser asks too, so the line written back
+        is the line the source text was read from.
 
         Args:
             lines: All lines of the file.
             start: Index of the first line after the header.
-            result: The output the copied lines are appended to.
 
         Returns:
-            The index of the first line that is neither blank nor a
-            comment.
+            The index of the say statement, or None when the block holds
+            none this can write into.
         """
-        index = start
-        while index < len(lines) and not lines[index].strip():
-            result.append(lines[index])
-            index += 1
-        while index < len(lines) and lines[index].lstrip().startswith("#"):
-            result.append(lines[index])
-            index += 1
-        return index
+        found = find_say(block_lines(lines, start))
+        if found is None:
+            return None
+        return start + found[0]
 
     def _apply_translations(
         self,
@@ -155,10 +154,13 @@ class TranslateBlockWriter:
                 result.append(line)
                 i += 1
                 if block_id in translations:
-                    i = self._copy_block_preamble(lines, i, result)
-                    if i < len(lines) and lines[i][:1] in (" ", "\t"):
-                        result.append(_replace_quoted(lines[i], translations[block_id]))
-                        i += 1
+                    editable = self._find_editable_line(lines, i)
+                    if editable is not None:
+                        result.extend(lines[i:editable])
+                        result.append(
+                            _replace_quoted(lines[editable], translations[block_id])
+                        )
+                        i = editable + 1
                 continue
 
             if in_strings:

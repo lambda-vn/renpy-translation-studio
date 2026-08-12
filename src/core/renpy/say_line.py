@@ -17,6 +17,11 @@ while the writer replaced everything between the first and the last
 quote of the line, which on a statement with a quoted speaker overwrote
 the speaker along with the text. This module is the single answer both
 of them ask.
+
+Which line of a block carries that statement is the same question one
+step up, and it lives here for the same reason: a translate block is not
+always one statement, so find_say() is what tells the dialogue apart
+from what Ren'Py grouped with it.
 """
 
 from dataclasses import dataclass
@@ -193,3 +198,77 @@ def split_say_line(line: str) -> SayLine | None:
         suffix=line[end:],
         who=_resolve_who(line[:start], quoted_speaker),
     )
+
+
+def _opens_multiline(line: str) -> bool:
+    """Return whether a line opens a triple-quoted say statement.
+
+    The spoken text of such a statement is not on this line, so a caller
+    looking for the string a translation replaces has nothing to point
+    at, and the closing `\"\"\"` reads as an empty string it must not be
+    handed either.
+
+    Args:
+        line: One line of a .rpy file.
+
+    Returns:
+        True when the line's first string literal opens with three
+        double quotes.
+    """
+    index = line.find('"')
+    return index != -1 and line[index : index + 3] == '"""'
+
+
+def block_lines(lines: list[str], start: int) -> list[str]:
+    """Return the body of the translate block whose header precedes start.
+
+    The body is everything written under the header, blank lines and
+    comments included, and it ends at the first line standing in column
+    one: the next header, or the file reference Ren'Py writes above it.
+
+    Args:
+        lines: All lines of the file.
+        start: Index of the first line after the block header.
+
+    Returns:
+        The block's lines, in file order.
+    """
+    end = start
+    while end < len(lines) and (
+        not lines[end].strip() or lines[end][:1] in (" ", "\t")
+    ):
+        end += 1
+    return lines[start:end]
+
+
+def find_say(lines: list[str]) -> tuple[int, SayLine] | None:
+    """Locate the say statement among the lines of one translate block.
+
+    A block is not always a single statement. Ren'Py groups with a line
+    of dialogue what belongs to it -- the `voice` playing under it, the
+    `nvl clear` before it -- and writes them all in the block, commented
+    then live, the say statement last. Reading the first line instead put
+    the audio path of `voice "v/e01.ogg"` where the dialogue was supposed
+    to be: taken as the text to translate on one side, and overwritten
+    with the translation on the other.
+
+    A comment opens no statement and is never taken; a statement holding
+    no string is skipped.
+
+    Args:
+        lines: The lines of one translate block, or the contents of its
+            comments, which mirror them one for one.
+
+    Returns:
+        The index of the say statement and its split form, or None when
+        the block holds none, or when it opens a multiline literal, whose
+        text spans lines this cannot point at.
+    """
+    found: tuple[int, SayLine] | None = None
+    for index, line in enumerate(lines):
+        if _opens_multiline(line):
+            return None
+        say = split_say_line(line)
+        if say is not None:
+            found = (index, say)
+    return found
