@@ -16,7 +16,7 @@ from app import shortcuts
 from app.components.stepper import build_stepper
 from app.dialogs import dialog_action
 from app.live_server import LiveServer
-from app.state import AppState
+from app.state import AppState, ReviewViewState
 from app.theme import (
     ACCENT,
     ACCENT_ON,
@@ -225,6 +225,27 @@ def _build_folder_tree(stats: list[FileStats], root_depth: int) -> _FolderNode:
     return root
 
 
+def _filter_key(vstate: ReviewViewState) -> str:
+    """Return the dropdown entry standing for a stored filter.
+
+    The two entries that are not statuses select on something a status
+    cannot express, so they replace it rather than joining it, and the
+    dropdown has to be put back on the right one when the view is rebuilt
+    from a snapshot.
+
+    Args:
+        vstate: The review snapshot to read the running filter from.
+
+    Returns:
+        The key of the matching dropdown option, empty for no filter.
+    """
+    if vstate.errors_only:
+        return _ERROR_FILTER
+    if vstate.review_only:
+        return _REVIEW_FILTER
+    return vstate.status_filter or ""
+
+
 def _has_blocking_issue(unit: TranslationUnit) -> bool:
     """Return whether a unit carries an error that blocks its validation.
 
@@ -274,22 +295,6 @@ class _PendingEdit:
     value: str
 
 
-@dataclass
-class ReviewViewState:
-    """Local state of the review view — no DB calls stored here."""
-
-    selected_file: str | None = None
-    current_page: int = 0
-    status_filter: str | None = "not_translated"
-    character_filter: str | None = None
-    errors_only: bool = False
-    review_only: bool = False
-    search_query: str = ""
-    current_units: list[TranslationUnit] = field(default_factory=list)
-    total_units: int = 0
-    file_stats: dict[str, FileStats] = field(default_factory=dict)
-
-
 # ── Vue principale ────────────────────────────────────────────────────────── #
 
 
@@ -336,7 +341,7 @@ class ReviewView:
         self._repo = TranslationUnitRepository(state.db.conn, state.db.lock)
         self._character_repo = CharacterRepository(state.db.conn, state.db.lock)
         self._project_meta_repo = ProjectMetaRepository(state.db.conn, state.db.lock)
-        self._vstate = ReviewViewState()
+        self._vstate = state.review_state()
         self._job: TranslationJob | None = None
         self._job_dialog_shown_once = False
         self._disposed = False
@@ -408,7 +413,7 @@ class ReviewView:
         )
         self._status_snack: ft.SnackBar | None = None
         self._filter_dropdown = ft.Dropdown(
-            value="not_translated",
+            value=_filter_key(self._vstate),
             options=[
                 *(self._status_filter_option(status) for status in _STATUS_LABEL_KEYS),
                 ft.dropdown.Option(
@@ -441,7 +446,7 @@ class ReviewView:
             on_select=self._on_filter_changed,
         )
         self._character_dropdown = ft.Dropdown(
-            value="",
+            value=self._vstate.character_filter or "",
             visible=False,
             editable=True,
             enable_filter=True,
@@ -461,6 +466,7 @@ class ReviewView:
             on_select=self._on_character_filter_changed,
         )
         self._search_field = ft.TextField(
+            value=self._vstate.search_query,
             hint_text=i18n.t("review.search_hint"),
             hint_style=ft.TextStyle(color=TEXT_HINT),
             prefix_icon=ft.Icons.SEARCH,
@@ -664,7 +670,7 @@ class ReviewView:
                 border_radius=6,
                 padding=ft.Padding(left=6, right=6, top=3, bottom=3),
             ),
-            on_click=lambda _e: self._on_configure_provider(),
+            on_click=lambda _e: self._navigate_provider(),
             radius=6,
         )
         self._characters_btn = self._toolbar_link(
@@ -775,8 +781,10 @@ class ReviewView:
 
         # ── Chargement initial ──────────────────────────────────────────── #
         files = self._repo.get_files()
-        if files:
-            self._vstate.selected_file = files[0]["source_file"]
+        known = {entry["source_file"] for entry in files}
+        if self._vstate.selected_file not in known:
+            self._vstate.selected_file = files[0]["source_file"] if files else None
+            self._vstate.current_page = 0
         self._refresh_character_options()
         self._load_files()
         if self._vstate.selected_file:
@@ -886,6 +894,24 @@ class ReviewView:
             thread.
         """
         return on_ui_thread(self._page, handler)
+
+    def may_leave(self) -> bool:
+        """Answer whether this view can be replaced right now.
+
+        Leaving disposes the view, which cancels the translation it is
+        running. Every navigation this view owns asks first, but the
+        settings dialog reaches the provider screen without going through
+        any of them, and it took a whole job down with it. The entry
+        point asks here rather than each door growing its own check.
+
+        Returns:
+            True when nothing would be lost. False having told the user
+            what is holding them, which is the same message the toolbar
+            shows.
+        """
+        if self._disposed:
+            return True
+        return not self._blocked_by_running_job()
 
     def dispose(self) -> None:
         """Write any pending edit, then drop the handler and the running job.
@@ -1821,6 +1847,12 @@ class ReviewView:
         would suppress every later refresh. A caller that means to keep
         the focus (validating from the keyboard) sets both again once the
         new rows exist.
+
+        A page number pointing past the end falls back to the last page
+        rather than showing an empty list. The number outlives the view,
+        so it can come back to a project whose lines were translated
+        elsewhere in the meantime, and "no result" on page forty of a
+        file that now has three is not something to page out of by hand.
         """
         self._rows = []
         self._focused_row = None
@@ -1844,19 +1876,11 @@ class ReviewView:
             self._pagination_row.controls.clear()
             return
 
-        selected = self._vstate.selected_file
-        if self._vstate.errors_only:
-            units, total = self._load_error_page(selected)
-        else:
-            units, total = self._repo.get_page(
-                source_file=selected,
-                page=self._vstate.current_page,
-                page_size=_PAGE_SIZE,
-                status_filter=self._vstate.status_filter or None,
-                search_query=self._vstate.search_query,
-                character=self._vstate.character_filter,
-                needs_review=self._vstate.review_only,
-            )
+        units, total = self._fetch_page()
+        last_page = max(0, -(-total // _PAGE_SIZE) - 1)
+        if not units and self._vstate.current_page > last_page:
+            self._vstate.current_page = last_page
+            units, total = self._fetch_page()
         self._vstate.current_units = units
         self._vstate.total_units = total
 
@@ -1883,6 +1907,28 @@ class ReviewView:
 
         total_pages = max(1, -(-total // _PAGE_SIZE))
         self._build_pagination(total_pages)
+
+    def _fetch_page(self) -> tuple[list[TranslationUnit], int]:
+        """Read the page the current filters and page number point at.
+
+        Returns:
+            Tuple of (units for this page, total matching row count).
+            Empty when no file is open.
+        """
+        selected = self._vstate.selected_file
+        if selected is None:
+            return [], 0
+        if self._vstate.errors_only:
+            return self._load_error_page(selected)
+        return self._repo.get_page(
+            source_file=selected,
+            page=self._vstate.current_page,
+            page_size=_PAGE_SIZE,
+            status_filter=self._vstate.status_filter or None,
+            search_query=self._vstate.search_query,
+            character=self._vstate.character_filter,
+            needs_review=self._vstate.review_only,
+        )
 
     def _load_error_page(self, source_file: str) -> tuple[list[TranslationUnit], int]:
         """Page through the lines the quality checks refuse to validate.
@@ -4387,6 +4433,13 @@ class ReviewView:
         """Dispose and navigate back to project setup."""
         self.dispose()
         self._on_back()
+
+    def _navigate_provider(self) -> None:
+        """Dispose and navigate to the provider settings view."""
+        if self._blocked_by_running_job():
+            return
+        self.dispose()
+        self._on_configure_provider()
 
     def _navigate_export(self) -> None:
         """Dispose and navigate to the zip export view."""

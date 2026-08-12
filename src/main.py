@@ -32,6 +32,9 @@ class DisposableView(Protocol):
     replaced.
     """
 
+    def may_leave(self) -> bool:
+        """Return whether the view can be replaced without losing work."""
+
     def dispose(self) -> None:
         """Release everything the view registered outside its controls."""
 
@@ -70,7 +73,7 @@ def main(page: ft.Page) -> None:
     current_show: Callable[[], None] = lambda: None  # noqa: E731 - set by first show_*
     current_view: DisposableView | None = None
 
-    def enter(show: Callable[[], None]) -> None:
+    def enter(show: Callable[[], None]) -> bool:
         """Leave the current view before the next one is built.
 
         The review view installs the keyboard shortcuts on the page, and
@@ -80,14 +83,27 @@ def main(page: ft.Page) -> None:
         here, including the ones that reach a view from the settings
         dialog rather than from the view itself.
 
+        Which is why the outgoing view is asked first: disposing a review
+        cancels the translation it is running, and the settings dialog
+        reaches the provider screen without passing any of that view's
+        own checks.
+
         Args:
             show: The view being entered, re-run on a locale change.
+
+        Returns:
+            True when the navigation may proceed. False when the current
+            view refused it, having said so itself; the caller must then
+            build nothing.
         """
         nonlocal current_show, current_view
+        if current_view is not None and not current_view.may_leave():
+            return False
         current_show = show
         if current_view is not None:
             current_view.dispose()
             current_view = None
+        return True
 
     def render(content: ft.Control) -> None:
         """Clear the page and render the persistent header above the view.
@@ -163,7 +179,8 @@ def main(page: ft.Page) -> None:
 
     def show_setup() -> None:
         """Render the project setup view."""
-        enter(show_setup)
+        if not enter(show_setup):
+            return
         view = ProjectSetupView(
             page,
             state,
@@ -174,7 +191,8 @@ def main(page: ft.Page) -> None:
     def show_review() -> None:
         """Render the translation review view."""
         nonlocal current_view
-        enter(show_review)
+        if not enter(show_review):
+            return
         view = ReviewView(
             page,
             state,
@@ -194,31 +212,36 @@ def main(page: ft.Page) -> None:
         Args:
             on_back: View to return to after saving or skipping.
         """
-        enter(lambda: show_provider_config(on_back))
+        if not enter(lambda: show_provider_config(on_back)):
+            return
         view = ProviderConfigView(page, on_back=on_back)
         render(view.build())
 
     def show_characters() -> None:
         """Render the character glossary view."""
-        enter(show_characters)
+        if not enter(show_characters):
+            return
         view = CharacterGlossaryView(page, state, on_back=show_review)
         render(view.build())
 
     def show_universe_summary() -> None:
         """Render the universe summary view."""
-        enter(show_universe_summary)
+        if not enter(show_universe_summary):
+            return
         view = UniverseSummaryView(page, state, on_back=show_review)
         render(view.build())
 
     def show_export() -> None:
         """Render the export (zip) view."""
-        enter(show_export)
+        if not enter(show_export):
+            return
         view = ExportView(page, state, on_back=show_review, on_setup=show_setup)
         render(view.build())
 
     def show_onboarding() -> None:
         """Render the onboarding view."""
-        enter(show_onboarding)
+        if not enter(show_onboarding):
+            return
         view = OnboardingView(page, on_done=show_setup)
         render(view.build())
 
