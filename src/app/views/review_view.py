@@ -24,6 +24,7 @@ from app.theme import (
     ACCENT_ON,
     BG_FILE_SEL,
     BG_INPUT,
+    BG_MENU,
     BORDER_COLOR,
     DOT_AI,
     DOT_DRAFT,
@@ -3730,6 +3731,13 @@ class ReviewView:
         passes as the batch translate button, and persists through
         on_chunk exactly like the batch job does.
 
+        What the job has to say is shown as it happens, the way the
+        banner does for a whole file. A single line looked like the
+        cheapest thing on the screen and was often the slowest: a local
+        model unloaded five minutes ago spends a cold load before writing
+        one word, and all there was to see was an hourglass that did not
+        move.
+
         Args:
             provider_id: Id of the provider to translate with.
             unit: The unit to translate.
@@ -3759,6 +3767,7 @@ class ReviewView:
         job = TranslationJob(
             on_chunk=self._on_job_chunk,
             on_progress=lambda _progress: None,
+            on_event=self._on_ui_thread(self._on_unit_job_event),
             on_complete=self._on_ui_thread(
                 partial(self._on_unit_job_complete, unit.block_id)
             ),
@@ -3770,6 +3779,19 @@ class ReviewView:
             self._state.source_language,
             self._state.target_language,
         )
+
+    def _on_unit_job_event(self, message: str) -> None:
+        """Report what the one-line translation is busy with.
+
+        Through the status line rather than the job banner, which belongs
+        to the batch translation and would claim a job is running over the
+        whole file. Runs on the event loop's thread via _on_ui_thread().
+
+        Args:
+            message: Human-readable description of what happened.
+        """
+        self._show_status(message, TEXT_MUTED)
+        self._safe_update()
 
     def _on_unit_job_complete(self, block_id: str, progress: JobProgress) -> None:
         """Clear the in-flight marker and refresh from the database.
@@ -4232,7 +4254,10 @@ class ReviewView:
 
         Args:
             message: Text to display.
-            color: Hex color (ERROR, WARNING, or SUCCESS).
+            color: ERROR, WARNING or SUCCESS, each with its background.
+                Any other colour is a plain notice and gets the neutral
+                one: telling someone a model is loading must not look
+                like telling them something went wrong.
             action: Label of an optional button shown next to the message.
             on_action: Called when that button is clicked.
         """
@@ -4240,8 +4265,10 @@ class ReviewView:
             bgcolor = "#16281c"
         elif color == WARNING:
             bgcolor = "#2b2210"
-        else:
+        elif color == ERROR:
             bgcolor = "#2b1c1c"
+        else:
+            bgcolor = BG_MENU
 
         self._hide_status()
         snack = ft.SnackBar(
