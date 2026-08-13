@@ -13,28 +13,11 @@ from typing import Literal
 import flet as ft
 from flet.controls.control_event import Event
 
+from app import theme
 from app.components.back_link import build_back_link
 from app.components.stepper import build_stepper
 from app.state import AppState
-from app.theme import (
-    ACCENT,
-    ACCENT_ON,
-    BG_INPUT,
-    BORDER_COLOR,
-    BORDER_STRONG,
-    ERROR,
-    FOCUS_RING,
-    FOCUS_RING_WIDTH,
-    TEXT,
-    TEXT_DIM,
-    TEXT_H,
-    TEXT_HINT,
-    TEXT_MUTED,
-    TEXT_PATH,
-    WARNING,
-    border_all,
-    focusable,
-)
+from app.theme import border_all, focusable
 from app.ui_thread import safe_update
 from core.exporter import GameNameResolver
 from core.i18n import i18n
@@ -151,12 +134,12 @@ class ProjectSetupView:
             i18n.t("project_setup.title"),
             size=24,
             weight=ft.FontWeight.W_600,
-            color=TEXT_H,
+            color=theme.TEXT_H,
         )
         self._t_header_subtitle = ft.Text(
             i18n.t("project_setup.subtitle"),
             size=13,
-            color=TEXT_DIM,
+            color=theme.TEXT_DIM,
         )
 
         # --- folder section ---
@@ -164,17 +147,17 @@ class ProjectSetupView:
             i18n.t("project_setup.game_folder"),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._t_browse = ft.Text(
             i18n.t("common.browse"),
             size=13.5,
             weight=ft.FontWeight.W_500,
-            color=TEXT,
+            color=theme.TEXT,
         )
         self._folder_label = ft.Text(
             i18n.t("project_setup.no_folder"),
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
             italic=True,
             size=13,
         )
@@ -183,24 +166,24 @@ class ProjectSetupView:
             i18n.t("project_setup.source_lang"),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._t_target_lang = ft.Text(
             i18n.t("project_setup.target_lang"),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
 
         self._target_dropdown = ft.Dropdown(
             options=_language_options(),
             value=state.target_language or None,
             hint_text=i18n.t("project_setup.target_placeholder"),
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=11,
             height=48,
             dense=True,
@@ -209,7 +192,7 @@ class ProjectSetupView:
         )
         self._target_help = ft.Text(
             i18n.t("project_setup.target_hint"),
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
             size=11.5,
         )
 
@@ -218,14 +201,14 @@ class ProjectSetupView:
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.FOLDER_OPEN, size=17, color=TEXT),
+                        ft.Icon(ft.Icons.FOLDER_OPEN, size=17, color=theme.TEXT),
                         self._t_browse,
                     ],
                     spacing=9,
                     tight=True,
                 ),
-                bgcolor=BG_INPUT,
-                border=border_all(1, BORDER_STRONG),
+                bgcolor=theme.BG_INPUT,
+                border=border_all(1, theme.BORDER_STRONG),
                 border_radius=10,
                 padding=ft.Padding(left=18, right=18, top=11, bottom=11),
                 ink=True,
@@ -238,11 +221,11 @@ class ProjectSetupView:
         self._source_dropdown = ft.Dropdown(
             options=_language_options(),
             value=self._state.source_language,
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=11,
             height=48,
             dense=True,
@@ -255,28 +238,28 @@ class ProjectSetupView:
             i18n.t("project_setup.sdk_title"),
             size=14,
             weight=ft.FontWeight.W_600,
-            color=TEXT,
+            color=theme.TEXT,
         )
         self._t_sdk_desc = ft.Text(
             i18n.t("project_setup.sdk_desc"),
             size=12,
-            color=TEXT_DIM,
+            color=theme.TEXT_DIM,
         )
 
         self._t_sdk_file_hint = ft.Text(
             i18n.t("project_setup.sdk_file_hint"),
             size=12,
-            color=TEXT_DIM,
+            color=theme.TEXT_DIM,
         )
         self._t_sdk_select = ft.Text(
             i18n.t("project_setup.sdk_select"),
             size=13,
             weight=ft.FontWeight.W_500,
-            color=TEXT,
+            color=theme.TEXT,
         )
         self._sdk_path_label = ft.Text(
             saved_sdk or "",
-            color=TEXT_HINT if not saved_sdk else TEXT_PATH,
+            color=theme.TEXT_HINT if not saved_sdk else theme.TEXT_PATH,
             italic=not bool(saved_sdk),
             size=13,
         )
@@ -293,15 +276,15 @@ class ProjectSetupView:
                                             ft.Icon(
                                                 ft.Icons.FOLDER_OPEN,
                                                 size=15,
-                                                color=TEXT,
+                                                color=theme.TEXT,
                                             ),
                                             self._t_sdk_select,
                                         ],
                                         spacing=7,
                                         tight=True,
                                     ),
-                                    bgcolor=BG_INPUT,
-                                    border=border_all(1, BORDER_STRONG),
+                                    bgcolor=theme.BG_INPUT,
+                                    border=border_all(1, theme.BORDER_STRONG),
                                     border_radius=8,
                                     padding=ft.Padding(
                                         left=14,
@@ -327,24 +310,26 @@ class ProjectSetupView:
         self._t_sdk_notice = ft.Text(
             i18n.t("project_setup.code_execution_notice"),
             size=12,
-            color=TEXT_DIM,
+            color=theme.TEXT_DIM,
             expand=True,
         )
         self._sdk_notice_row = ft.Row(
             [
-                ft.Icon(ft.Icons.INFO_OUTLINE, size=16, color=TEXT_DIM),
+                ft.Icon(ft.Icons.INFO_OUTLINE, size=16, color=theme.TEXT_DIM),
                 self._t_sdk_notice,
             ],
             spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.START,
         )
 
-        self._extract_btn_icon = ft.Icon(ft.Icons.DOWNLOAD, size=17, color=TEXT_HINT)
+        self._extract_btn_icon = ft.Icon(
+            ft.Icons.DOWNLOAD, size=17, color=theme.TEXT_HINT
+        )
         self._extract_btn_text = ft.Text(
             i18n.t("project_setup.extract"),
             size=14.5,
             weight=ft.FontWeight.W_600,
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
         )
         self._extract_btn_box = ft.Container(
             content=ft.Row(
@@ -352,7 +337,7 @@ class ProjectSetupView:
                 tight=True,
                 spacing=10,
             ),
-            bgcolor="#26242f",
+            bgcolor=theme.SURFACE_DISABLED,
             border_radius=12,
             padding=ft.Padding(left=26, right=26, top=14, bottom=14),
             ink=True,
@@ -362,35 +347,38 @@ class ProjectSetupView:
             on_click=self._on_extract_clicked,
             radius=12,
         )
-        self._extract_hint = ft.Text("", size=12.5, color=TEXT_DIM)
+        self._extract_hint = ft.Text("", size=12.5, color=theme.TEXT_DIM)
         self._t_extracting = ft.Text(
             i18n.t("project_setup.extracting"),
             size=14,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._extracting_row = ft.Row(
             [
-                ft.ProgressRing(width=16, height=16, color=ACCENT, stroke_width=2),
+                ft.ProgressRing(
+                    width=16, height=16, color=theme.ACCENT, stroke_width=2
+                ),
                 self._t_extracting,
             ],
             spacing=10,
             visible=False,
         )
-        self._status = ft.Text("", color=ERROR, size=13)
+        self._status = ft.Text("", color=theme.ERROR, size=13)
 
         # --- projects list (landing) ---
         self._recent_col = ft.Column(spacing=8)
         self._recent_empty = ft.Text(
             i18n.t("project_setup.list_empty"),
             size=13,
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
             italic=True,
         )
         self._error_snack = ft.SnackBar(
             content=ft.Text("", size=13),
+            bgcolor=theme.TOAST_ERROR_BG,
             behavior=ft.SnackBarBehavior.FLOATING,
             show_close_icon=True,
-            close_icon_color=TEXT_HINT,
+            close_icon_color=theme.TEXT_HINT,
             duration=ft.Duration(seconds=6),
             margin=ft.Margin(left=20, right=20, bottom=20),
         )
@@ -404,7 +392,7 @@ class ProjectSetupView:
         if state.project_path is not None:
             self._folder_label.value = str(state.project_path)
             self._folder_label.italic = False
-            self._folder_label.color = TEXT_PATH
+            self._folder_label.color = theme.TEXT_PATH
         self._mode = "list" if self._recent_col.controls else "form"
         self._update_extract_btn()
 
@@ -446,12 +434,12 @@ class ProjectSetupView:
                             i18n.t("project_setup.list_title"),
                             size=24,
                             weight=ft.FontWeight.W_600,
-                            color=TEXT_H,
+                            color=theme.TEXT_H,
                         ),
                         ft.Text(
                             i18n.t("project_setup.list_subtitle"),
                             size=13,
-                            color=TEXT_DIM,
+                            color=theme.TEXT_DIM,
                         ),
                     ],
                     spacing=4,
@@ -462,18 +450,18 @@ class ProjectSetupView:
                     ft.Container(
                         content=ft.Row(
                             [
-                                ft.Icon(ft.Icons.ADD, size=17, color=ACCENT_ON),
+                                ft.Icon(ft.Icons.ADD, size=17, color=theme.ACCENT_ON),
                                 ft.Text(
                                     i18n.t("project_setup.new_project"),
                                     size=14.5,
                                     weight=ft.FontWeight.W_600,
-                                    color=ACCENT_ON,
+                                    color=theme.ACCENT_ON,
                                 ),
                             ],
                             tight=True,
                             spacing=10,
                         ),
-                        bgcolor=ACCENT,
+                        bgcolor=theme.ACCENT,
                         border_radius=12,
                         padding=ft.Padding(left=22, right=22, top=13, bottom=13),
                         ink=True,
@@ -551,7 +539,7 @@ class ProjectSetupView:
         self._state.game_name = ""
         self._folder_label.value = i18n.t("project_setup.no_folder")
         self._folder_label.italic = True
-        self._folder_label.color = TEXT_HINT
+        self._folder_label.color = theme.TEXT_HINT
         self._state.target_language = ""
         self._target_dropdown.value = None
         self._status.value = ""
@@ -661,7 +649,7 @@ class ProjectSetupView:
             self._state.project_path = Path(path)
             self._folder_label.value = path
             self._folder_label.italic = False
-            self._folder_label.color = TEXT_PATH
+            self._folder_label.color = theme.TEXT_PATH
             self._update_extract_btn()
             self._page.update()
 
@@ -678,7 +666,7 @@ class ProjectSetupView:
             self._sdk_path = Path(results[0].path)
             self._sdk_path_label.value = results[0].path
             self._sdk_path_label.italic = False
-            self._sdk_path_label.color = TEXT_PATH
+            self._sdk_path_label.color = theme.TEXT_PATH
             settings.set("sdk_path", results[0].path)
             self._update_extract_btn()
             self._page.update()
@@ -738,9 +726,9 @@ class ProjectSetupView:
         """Toggle the extract button styling and say what it is waiting for."""
         missing = self._missing_requirements()
         can = not missing
-        self._extract_btn_box.bgcolor = ACCENT if can else "#26242f"
-        self._extract_btn_icon.color = ACCENT_ON if can else TEXT_HINT
-        self._extract_btn_text.color = ACCENT_ON if can else TEXT_HINT
+        self._extract_btn_box.bgcolor = theme.ACCENT if can else theme.SURFACE_DISABLED
+        self._extract_btn_icon.color = theme.ACCENT_ON if can else theme.TEXT_HINT
+        self._extract_btn_text.color = theme.ACCENT_ON if can else theme.TEXT_HINT
         self._extract_hint.value = (
             ""
             if can
@@ -816,9 +804,9 @@ class ProjectSetupView:
                 i18n.t("project_setup.existing_tl_title"),
                 size=18,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             content=ft.Column(
                 [
                     ft.Text(
@@ -826,25 +814,25 @@ class ProjectSetupView:
                             language=localized_label(self._state.target_language)
                         ),
                         size=13.5,
-                        color=TEXT_MUTED,
+                        color=theme.TEXT_MUTED,
                     ),
                     self._build_mode_card(
                         project,
                         "keep",
                         ft.Icons.PLAY_ARROW,
-                        ACCENT,
+                        theme.ACCENT,
                     ),
                     self._build_mode_card(
                         project,
                         "update",
                         ft.Icons.SYNC,
-                        ACCENT,
+                        theme.ACCENT,
                     ),
                     self._build_mode_card(
                         project,
                         "reset",
                         ft.Icons.RESTART_ALT,
-                        ERROR,
+                        theme.ERROR,
                     ),
                 ],
                 spacing=12,
@@ -858,7 +846,7 @@ class ProjectSetupView:
                             i18n.t("common.cancel"),
                             size=13.5,
                             weight=ft.FontWeight.W_500,
-                            color=TEXT_MUTED,
+                            color=theme.TEXT_MUTED,
                         ),
                         padding=ft.Padding(left=12, right=12, top=8, bottom=8),
                         ink=True,
@@ -904,8 +892,8 @@ class ProjectSetupView:
         """
         return focusable(
             ft.Container(
-                bgcolor=BG_INPUT,
-                border=border_all(1, BORDER_COLOR),
+                bgcolor=theme.BG_INPUT,
+                border=border_all(1, theme.BORDER_COLOR),
                 border_radius=10,
                 padding=ft.Padding(left=14, right=14, top=12, bottom=12),
                 ink=True,
@@ -918,12 +906,12 @@ class ProjectSetupView:
                                     i18n.t(f"project_setup.existing_{mode}_title"),
                                     size=13.5,
                                     weight=ft.FontWeight.W_600,
-                                    color=TEXT_H,
+                                    color=theme.TEXT_H,
                                 ),
                                 ft.Text(
                                     i18n.t(f"project_setup.existing_{mode}_desc"),
                                     size=12.5,
-                                    color=TEXT_MUTED,
+                                    color=theme.TEXT_MUTED,
                                 ),
                             ],
                             spacing=3,
@@ -936,7 +924,7 @@ class ProjectSetupView:
             ),
             on_click=lambda _e: self._on_mode_chosen(project, mode),
             radius=10,
-            width=_MODE_DIALOG_WIDTH - 2 * FOCUS_RING_WIDTH,
+            width=_MODE_DIALOG_WIDTH - 2 * theme.FOCUS_RING_WIDTH,
         )
 
     def _on_mode_chosen(self, project: Path, mode: _ExtractMode) -> None:
@@ -1020,22 +1008,22 @@ class ProjectSetupView:
         """
         return ft.AlertDialog(
             modal=True,
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             title=ft.Text(
                 i18n.t("project_setup.discarded_title"),
                 size=18,
                 weight=ft.FontWeight.W_600,
-                color=WARNING,
+                color=theme.WARNING,
             ),
             content=ft.Column(
                 [
                     ft.Text(
                         i18n.t("project_setup.discarded_message"),
                         size=13.5,
-                        color=TEXT_MUTED,
+                        color=theme.TEXT_MUTED,
                     ),
                     *[
-                        ft.Text(name, size=12.5, color=TEXT_PATH)
+                        ft.Text(name, size=12.5, color=theme.TEXT_PATH)
                         for name in self._discarded_sources
                     ],
                 ],
@@ -1050,9 +1038,9 @@ class ProjectSetupView:
                             i18n.t("project_setup.discarded_continue"),
                             size=13.5,
                             weight=ft.FontWeight.W_600,
-                            color=ACCENT_ON,
+                            color=theme.ACCENT_ON,
                         ),
-                        bgcolor=ACCENT,
+                        bgcolor=theme.ACCENT,
                         padding=ft.Padding(left=18, right=18, top=10, bottom=10),
                         ink=True,
                         border_radius=8,
@@ -1233,7 +1221,7 @@ class ProjectSetupView:
                 )
             else:
                 self._status.value = str(exc)
-                self._status.color = ERROR
+                self._status.color = theme.ERROR
                 self._content_holder.content = self._build_form_content()
                 self._page.update()
             return
@@ -1250,8 +1238,8 @@ class ProjectSetupView:
         Args:
             message: The error text to display.
         """
-        self._error_snack.content = ft.Text(message, size=13, color=ERROR)
-        self._error_snack.bgcolor = "#2b1c1c"
+        self._error_snack.content = ft.Text(message, size=13, color=theme.ERROR)
+        self._error_snack.bgcolor = theme.TOAST_ERROR_BG
         self._error_snack.open = True
         if self._error_snack_shown:
             self._page.update()
@@ -1270,11 +1258,13 @@ class ProjectSetupView:
             alignment=ft.Alignment(0, 0),
             content=ft.Row(
                 [
-                    ft.ProgressRing(width=18, height=18, color=ACCENT, stroke_width=2),
+                    ft.ProgressRing(
+                        width=18, height=18, color=theme.ACCENT, stroke_width=2
+                    ),
                     ft.Text(
                         i18n.t("project_setup.resuming"),
                         size=14,
-                        color=TEXT_MUTED,
+                        color=theme.TEXT_MUTED,
                     ),
                 ],
                 spacing=12,
@@ -1336,18 +1326,18 @@ class ProjectSetupView:
                             project.name,
                             size=14,
                             weight=ft.FontWeight.W_600,
-                            color=TEXT_H,
+                            color=theme.TEXT_H,
                             max_lines=1,
                             overflow=ft.TextOverflow.ELLIPSIS,
                         ),
                         ft.Text(
                             str(project),
                             size=11,
-                            color=TEXT_HINT,
+                            color=theme.TEXT_HINT,
                             max_lines=1,
                             overflow=ft.TextOverflow.ELLIPSIS,
                         ),
-                        ft.Text(meta_line, size=12, color=TEXT_MUTED),
+                        ft.Text(meta_line, size=12, color=theme.TEXT_MUTED),
                     ],
                     spacing=2,
                     tight=True,
@@ -1362,7 +1352,7 @@ class ProjectSetupView:
         )
         delete_btn = focusable(
             ft.Container(
-                content=ft.Icon(ft.Icons.CLOSE, size=18, color=TEXT_HINT),
+                content=ft.Icon(ft.Icons.CLOSE, size=18, color=theme.TEXT_HINT),
                 height=_CARD_HEIGHT,
                 alignment=ft.Alignment(x=0, y=0),
                 ink=True,
@@ -1374,8 +1364,8 @@ class ProjectSetupView:
             height=_CARD_HEIGHT,
         )
         return ft.Container(
-            bgcolor=BG_INPUT,
-            border=border_all(1, BORDER_COLOR),
+            bgcolor=theme.BG_INPUT,
+            border=border_all(1, theme.BORDER_COLOR),
             border_radius=11,
             content=ft.Row(
                 [info_area, delete_btn],
@@ -1409,13 +1399,13 @@ class ProjectSetupView:
                 i18n.t("project_setup.delete_title"),
                 size=18,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             content=ft.Text(
                 i18n.t("project_setup.delete_message").format(name=project.name),
                 size=13.5,
-                color=TEXT_MUTED,
+                color=theme.TEXT_MUTED,
                 width=340,
             ),
             actions=[
@@ -1425,7 +1415,7 @@ class ProjectSetupView:
                             i18n.t("common.cancel"),
                             size=13.5,
                             weight=ft.FontWeight.W_500,
-                            color=TEXT_MUTED,
+                            color=theme.TEXT_MUTED,
                         ),
                         padding=ft.Padding(left=12, right=12, top=8, bottom=8),
                         ink=True,
@@ -1439,7 +1429,7 @@ class ProjectSetupView:
                             i18n.t("project_setup.delete_btn"),
                             size=13.5,
                             weight=ft.FontWeight.W_600,
-                            color=ERROR,
+                            color=theme.ERROR,
                         ),
                         padding=ft.Padding(left=12, right=12, top=8, bottom=8),
                         ink=True,
@@ -1818,5 +1808,5 @@ class ProjectSetupView:
             message: The error text to display.
         """
         self._status.value = message
-        self._status.color = ERROR
+        self._status.color = theme.ERROR
         self._page.update()

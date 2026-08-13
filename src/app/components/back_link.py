@@ -4,7 +4,8 @@ from collections.abc import Callable
 
 import flet as ft
 
-from app.theme import TEXT_MUTED, focusable
+from app import theme
+from app.theme import focusable
 
 
 def build_back_link(label: str, on_click: Callable[[], None]) -> ft.Control:
@@ -28,12 +29,12 @@ def build_back_link(label: str, on_click: Callable[[], None]) -> ft.Control:
         ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.ARROW_BACK, size=15, color=TEXT_MUTED),
+                    ft.Icon(ft.Icons.ARROW_BACK, size=15, color=theme.TEXT_MUTED),
                     ft.Text(
                         label,
                         size=13,
                         weight=ft.FontWeight.W_500,
-                        color=TEXT_MUTED,
+                        color=theme.TEXT_MUTED,
                     ),
                 ],
                 tight=True,

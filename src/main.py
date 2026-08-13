@@ -5,13 +5,12 @@ from typing import Protocol
 
 import flet as ft
 
-from app import shortcuts
+from app import shortcuts, theme
 from app.components.app_header import build_app_header
 from app.components.help_dialog import build_help_dialog
 from app.components.settings_dialog import build_settings_dialog
 from app.dialogs import close_top_alert_dialog, top_alert_dialog
 from app.state import AppState
-from app.theme import BG_MENU, TEXT, TEXT_MUTED
 from app.views.character_glossary_view import CharacterGlossaryView
 from app.views.export_view import ExportView
 from app.views.onboarding import OnboardingView
@@ -48,14 +47,14 @@ def main(page: ft.Page) -> None:
     configure_logging()
 
     page.title = "Ren'Py Translation Studio"
-    page.bgcolor = "#141318"
+    page.bgcolor = theme.BG
     page.padding = 0
     page.theme_mode = ft.ThemeMode.DARK
     page.theme = ft.Theme(
         popup_menu_theme=ft.PopupMenuTheme(
-            color=BG_MENU,
-            icon_color=TEXT_MUTED,
-            label_text_style=ft.TextStyle(size=13, color=TEXT),
+            color=theme.BG_MENU,
+            icon_color=theme.TEXT_MUTED,
+            label_text_style=ft.TextStyle(size=13, color=theme.TEXT),
             shape=ft.RoundedRectangleBorder(radius=10),
         )
     )

@@ -8,24 +8,10 @@ from pathlib import Path
 import flet as ft
 from flet.controls.control_event import Event
 
+from app import theme
 from app.components.stepper import build_stepper
 from app.state import AppState
-from app.theme import (
-    ACCENT,
-    ACCENT_ON,
-    BG_INPUT,
-    BORDER_COLOR,
-    ERROR,
-    SUCCESS,
-    TEXT,
-    TEXT_DIM,
-    TEXT_H,
-    TEXT_HINT,
-    TEXT_MUTED,
-    WARNING,
-    border_all,
-    focusable,
-)
+from app.theme import border_all, focusable
 from core.export_sync import ExportSyncState, check_sync
 from core.exporter import TranslationZipExporter
 from core.i18n import i18n
@@ -67,15 +53,15 @@ class ExportView:
             formatted,
             size=30,
             weight=ft.FontWeight.W_700,
-            color=TEXT_H,
+            color=theme.TEXT_H,
         )
 
         self._game_name_inner = ft.TextField(
             value=state.game_name,
             border=ft.InputBorder.NONE,
             bgcolor="transparent",
-            color=TEXT,
-            cursor_color=ACCENT,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             expand=True,
             content_padding=ft.Padding(left=14, right=14, top=0, bottom=0),
             on_change=self._on_game_name_changed,
@@ -85,8 +71,8 @@ class ExportView:
                 [self._game_name_inner],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            bgcolor=BG_INPUT,
-            border=border_all(1.5, BORDER_COLOR),
+            bgcolor=theme.BG_INPUT,
+            border=border_all(1.5, theme.BORDER_COLOR),
             border_radius=11,
             height=48,
         )
@@ -94,20 +80,20 @@ class ExportView:
         self._zip_label = ft.Text(
             self._make_zip_name(),
             size=11.5,
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
         )
 
         has_blocks = count > 0
         self._export_btn_icon = ft.Icon(
             ft.Icons.DOWNLOAD,
             size=17,
-            color=ACCENT_ON if has_blocks else TEXT_HINT,
+            color=theme.ACCENT_ON if has_blocks else theme.TEXT_HINT,
         )
         self._export_btn_text = ft.Text(
             i18n.t("export.export_btn"),
             size=14.5,
             weight=ft.FontWeight.W_600,
-            color=ACCENT_ON if has_blocks else TEXT_HINT,
+            color=theme.ACCENT_ON if has_blocks else theme.TEXT_HINT,
         )
         self._export_btn = focusable(
             ft.Container(
@@ -116,7 +102,7 @@ class ExportView:
                     tight=True,
                     spacing=10,
                 ),
-                bgcolor=ACCENT if has_blocks else "#26242f",
+                bgcolor=theme.ACCENT if has_blocks else theme.SURFACE_DISABLED,
                 border_radius=12,
                 padding=ft.Padding(left=26, right=26, top=14, bottom=14),
                 ink=has_blocks,
@@ -127,23 +113,27 @@ class ExportView:
         )
         self._exporting_row = ft.Row(
             [
-                ft.ProgressRing(width=16, height=16, color=ACCENT, stroke_width=2),
-                ft.Text(i18n.t("export.generating"), size=14, color=TEXT_MUTED),
+                ft.ProgressRing(
+                    width=16, height=16, color=theme.ACCENT, stroke_width=2
+                ),
+                ft.Text(i18n.t("export.generating"), size=14, color=theme.TEXT_MUTED),
             ],
             spacing=10,
             visible=False,
         )
 
-        self._success_path_text = ft.Text("", size=12, color="#8aa792")
+        self._success_path_text = ft.Text("", size=12, color=theme.SUCCESS_PATH)
         self._success_panel = ft.Container(
             content=ft.Row(
                 [
                     ft.Container(
-                        content=ft.Icon(ft.Icons.CHECK, color="#10261a", size=15),
+                        content=ft.Icon(
+                            ft.Icons.CHECK, color=theme.ON_SUCCESS, size=15
+                        ),
                         width=26,
                         height=26,
                         border_radius=13,
-                        bgcolor=SUCCESS,
+                        bgcolor=theme.SUCCESS,
                         alignment=ft.Alignment(x=0, y=0),
                     ),
                     ft.Column(
@@ -152,7 +142,7 @@ class ExportView:
                                 i18n.t("export.success_title"),
                                 size=13.5,
                                 weight=ft.FontWeight.W_600,
-                                color="#bdeccb",
+                                color=theme.SUCCESS_TITLE,
                             ),
                             self._success_path_text,
                         ],
@@ -163,13 +153,13 @@ class ExportView:
                 spacing=13,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            bgcolor="#0f2316",
-            border=border_all(1, "#2a6640"),
+            bgcolor=theme.SUCCESS_PANEL_BG,
+            border=border_all(1, theme.SUCCESS_PANEL_BORDER),
             border_radius=12,
             padding=ft.Padding(left=18, right=18, top=15, bottom=15),
             visible=False,
         )
-        self._error_text = ft.Text("", color=ERROR, size=13)
+        self._error_text = ft.Text("", color=theme.ERROR, size=13)
 
     def build(self) -> ft.Control:
         """Build and return the export view control tree.
@@ -204,7 +194,7 @@ class ExportView:
                                                             ),
                                                             size=13.5,
                                                             weight=ft.FontWeight.W_500,
-                                                            color=TEXT_MUTED,
+                                                            color=theme.TEXT_MUTED,
                                                         ),
                                                         ink=True,
                                                         border_radius=6,
@@ -253,12 +243,12 @@ class ExportView:
                     i18n.t("export.title"),
                     size=24,
                     weight=ft.FontWeight.W_600,
-                    color=TEXT_H,
+                    color=theme.TEXT_H,
                 ),
                 ft.Text(
                     i18n.t("export.subtitle"),
                     size=13,
-                    color=TEXT_DIM,
+                    color=theme.TEXT_DIM,
                 ),
             ],
             spacing=4,
@@ -274,11 +264,11 @@ class ExportView:
             content=ft.Row(
                 [
                     ft.Container(
-                        content=ft.Icon(ft.Icons.SEGMENT, color=ACCENT, size=24),
+                        content=ft.Icon(ft.Icons.SEGMENT, color=theme.ACCENT, size=24),
                         width=48,
                         height=48,
                         border_radius=12,
-                        bgcolor="#1f1b2b",
+                        bgcolor=theme.TILE_BG,
                         alignment=ft.Alignment(x=0, y=0),
                     ),
                     ft.Column(
@@ -287,7 +277,7 @@ class ExportView:
                             ft.Text(
                                 i18n.t("export.blocks_extracted"),
                                 size=13,
-                                color=TEXT_MUTED,
+                                color=theme.TEXT_MUTED,
                             ),
                         ],
                         spacing=5,
@@ -299,8 +289,8 @@ class ExportView:
             ),
             padding=ft.Padding(left=22, right=22, top=20, bottom=20),
             border_radius=14,
-            bgcolor="#201d2b",
-            border=border_all(1, "#322f3d"),
+            bgcolor=theme.PANEL_BG,
+            border=border_all(1, theme.BORDER_SUBTLE),
         )
 
     def _build_game_name_section(self) -> ft.Container:
@@ -316,7 +306,7 @@ class ExportView:
                         i18n.t("export.game_name_label"),
                         size=12,
                         weight=ft.FontWeight.W_600,
-                        color=TEXT_MUTED,
+                        color=theme.TEXT_MUTED,
                     ),
                     self._game_name_container,
                     self._zip_label,
@@ -424,15 +414,15 @@ class ExportView:
 
         dialog = ft.AlertDialog(
             modal=True,
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             title=ft.Text(
                 i18n.t("export.incomplete_title"),
                 size=15,
                 weight=ft.FontWeight.W_600,
-                color=WARNING,
+                color=theme.WARNING,
             ),
             content=ft.Column(
-                [ft.Text(m, size=13, color=TEXT_MUTED) for m in messages],
+                [ft.Text(m, size=13, color=theme.TEXT_MUTED) for m in messages],
                 spacing=8,
                 tight=True,
                 width=380,
@@ -441,7 +431,7 @@ class ExportView:
                 focusable(
                     ft.Container(
                         content=ft.Text(
-                            i18n.t("common.cancel"), size=13.5, color=TEXT_MUTED
+                            i18n.t("common.cancel"), size=13.5, color=theme.TEXT_MUTED
                         ),
                         padding=ft.Padding(left=12, right=12, top=10, bottom=10),
                         ink=True,
@@ -455,9 +445,9 @@ class ExportView:
                             i18n.t("export.sync_export_anyway"),
                             size=13.5,
                             weight=ft.FontWeight.W_600,
-                            color=ACCENT_ON,
+                            color=theme.ACCENT_ON,
                         ),
-                        bgcolor=ACCENT,
+                        bgcolor=theme.ACCENT,
                         border_radius=8,
                         padding=ft.Padding(left=18, right=18, top=10, bottom=10),
                         ink=True,

@@ -6,28 +6,11 @@ from pathlib import Path
 import flet as ft
 from flet.controls.control_event import Event
 
+from app import theme
 from app.components.back_link import build_back_link
 from app.dialogs import dialog_action
 from app.state import AppState
-from app.theme import (
-    ACCENT,
-    ACCENT_ON,
-    BG_INPUT,
-    BORDER_COLOR,
-    BORDER_STRONG,
-    ERROR,
-    FOCUS_RING,
-    FOCUS_RING_WIDTH,
-    SUCCESS,
-    TEXT,
-    TEXT_DIM,
-    TEXT_H,
-    TEXT_HINT,
-    TEXT_MUTED,
-    WARNING,
-    border_all,
-    focusable,
-)
+from app.theme import border_all, focusable
 from app.toasts import show_toast
 from core.i18n import i18n
 from core.project_actions import detect_and_store_characters
@@ -66,19 +49,21 @@ class CharacterGlossaryView:
             i18n.t("characters.title"),
             size=26,
             weight=ft.FontWeight.W_700,
-            color=TEXT_H,
+            color=theme.TEXT_H,
         )
-        self._subtitle = ft.Text(i18n.t("characters.subtitle"), size=13, color=TEXT_DIM)
+        self._subtitle = ft.Text(
+            i18n.t("characters.subtitle"), size=13, color=theme.TEXT_DIM
+        )
 
         self._variable_field = ft.TextField(
             hint_text=i18n.t("characters.variable"),
-            hint_style=ft.TextStyle(color=TEXT_HINT),
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
-            cursor_color=ACCENT,
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             border_radius=8,
             height=44,
             width=160,
@@ -86,13 +71,13 @@ class CharacterGlossaryView:
         )
         self._display_name_field = ft.TextField(
             hint_text=i18n.t("characters.display_name"),
-            hint_style=ft.TextStyle(color=TEXT_HINT),
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
-            cursor_color=ACCENT,
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             border_radius=8,
             height=44,
             width=200,
@@ -102,12 +87,12 @@ class CharacterGlossaryView:
             i18n.t("characters.add"),
             size=13,
             weight=ft.FontWeight.W_600,
-            color=ACCENT_ON,
+            color=theme.ACCENT_ON,
         )
         self._add_btn = focusable(
             ft.Container(
                 content=self._add_text,
-                bgcolor=ACCENT,
+                bgcolor=theme.ACCENT,
                 border_radius=8,
                 padding=ft.Padding(left=16, right=16, top=12, bottom=12),
                 ink=True,
@@ -118,20 +103,20 @@ class CharacterGlossaryView:
             i18n.t("characters.detect"),
             size=13,
             weight=ft.FontWeight.W_500,
-            color=TEXT,
+            color=theme.TEXT,
         )
         self._detect_btn = focusable(
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.SEARCH, size=15, color=TEXT),
+                        ft.Icon(ft.Icons.SEARCH, size=15, color=theme.TEXT),
                         self._detect_text,
                     ],
                     spacing=7,
                     tight=True,
                 ),
-                bgcolor=BG_INPUT,
-                border=border_all(1, BORDER_STRONG),
+                bgcolor=theme.BG_INPUT,
+                border=border_all(1, theme.BORDER_STRONG),
                 border_radius=8,
                 padding=ft.Padding(left=14, right=14, top=11, bottom=11),
                 ink=True,
@@ -142,18 +127,20 @@ class CharacterGlossaryView:
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.DELETE_SWEEP_OUTLINED, size=15, color=ERROR),
+                        ft.Icon(
+                            ft.Icons.DELETE_SWEEP_OUTLINED, size=15, color=theme.ERROR
+                        ),
                         ft.Text(
                             i18n.t("characters.clear_all"),
                             size=13,
                             weight=ft.FontWeight.W_500,
-                            color=ERROR,
+                            color=theme.ERROR,
                         ),
                     ],
                     spacing=7,
                     tight=True,
                 ),
-                border=border_all(1, BORDER_STRONG),
+                border=border_all(1, theme.BORDER_STRONG),
                 border_radius=8,
                 padding=ft.Padding(left=14, right=14, top=11, bottom=11),
                 ink=True,
@@ -228,16 +215,16 @@ class CharacterGlossaryView:
                         i18n.t("characters.purpose_title"),
                         size=13,
                         weight=ft.FontWeight.W_600,
-                        color=TEXT_H,
+                        color=theme.TEXT_H,
                     ),
                     *(
                         ft.Row(
                             [
-                                ft.Icon(icon, size=15, color=ACCENT),
+                                ft.Icon(icon, size=15, color=theme.ACCENT),
                                 ft.Text(
                                     i18n.t(key),
                                     size=12.5,
-                                    color=TEXT_MUTED,
+                                    color=theme.TEXT_MUTED,
                                     expand=True,
                                 ),
                             ],
@@ -250,8 +237,8 @@ class CharacterGlossaryView:
                 spacing=9,
                 tight=True,
             ),
-            bgcolor=BG_INPUT,
-            border=border_all(1, BORDER_COLOR),
+            bgcolor=theme.BG_INPUT,
+            border=border_all(1, theme.BORDER_COLOR),
             border_radius=12,
             padding=ft.Padding(left=18, right=18, top=15, bottom=15),
         )
@@ -262,7 +249,9 @@ class CharacterGlossaryView:
         self._clear_all_btn.visible = bool(characters)
         if not characters:
             self._list_col.controls = [
-                ft.Text(i18n.t("characters.no_characters"), size=13, color=TEXT_HINT)
+                ft.Text(
+                    i18n.t("characters.no_characters"), size=13, color=theme.TEXT_HINT
+                )
             ]
         else:
             self._list_col.controls = [self._build_row(c) for c in characters]
@@ -279,13 +268,13 @@ class CharacterGlossaryView:
         notes_field = ft.TextField(
             value=character.notes or "",
             hint_text=i18n.t("characters.notes"),
-            hint_style=ft.TextStyle(color=TEXT_HINT),
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
-            cursor_color=ACCENT,
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             border_radius=8,
             expand=True,
             content_padding=ft.Padding(left=10, right=10, top=8, bottom=8),
@@ -308,7 +297,7 @@ class CharacterGlossaryView:
                 return
             self._repo.update_notes(character.variable, value)
             character.notes = value
-            show_toast(self._page, i18n.t("characters.notes_saved"), SUCCESS)
+            show_toast(self._page, i18n.t("characters.notes_saved"), theme.SUCCESS)
 
         notes_field.on_blur = _on_notes_blur
 
@@ -324,16 +313,18 @@ class CharacterGlossaryView:
                                 character.variable,
                                 size=13.5,
                                 weight=ft.FontWeight.W_600,
-                                color=TEXT,
+                                color=theme.TEXT,
                             ),
-                            ft.Text(character.display_name, size=13, color=TEXT_MUTED),
+                            ft.Text(
+                                character.display_name, size=13, color=theme.TEXT_MUTED
+                            ),
                             ft.Container(expand=True),
                             focusable(
                                 ft.Container(
                                     content=ft.Icon(
                                         ft.Icons.DELETE_OUTLINE,
                                         size=16,
-                                        color=ERROR,
+                                        color=theme.ERROR,
                                     ),
                                     ink=True,
                                     border_radius=8,
@@ -350,7 +341,7 @@ class CharacterGlossaryView:
                 spacing=8,
             ),
             padding=ft.Padding(left=14, right=14, top=10, bottom=10),
-            border=border_all(1, BORDER_COLOR),
+            border=border_all(1, theme.BORDER_COLOR),
             border_radius=10,
         )
 
@@ -372,7 +363,7 @@ class CharacterGlossaryView:
             show_toast(
                 self._page,
                 i18n.t("characters.deleted_one").format(name=variable),
-                SUCCESS,
+                theme.SUCCESS,
             )
 
         return ft.AlertDialog(
@@ -381,9 +372,9 @@ class CharacterGlossaryView:
                 i18n.t("characters.confirm_delete"),
                 size=16,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             actions=[
                 dialog_action(
                     i18n.t("common.cancel"),
@@ -428,22 +419,22 @@ class CharacterGlossaryView:
             show_toast(
                 self._page,
                 i18n.t("characters.cleared_count").format(n=deleted),
-                SUCCESS,
+                theme.SUCCESS,
             )
 
         return ft.AlertDialog(
             modal=True,
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             title=ft.Text(
                 i18n.t("characters.confirm_clear_all"),
                 size=16,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
             content=ft.Text(
                 i18n.t("characters.confirm_clear_all_message").format(n=count),
                 size=13.5,
-                color=TEXT_MUTED,
+                color=theme.TEXT_MUTED,
                 width=360,
             ),
             actions=[
@@ -472,7 +463,7 @@ class CharacterGlossaryView:
         show_toast(
             self._page,
             i18n.t("characters.detected_count").format(n=count),
-            SUCCESS if count else WARNING,
+            theme.SUCCESS if count else theme.WARNING,
         )
 
     def _on_add_clicked(self, _e: Event[ft.TextButton]) -> None:

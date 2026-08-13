@@ -1,9 +1,15 @@
 """Shared color palette, border helper and focus wrapper for the UI.
 
-Centralizes the dark-theme colors previously duplicated in every view and
-component module. Import the named colors directly:
+Centralizes the colors previously duplicated in every view and component
+module. Import the module, never the names:
 
-    from app.theme import ACCENT, TEXT_H, border_all
+    from app import theme
+    ...
+    bgcolor=theme.BG_MENU
+
+`from app.theme import BG_MENU` binds the string at import time, which is
+exactly what let a colour drift out of here and into a view in the first
+place.
 """
 
 from collections.abc import Callable
@@ -40,6 +46,30 @@ DOT_DRAFT = "#7fbfff"
 DOT_IMPORTED = "#c9a5ff"
 DOT_AI = "#ffc947"
 DOT_HUMAN = "#7ddf9b"
+
+SURFACE_DISABLED = "#26242f"
+BANNER_BG = "#1b1a26"
+TOOLBAR_BG = "#17161f"
+TABLE_HEADER_BG = "#15141d"
+PANEL_BG = "#201d2b"
+TILE_BG = "#1f1b2b"
+
+BORDER_SUBTLE = "#322f3d"
+BORDER_ROW = "#1e1d27"
+DANGER_BORDER = "#4a2828"
+
+TOAST_SUCCESS_BG = "#16281c"
+TOAST_WARNING_BG = "#2b2210"
+TOAST_ERROR_BG = "#2b1c1c"
+
+SUCCESS_PANEL_BG = "#0f2316"
+SUCCESS_PANEL_BORDER = "#2a6640"
+SUCCESS_TITLE = "#bdeccb"
+SUCCESS_PATH = "#8aa792"
+ON_SUCCESS = "#10261a"
+
+STEP_DONE_BG = "#2a2638"
+STEP_TODO_BORDER = "#423f4d"
 
 
 def border_all(width: float, color: str) -> ft.Border:

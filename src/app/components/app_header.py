@@ -5,7 +5,8 @@ from collections.abc import Callable
 import flet as ft
 from flet.controls.control_event import Event
 
-from app.theme import BG, BORDER, TEXT_H, TEXT_HINT, focusable
+from app import theme
+from app.theme import focusable
 from core.i18n import i18n
 from core.languages import localized_label
 
@@ -41,7 +42,7 @@ def _build_project_label(game_name: str, target_language: str) -> ft.Control:
         content=ft.Text(
             " · ".join(parts),
             size=13,
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
             no_wrap=True,
             overflow=ft.TextOverflow.ELLIPSIS,
             tooltip=" · ".join(parts),
@@ -77,13 +78,13 @@ def build_app_header(
                     APP_NAME,
                     size=15,
                     weight=ft.FontWeight.W_700,
-                    color=TEXT_H,
+                    color=theme.TEXT_H,
                 ),
                 _build_project_label(game_name, target_language),
                 focusable(
                     ft.Container(
                         content=ft.Icon(
-                            ft.Icons.HELP_OUTLINE, size=18, color=TEXT_HINT
+                            ft.Icons.HELP_OUTLINE, size=18, color=theme.TEXT_HINT
                         ),
                         width=32,
                         height=32,
@@ -99,7 +100,7 @@ def build_app_header(
                 focusable(
                     ft.Container(
                         content=ft.Icon(
-                            ft.Icons.SETTINGS_OUTLINED, size=18, color=TEXT_HINT
+                            ft.Icons.SETTINGS_OUTLINED, size=18, color=theme.TEXT_HINT
                         ),
                         width=32,
                         height=32,
@@ -116,6 +117,6 @@ def build_app_header(
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
         padding=ft.Padding(left=40, right=40, top=14, bottom=14),
-        border=ft.Border(bottom=ft.BorderSide(1, BORDER)),
-        bgcolor=BG,
+        border=ft.Border(bottom=ft.BorderSide(1, theme.BORDER)),
+        bgcolor=theme.BG,
     )

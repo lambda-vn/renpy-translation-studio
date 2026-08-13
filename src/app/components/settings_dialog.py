@@ -5,20 +5,8 @@ from collections.abc import Callable
 import flet as ft
 from flet.controls.control_event import Event
 
-from app.theme import (
-    ACCENT,
-    BG_INPUT,
-    BORDER_STRONG,
-    ERROR,
-    FOCUS_RING,
-    FOCUS_RING_WIDTH,
-    TEXT_H,
-    TEXT_HINT,
-    TEXT_MUTED,
-    TEXT_PATH,
-    border_all,
-    focusable,
-)
+from app import theme
+from app.theme import border_all, focusable
 from core.i18n import SUPPORTED_LOCALES, i18n
 from core.languages import localized_label
 from core.settings import settings
@@ -47,7 +35,7 @@ def build_settings_dialog(
         An AlertDialog with language, SDK path, and provider config controls.
     """
     saved_sdk = settings.get("sdk_path")
-    sdk_path_label = ft.Text(saved_sdk or "", size=13, color=TEXT_PATH)
+    sdk_path_label = ft.Text(saved_sdk or "", size=13, color=theme.TEXT_PATH)
 
     def on_locale_changed(e: Event[ft.Dropdown]) -> None:
         locale = e.control.value or "en"
@@ -72,7 +60,7 @@ def build_settings_dialog(
 
     sdk_clear_btn = focusable(
         ft.Container(
-            content=ft.Icon(ft.Icons.CLOSE, size=14, color=TEXT_HINT),
+            content=ft.Icon(ft.Icons.CLOSE, size=14, color=theme.TEXT_HINT),
             width=24,
             height=24,
             alignment=ft.Alignment(0, 0),
@@ -105,7 +93,9 @@ def build_settings_dialog(
         """
         stats = translation_memory.stats()
         if not stats:
-            return [ft.Text(i18n.t("settings.memory_empty"), size=12, color=TEXT_HINT)]
+            return [
+                ft.Text(i18n.t("settings.memory_empty"), size=12, color=theme.TEXT_HINT)
+            ]
         return [
             build_memory_row(source, target, count) for source, target, count in stats
         ]
@@ -167,7 +157,9 @@ def build_settings_dialog(
 
         forget_btn = focusable(
             ft.Container(
-                content=ft.Icon(ft.Icons.DELETE_OUTLINE, size=15, color=TEXT_HINT),
+                content=ft.Icon(
+                    ft.Icons.DELETE_OUTLINE, size=15, color=theme.TEXT_HINT
+                ),
                 width=26,
                 height=26,
                 alignment=ft.Alignment(0, 0),
@@ -182,7 +174,7 @@ def build_settings_dialog(
         )
         cancel_btn = focusable(
             ft.Container(
-                content=ft.Icon(ft.Icons.CLOSE, size=15, color=TEXT_HINT),
+                content=ft.Icon(ft.Icons.CLOSE, size=15, color=theme.TEXT_HINT),
                 width=26,
                 height=26,
                 alignment=ft.Alignment(0, 0),
@@ -202,7 +194,7 @@ def build_settings_dialog(
                     i18n.t("settings.memory_confirm"),
                     size=12,
                     weight=ft.FontWeight.W_600,
-                    color=ERROR,
+                    color=theme.ERROR,
                 ),
                 padding=ft.Padding(left=8, right=8, top=4, bottom=4),
                 border_radius=6,
@@ -220,13 +212,13 @@ def build_settings_dialog(
                         source=localized_label(source), target=localized_label(target)
                     ),
                     size=13,
-                    color=TEXT_H,
+                    color=theme.TEXT_H,
                     expand=True,
                 ),
                 ft.Text(
                     i18n.t("settings.memory_entries").format(n=count),
                     size=12,
-                    color=TEXT_MUTED,
+                    color=theme.TEXT_MUTED,
                 ),
                 confirm_btn,
                 forget_btn,
@@ -252,9 +244,9 @@ def build_settings_dialog(
             i18n.t("settings.title"),
             size=18,
             weight=ft.FontWeight.W_600,
-            color=TEXT_H,
+            color=theme.TEXT_H,
         ),
-        bgcolor="#1a1822",
+        bgcolor=theme.BG_MENU,
         content=ft.Column(
             [
                 ft.Column(
@@ -263,16 +255,16 @@ def build_settings_dialog(
                             i18n.t("settings.language_label"),
                             size=12,
                             weight=ft.FontWeight.W_600,
-                            color=TEXT_MUTED,
+                            color=theme.TEXT_MUTED,
                         ),
                         ft.Dropdown(
                             options=_LOCALE_OPTIONS,
                             value=i18n.locale,
-                            bgcolor=BG_INPUT,
-                            border_color=BORDER_STRONG,
-                            focused_border_color=FOCUS_RING,
-                            focused_border_width=FOCUS_RING_WIDTH,
-                            color=TEXT_H,
+                            bgcolor=theme.BG_INPUT,
+                            border_color=theme.BORDER_STRONG,
+                            focused_border_color=theme.FOCUS_RING,
+                            focused_border_width=theme.FOCUS_RING_WIDTH,
+                            color=theme.TEXT_H,
                             border_radius=11,
                             height=48,
                             dense=True,
@@ -288,12 +280,12 @@ def build_settings_dialog(
                             i18n.t("settings.sdk_label"),
                             size=12,
                             weight=ft.FontWeight.W_600,
-                            color=TEXT_MUTED,
+                            color=theme.TEXT_MUTED,
                         ),
                         ft.Text(
                             i18n.t("settings.sdk_hint"),
                             size=11.5,
-                            color=TEXT_HINT,
+                            color=theme.TEXT_HINT,
                         ),
                         ft.Row(
                             [
@@ -304,20 +296,20 @@ def build_settings_dialog(
                                                 ft.Icon(
                                                     ft.Icons.FOLDER_OPEN,
                                                     size=15,
-                                                    color=TEXT_H,
+                                                    color=theme.TEXT_H,
                                                 ),
                                                 ft.Text(
                                                     i18n.t("settings.sdk_browse"),
                                                     size=13,
                                                     weight=ft.FontWeight.W_500,
-                                                    color=TEXT_H,
+                                                    color=theme.TEXT_H,
                                                 ),
                                             ],
                                             spacing=7,
                                             tight=True,
                                         ),
-                                        bgcolor=BG_INPUT,
-                                        border=border_all(1, BORDER_STRONG),
+                                        bgcolor=theme.BG_INPUT,
+                                        border=border_all(1, theme.BORDER_STRONG),
                                         border_radius=8,
                                         padding=ft.Padding(
                                             left=14, right=14, top=9, bottom=9
@@ -341,12 +333,12 @@ def build_settings_dialog(
                             i18n.t("settings.memory_label"),
                             size=12,
                             weight=ft.FontWeight.W_600,
-                            color=TEXT_MUTED,
+                            color=theme.TEXT_MUTED,
                         ),
                         ft.Text(
                             i18n.t("settings.memory_hint"),
                             size=11.5,
-                            color=TEXT_HINT,
+                            color=theme.TEXT_HINT,
                         ),
                         memory_rows,
                     ],
@@ -358,27 +350,29 @@ def build_settings_dialog(
                             i18n.t("provider_config.title"),
                             size=12,
                             weight=ft.FontWeight.W_600,
-                            color=TEXT_MUTED,
+                            color=theme.TEXT_MUTED,
                         ),
                         focusable(
                             ft.Container(
                                 content=ft.Row(
                                     [
                                         ft.Icon(
-                                            ft.Icons.TRANSLATE, size=15, color=TEXT_H
+                                            ft.Icons.TRANSLATE,
+                                            size=15,
+                                            color=theme.TEXT_H,
                                         ),
                                         ft.Text(
                                             i18n.t("provider_config.open_settings"),
                                             size=13,
                                             weight=ft.FontWeight.W_500,
-                                            color=TEXT_H,
+                                            color=theme.TEXT_H,
                                         ),
                                     ],
                                     spacing=7,
                                     tight=True,
                                 ),
-                                bgcolor=BG_INPUT,
-                                border=border_all(1, BORDER_STRONG),
+                                bgcolor=theme.BG_INPUT,
+                                border=border_all(1, theme.BORDER_STRONG),
                                 border_radius=8,
                                 padding=ft.Padding(left=14, right=14, top=9, bottom=9),
                                 ink=True,
@@ -400,7 +394,7 @@ def build_settings_dialog(
                         i18n.t("settings.close"),
                         size=13.5,
                         weight=ft.FontWeight.W_500,
-                        color=ACCENT,
+                        color=theme.ACCENT,
                     ),
                     padding=ft.Padding(left=12, right=12, top=8, bottom=8),
                     ink=True,

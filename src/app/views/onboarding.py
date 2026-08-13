@@ -6,25 +6,8 @@ from pathlib import Path
 import flet as ft
 from flet.controls.control_event import Event
 
-from app.theme import (
-    ACCENT,
-    ACCENT_ON,
-    BG_INPUT,
-    BORDER_COLOR,
-    BORDER_STRONG,
-    ERROR,
-    FOCUS_RING,
-    FOCUS_RING_WIDTH,
-    SUCCESS,
-    TEXT,
-    TEXT_DIM,
-    TEXT_H,
-    TEXT_HINT,
-    TEXT_MUTED,
-    TEXT_PATH,
-    border_all,
-    focusable,
-)
+from app import theme
+from app.theme import border_all, focusable
 from core.i18n import SUPPORTED_LOCALES, i18n
 from core.settings import settings
 
@@ -71,28 +54,28 @@ class OnboardingView:
             i18n.t("onboarding.title"),
             size=26,
             weight=ft.FontWeight.W_700,
-            color=TEXT_H,
+            color=theme.TEXT_H,
         )
         self._subtitle = ft.Text(
             i18n.t("onboarding.subtitle"),
             size=13,
-            color=TEXT_DIM,
+            color=theme.TEXT_DIM,
         )
 
         self._lang_label = ft.Text(
             i18n.t("onboarding.language_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._lang_dropdown = ft.Dropdown(
             options=_LOCALE_OPTIONS,
             value=i18n.locale,
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=11,
             height=48,
             dense=True,
@@ -104,12 +87,12 @@ class OnboardingView:
             i18n.t("onboarding.sdk_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._sdk_hint = ft.Text(
             i18n.t("onboarding.sdk_hint"),
             size=11.5,
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
         )
         self._sdk_download_link = focusable(
             ft.Container(
@@ -117,7 +100,7 @@ class OnboardingView:
                     i18n.t("onboarding.sdk_download"),
                     size=11.5,
                     weight=ft.FontWeight.W_600,
-                    color=ACCENT,
+                    color=theme.ACCENT,
                 ),
                 ink=True,
                 border_radius=6,
@@ -129,32 +112,32 @@ class OnboardingView:
         self._sdk_examples = ft.Text(
             i18n.t("onboarding.sdk_examples"),
             size=11,
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
         )
         self._sdk_path_label = ft.Text(
             settings.get("sdk_path") or "",
             size=13,
-            color=TEXT_PATH,
+            color=theme.TEXT_PATH,
         )
         self._sdk_status = ft.Text("", size=12)
         self._sdk_browse_text = ft.Text(
             i18n.t("onboarding.sdk_browse"),
             size=13,
             weight=ft.FontWeight.W_500,
-            color=TEXT,
+            color=theme.TEXT,
         )
         self._sdk_browse_btn = focusable(
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.FOLDER_OPEN, size=15, color=TEXT),
+                        ft.Icon(ft.Icons.FOLDER_OPEN, size=15, color=theme.TEXT),
                         self._sdk_browse_text,
                     ],
                     spacing=7,
                     tight=True,
                 ),
-                bgcolor=BG_INPUT,
-                border=border_all(1, BORDER_STRONG),
+                bgcolor=theme.BG_INPUT,
+                border=border_all(1, theme.BORDER_STRONG),
                 border_radius=8,
                 padding=ft.Padding(left=14, right=14, top=9, bottom=9),
                 ink=True,
@@ -166,12 +149,12 @@ class OnboardingView:
             i18n.t("onboarding.finish"),
             size=14.5,
             weight=ft.FontWeight.W_600,
-            color=ACCENT_ON,
+            color=theme.ACCENT_ON,
         )
         self._finish_btn = focusable(
             ft.Container(
                 content=self._finish_text,
-                bgcolor=ACCENT,
+                bgcolor=theme.ACCENT,
                 border_radius=12,
                 padding=ft.Padding(left=28, right=28, top=14, bottom=14),
                 ink=True,
@@ -278,10 +261,10 @@ class OnboardingView:
         self._sdk_path_label.value = str(path)
         if _sdk_is_valid(path):
             self._sdk_status.value = i18n.t("onboarding.sdk_valid")
-            self._sdk_status.color = SUCCESS
+            self._sdk_status.color = theme.SUCCESS
         else:
             self._sdk_status.value = i18n.t("onboarding.sdk_invalid")
-            self._sdk_status.color = ERROR
+            self._sdk_status.color = theme.ERROR
 
     def _on_finish_clicked(self, _: Event[ft.TextButton]) -> None:
         """Navigate to project setup unless the chosen SDK path is wrong.
@@ -303,7 +286,7 @@ class OnboardingView:
         saved = settings.get("sdk_path")
         if saved and not _sdk_is_valid(Path(saved)):
             self._sdk_status.value = i18n.t("onboarding.sdk_invalid")
-            self._sdk_status.color = ERROR
+            self._sdk_status.color = theme.ERROR
             self._page.update()
             return
         settings.set("locale", i18n.locale)

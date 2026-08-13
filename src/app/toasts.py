@@ -4,13 +4,30 @@ from collections.abc import Callable
 
 import flet as ft
 
-from app.theme import ACCENT, SUCCESS, TEXT_HINT, WARNING
+from app import theme
 
-_BACKGROUNDS = {
-    SUCCESS: "#16281c",
-    WARNING: "#2b2210",
-}
-_ERROR_BACKGROUND = "#2b1c1c"
+
+def _background(color: str) -> str:
+    """Return the fill a toast of that outcome sits on.
+
+    Resolved on each call rather than held in a module-level table: the
+    colours move with the theme, and a table filled at import would keep
+    the palette the application started with.
+
+    Args:
+        color: The outcome, as one of the theme's SUCCESS, WARNING or
+            ERROR colors. Anything else is a plain notice.
+
+    Returns:
+        The matching background color.
+    """
+    if color == theme.SUCCESS:
+        return theme.TOAST_SUCCESS_BG
+    if color == theme.WARNING:
+        return theme.TOAST_WARNING_BG
+    if color == theme.ERROR:
+        return theme.TOAST_ERROR_BG
+    return theme.BG_MENU
 
 
 def build_toast(
@@ -35,7 +52,9 @@ def build_toast(
     Args:
         message: What happened, already localized.
         color: The outcome, as one of the theme's SUCCESS, WARNING or
-            ERROR colors. Anything else is treated as an error.
+            ERROR colors. Anything else is a plain notice and gets the
+            neutral background: telling somebody a model is loading must
+            not look like telling them something went wrong.
         action: Label of an optional button shown next to the message.
         on_action: Called when that button is clicked.
 
@@ -44,16 +63,16 @@ def build_toast(
     """
     return ft.SnackBar(
         content=ft.Text(message, size=13, color=color),
-        bgcolor=_BACKGROUNDS.get(color, _ERROR_BACKGROUND),
+        bgcolor=_background(color),
         behavior=ft.SnackBarBehavior.FLOATING,
         show_close_icon=True,
-        close_icon_color=TEXT_HINT,
+        close_icon_color=theme.TEXT_HINT,
         duration=ft.Duration(seconds=10 if action else 5),
         margin=ft.Margin(left=20, right=20, bottom=20),
         action=(
             ft.SnackBarAction(
                 label=action,
-                text_color=ACCENT,
+                text_color=theme.ACCENT,
                 on_click=lambda _e: on_action() if on_action else None,
             )
             if action

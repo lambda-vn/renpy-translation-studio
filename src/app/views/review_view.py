@@ -14,35 +14,13 @@ from typing import Any, ParamSpec
 import flet as ft
 from flet.controls.control_event import Event
 
-from app import shortcuts
+from app import shortcuts, theme
 from app.components.stepper import build_stepper
 from app.dialogs import dialog_action
 from app.live_server import LiveServer
 from app.state import AppState, ReviewViewState
-from app.theme import (
-    ACCENT,
-    ACCENT_ON,
-    BG_FILE_SEL,
-    BG_INPUT,
-    BG_MENU,
-    BORDER_COLOR,
-    DOT_AI,
-    DOT_DRAFT,
-    DOT_HUMAN,
-    DOT_IMPORTED,
-    DOT_NONE,
-    ERROR,
-    FOCUS_RING,
-    FOCUS_RING_WIDTH,
-    SUCCESS,
-    TEXT,
-    TEXT_H,
-    TEXT_HINT,
-    TEXT_MUTED,
-    WARNING,
-    border_all,
-    focusable,
-)
+from app.theme import border_all, focusable
+from app.toasts import build_toast
 from app.ui_thread import on_ui_thread, safe_update
 from core.export_sync import META_SAVED_AT, record_save
 from core.file_reveal import RevealError, reveal_in_file_manager
@@ -98,11 +76,11 @@ _CLEAR_STATUS_SETS: dict[str, list[TranslationStatus]] = {
 
 # ── Couleurs ──────────────────────────────────────────────────────────────── #
 _STATUS_COLORS = {
-    "not_translated": DOT_NONE,
-    "draft": DOT_DRAFT,
-    "imported": DOT_IMPORTED,
-    "ai_suggested": DOT_AI,
-    "human_validated": DOT_HUMAN,
+    "not_translated": theme.DOT_NONE,
+    "draft": theme.DOT_DRAFT,
+    "imported": theme.DOT_IMPORTED,
+    "ai_suggested": theme.DOT_AI,
+    "human_validated": theme.DOT_HUMAN,
 }
 
 _STATUS_ICONS = {
@@ -148,7 +126,7 @@ _ROW_ACTIONS = 5  # nombre de boutons d'action par ligne
 # l'anneau de focus, leurs colonnes tombent 48 px a cote de celles de la ligne
 # qu'elles commentent.
 _COL_ACTIONS = (
-    _ROW_ACTIONS * (_COL_ACTION + 2 * FOCUS_RING_WIDTH)
+    _ROW_ACTIONS * (_COL_ACTION + 2 * theme.FOCUS_RING_WIDTH)
     + (_ROW_ACTIONS - 1) * _ROW_SPACING
 )
 _EDIT_DEBOUNCE = 0.35  # delai avant d'ecrire une saisie en base (s)
@@ -388,28 +366,32 @@ class ReviewView:
             "...",
             size=13,
             weight=ft.FontWeight.W_500,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
-        self._sync_text = ft.Text("", size=12, color=TEXT_HINT)
+        self._sync_text = ft.Text("", size=12, color=theme.TEXT_HINT)
         self._progress_bar = ft.ProgressBar(
-            value=0, color=SUCCESS, bgcolor=BG_INPUT, height=4, border_radius=2
+            value=0,
+            color=theme.SUCCESS,
+            bgcolor=theme.BG_INPUT,
+            height=4,
+            border_radius=2,
         )
-        self._progress_text = ft.Text("", size=11, color=TEXT_HINT)
+        self._progress_text = ft.Text("", size=11, color=theme.TEXT_HINT)
         self._save_box = ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.SAVE_OUTLINED, size=15, color=ACCENT_ON),
+                    ft.Icon(ft.Icons.SAVE_OUTLINED, size=15, color=theme.ACCENT_ON),
                     ft.Text(
                         i18n.t("review.save_btn"),
                         size=13,
                         weight=ft.FontWeight.W_600,
-                        color=ACCENT_ON,
+                        color=theme.ACCENT_ON,
                     ),
                 ],
                 spacing=7,
                 tight=True,
             ),
-            bgcolor=ACCENT,
+            bgcolor=theme.ACCENT,
             border_radius=9,
             padding=ft.Padding(left=14, right=14, top=9, bottom=9),
             ink=True,
@@ -427,26 +409,28 @@ class ReviewView:
                 ft.dropdown.Option(
                     key=_REVIEW_FILTER,
                     text=i18n.t("review.filter_needs_review"),
-                    leading_icon=ft.Icon(ft.Icons.FLAG, size=14, color=WARNING),
+                    leading_icon=ft.Icon(ft.Icons.FLAG, size=14, color=theme.WARNING),
                 ),
                 ft.dropdown.Option(
                     key=_ERROR_FILTER,
                     text=i18n.t("review.filter_errors"),
-                    leading_icon=ft.Icon(ft.Icons.ERROR_OUTLINE, size=14, color=ERROR),
+                    leading_icon=ft.Icon(
+                        ft.Icons.ERROR_OUTLINE, size=14, color=theme.ERROR
+                    ),
                 ),
                 ft.dropdown.Option(
                     key="",
                     text=i18n.t("review.filter_all"),
                     leading_icon=ft.Icon(
-                        ft.Icons.FILTER_ALT_OFF_OUTLINED, size=14, color=TEXT_HINT
+                        ft.Icons.FILTER_ALT_OFF_OUTLINED, size=14, color=theme.TEXT_HINT
                     ),
                 ),
             ],
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             width=190,
             content_padding=ft.Padding(left=10, right=0, top=0, bottom=0),
@@ -461,12 +445,12 @@ class ReviewView:
             menu_height=320,
             leading_icon=ft.Icons.PERSON_SEARCH_OUTLINED,
             hint_text=i18n.t("review.filter_character_hint"),
-            hint_style=ft.TextStyle(color=TEXT_HINT),
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             width=260,
             content_padding=ft.Padding(left=10, right=0, top=0, bottom=0),
@@ -476,15 +460,15 @@ class ReviewView:
         self._search_field = ft.TextField(
             value=self._vstate.search_query,
             hint_text=i18n.t("review.search_hint"),
-            hint_style=ft.TextStyle(color=TEXT_HINT),
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
             prefix_icon=ft.Icons.SEARCH,
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
             border_radius=8,
-            color=TEXT,
-            cursor_color=ACCENT,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             height=40,
             width=230,
             content_padding=ft.Padding(left=8, right=8, top=0, bottom=0),
@@ -497,11 +481,11 @@ class ReviewView:
                 ft.dropdown.Option(key="all", text=i18n.t("translation.scope_all")),
                 ft.dropdown.Option(key="file", text=i18n.t("translation.scope_file")),
             ],
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             width=190,
             content_padding=ft.Padding(left=10, right=0, top=0, bottom=0),
@@ -511,19 +495,19 @@ class ReviewView:
             i18n.t("translation.translate_automatic"),
             size=13,
             weight=ft.FontWeight.W_600,
-            color=ACCENT_ON,
+            color=theme.ACCENT_ON,
         )
         self._translate_btn = focusable(
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.AUTO_AWESOME, size=14, color=ACCENT_ON),
+                        ft.Icon(ft.Icons.AUTO_AWESOME, size=14, color=theme.ACCENT_ON),
                         self._translate_text,
                     ],
                     spacing=7,
                     tight=True,
                 ),
-                bgcolor=ACCENT,
+                bgcolor=theme.ACCENT,
                 border_radius=9,
                 padding=ft.Padding(left=14, right=14, top=9, bottom=9),
                 ink=True,
@@ -532,41 +516,41 @@ class ReviewView:
             radius=9,
         )
         self._job_provider_text = ft.Text(
-            "", size=13.5, weight=ft.FontWeight.W_600, color=TEXT_H
+            "", size=13.5, weight=ft.FontWeight.W_600, color=theme.TEXT_H
         )
         self._job_progress_bar = ft.ProgressBar(
-            value=0, color=ACCENT, bgcolor=BG_INPUT, expand=True
+            value=0, color=theme.ACCENT, bgcolor=theme.BG_INPUT, expand=True
         )
-        self._job_counter_text = ft.Text("", size=13, color=TEXT_MUTED)
-        self._job_batch_text = ft.Text("", size=12.5, color=TEXT_HINT)
-        self._job_hint_text = ft.Text("", size=12, color=TEXT_HINT)
-        self._job_event_text = ft.Text("", size=12, color=TEXT_HINT, expand=True)
+        self._job_counter_text = ft.Text("", size=13, color=theme.TEXT_MUTED)
+        self._job_batch_text = ft.Text("", size=12.5, color=theme.TEXT_HINT)
+        self._job_hint_text = ft.Text("", size=12, color=theme.TEXT_HINT)
+        self._job_event_text = ft.Text("", size=12, color=theme.TEXT_HINT, expand=True)
         self._job_cancel_text = ft.Text(
             i18n.t("translation.cancel"),
             size=13,
             weight=ft.FontWeight.W_600,
-            color=ERROR,
+            color=theme.ERROR,
         )
         self._job_cancel_btn = focusable(
             ft.Container(
                 content=self._job_cancel_text,
                 ink=True,
                 border_radius=8,
-                border=border_all(1, "#4a2828"),
+                border=border_all(1, theme.DANGER_BORDER),
                 padding=ft.Padding(left=14, right=14, top=7, bottom=7),
             ),
             on_click=self._on_cancel_clicked,
         )
         self._job_banner = ft.Container(
             visible=False,
-            bgcolor="#1b1a26",
-            border=ft.Border(bottom=ft.BorderSide(1, "#1a1820")),
+            bgcolor=theme.BANNER_BG,
+            border=ft.Border(bottom=ft.BorderSide(1, theme.BORDER)),
             padding=ft.Padding(left=14, right=14, top=10, bottom=10),
             content=ft.Column(
                 [
                     ft.Row(
                         [
-                            ft.Icon(ft.Icons.AUTO_AWESOME, size=15, color=ACCENT),
+                            ft.Icon(ft.Icons.AUTO_AWESOME, size=15, color=theme.ACCENT),
                             self._job_provider_text,
                             self._job_progress_bar,
                             self._job_counter_text,
@@ -590,15 +574,15 @@ class ReviewView:
             i18n.t("translation.choose_provider_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._provider_choice_dropdown = ft.Dropdown(
             options=[],
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             width=300,
             dense=True,
@@ -608,7 +592,7 @@ class ReviewView:
             i18n.t("translation.scope_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._job_selection_col = ft.Column(
             spacing=9,
@@ -620,12 +604,12 @@ class ReviewView:
             i18n.t("translation.start"),
             size=13.5,
             weight=ft.FontWeight.W_600,
-            color=ACCENT_ON,
+            color=theme.ACCENT_ON,
         )
         self._provider_choice_start_btn = focusable(
             ft.Container(
                 content=self._provider_choice_start_text,
-                bgcolor=ACCENT,
+                bgcolor=theme.ACCENT,
                 border_radius=8,
                 padding=ft.Padding(left=18, right=18, top=10, bottom=10),
                 ink=True,
@@ -633,7 +617,7 @@ class ReviewView:
             on_click=self._on_provider_choice_confirmed,
         )
         self._provider_choice_cancel_text = ft.Text(
-            i18n.t("common.cancel"), size=13.5, color=TEXT_MUTED
+            i18n.t("common.cancel"), size=13.5, color=theme.TEXT_MUTED
         )
         self._provider_choice_cancel_btn = focusable(
             ft.Container(
@@ -646,7 +630,7 @@ class ReviewView:
         )
         self._job_dialog = ft.AlertDialog(
             modal=True,
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             content=self._job_selection_col,
             actions=[
                 self._provider_choice_cancel_btn,
@@ -658,18 +642,18 @@ class ReviewView:
         self._provider_warning_text = ft.Text(
             i18n.t("translation.no_provider_configured"),
             size=12,
-            color=WARNING,
+            color=theme.WARNING,
         )
         self._language_warning_text = ft.Text(
             "",
             size=12,
-            color=WARNING,
+            color=theme.WARNING,
         )
         self._provider_link_text = ft.Text(
             i18n.t("provider_config.open_settings"),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=ACCENT,
+            color=theme.ACCENT,
         )
         self._provider_link_btn = focusable(
             ft.Container(
@@ -713,11 +697,11 @@ class ReviewView:
                 ),
                 ft.dropdown.Option(key="json", text=i18n.t("interchange.format_json")),
             ],
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             content_padding=ft.Padding(left=10, right=0, top=0, bottom=0),
             dense=True,
@@ -729,11 +713,11 @@ class ReviewView:
                 ft.dropdown.Option(key="file", text=i18n.t("translation.scope_file")),
                 ft.dropdown.Option(key="all", text=i18n.t("translation.scope_all")),
             ],
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             content_padding=ft.Padding(left=10, right=0, top=0, bottom=0),
             dense=True,
@@ -750,11 +734,11 @@ class ReviewView:
                 ft.dropdown.Option(key="file", text=i18n.t("translation.scope_file")),
                 ft.dropdown.Option(key="all", text=i18n.t("translation.scope_all")),
             ],
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             width=190,
             content_padding=ft.Padding(left=10, right=0, top=0, bottom=0),
@@ -772,11 +756,11 @@ class ReviewView:
                 ),
                 ft.dropdown.Option(key="", text=i18n.t("review.clear_status_all")),
             ],
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             width=250,
             content_padding=ft.Padding(left=10, right=0, top=0, bottom=0),
@@ -832,8 +816,8 @@ class ReviewView:
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(icon, size=17, color=TEXT_MUTED),
-                        ft.Text(label, size=12, color=TEXT_MUTED),
+                        ft.Icon(icon, size=17, color=theme.TEXT_MUTED),
+                        ft.Text(label, size=12, color=theme.TEXT_MUTED),
                     ],
                     spacing=6,
                     tight=True,
@@ -853,7 +837,7 @@ class ReviewView:
         Returns:
             A one pixel wide vertical rule.
         """
-        return ft.Container(width=1, height=22, bgcolor=BORDER_COLOR)
+        return ft.Container(width=1, height=22, bgcolor=theme.BORDER_COLOR)
 
     @staticmethod
     def _row_action(
@@ -871,7 +855,7 @@ class ReviewView:
         """
         return focusable(
             ft.Container(
-                content=ft.Icon(icon, size=14, color=TEXT_HINT),
+                content=ft.Icon(icon, size=14, color=theme.TEXT_HINT),
                 width=_COL_ACTION,
                 height=_ROW_ACTION_HEIGHT,
                 alignment=ft.Alignment(0, 0),
@@ -1405,12 +1389,12 @@ class ReviewView:
         return ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.FOLDER_OUTLINED, size=12, color=TEXT_HINT),
+                    ft.Icon(ft.Icons.FOLDER_OUTLINED, size=12, color=theme.TEXT_HINT),
                     ft.Text(
                         label,
                         size=11,
                         weight=ft.FontWeight.W_700,
-                        color=TEXT_HINT,
+                        color=theme.TEXT_HINT,
                         expand=True,
                         no_wrap=True,
                         overflow=ft.TextOverflow.ELLIPSIS,
@@ -1470,7 +1454,7 @@ class ReviewView:
                         fname,
                         size=13,
                         weight=(ft.FontWeight.W_600 if is_sel else ft.FontWeight.W_400),
-                        color=TEXT if is_sel else TEXT_MUTED,
+                        color=theme.TEXT if is_sel else theme.TEXT_MUTED,
                         no_wrap=True,
                         overflow=ft.TextOverflow.ELLIPSIS,
                     ),
@@ -1479,13 +1463,13 @@ class ReviewView:
                             ft.Icon(
                                 ft.Icons.SEARCH,
                                 size=11,
-                                color=ACCENT,
+                                color=theme.ACCENT,
                                 visible=bool(matches),
                             ),
                             ft.Text(
                                 str(matches) if matches else "",
                                 size=10,
-                                color=ACCENT,
+                                color=theme.ACCENT,
                                 weight=ft.FontWeight.W_600,
                             ),
                             ft.Icon(
@@ -1497,7 +1481,7 @@ class ReviewView:
                             ft.Text(
                                 f"{validated}/{total}",
                                 size=11,
-                                color=SUCCESS if is_done else TEXT_HINT,
+                                color=theme.SUCCESS if is_done else theme.TEXT_HINT,
                             ),
                             self._build_count_badge(
                                 "ai_suggested",
@@ -1521,7 +1505,7 @@ class ReviewView:
                 tight=True,
             ),
             opacity=0.35 if matches == 0 else 1.0,
-            bgcolor=BG_FILE_SEL if is_sel else "transparent",
+            bgcolor=theme.BG_FILE_SEL if is_sel else "transparent",
             border_radius=6,
             padding=ft.Padding(left=indent, right=10, top=8, bottom=8),
             ink=True,
@@ -1660,7 +1644,7 @@ class ReviewView:
             _e: Unused click event.
         """
         self._page.run_task(ft.Clipboard().set, source_file)
-        self._show_status(i18n.t("review.file_menu_copied"), SUCCESS)
+        self._show_status(i18n.t("review.file_menu_copied"), theme.SUCCESS)
 
     def _reveal_file(self, source_file: str) -> None:
         """Open the desktop file manager on this file.
@@ -1683,7 +1667,7 @@ class ReviewView:
         try:
             reveal_in_file_manager(Path(source_file))
         except RevealError:
-            self._show_status(i18n.t("review.file_menu_reveal_failed"), ERROR)
+            self._show_status(i18n.t("review.file_menu_reveal_failed"), theme.ERROR)
 
     def _translate_file(self, source_file: str) -> None:
         """Open the translation dialog, pinned to one file.
@@ -1733,8 +1717,8 @@ class ReviewView:
         _, name = _split_source_path(self._menu_file)
         return ft.Row(
             [
-                ft.Icon(ft.Icons.DESCRIPTION_OUTLINED, size=15, color=TEXT_HINT),
-                ft.Text(name, size=13, color=TEXT, expand=True, no_wrap=True),
+                ft.Icon(ft.Icons.DESCRIPTION_OUTLINED, size=15, color=theme.TEXT_HINT),
+                ft.Text(name, size=13, color=theme.TEXT, expand=True, no_wrap=True),
             ],
             spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -1896,7 +1880,7 @@ class ReviewView:
                 ft.Container(
                     content=ft.Text(
                         i18n.t("review.no_file_selected"),
-                        color=TEXT_HINT,
+                        color=theme.TEXT_HINT,
                         size=13,
                     ),
                     padding=ft.Padding(left=20, right=20, top=20, bottom=20),
@@ -1920,7 +1904,7 @@ class ReviewView:
                 ft.Container(
                     content=ft.Text(
                         i18n.t("review.no_results"),
-                        color=TEXT_HINT,
+                        color=theme.TEXT_HINT,
                         size=13,
                     ),
                     padding=ft.Padding(left=20, right=20, top=20, bottom=20),
@@ -2037,14 +2021,14 @@ class ReviewView:
         field = ft.TextField(
             value=unit.translated_text,
             hint_text="...",
-            hint_style=ft.TextStyle(color=TEXT_HINT),
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
             border_radius=8,
-            color=TEXT,
-            cursor_color=ACCENT,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             expand=True,
             multiline=True,
             min_lines=1,
@@ -2052,21 +2036,21 @@ class ReviewView:
             content_padding=ft.Padding(left=10, right=10, top=8, bottom=8),
         )
 
-        warning_text = ft.Text("", size=11, color=WARNING, visible=False)
+        warning_text = ft.Text("", size=11, color=theme.WARNING, visible=False)
         self._refresh_warning(warning_text, unit.source_text, unit.translated_text)
 
         review_icon = self._build_review_icon(unit.needs_review)
         note_field = ft.TextField(
             value=unit.note or "",
             hint_text=i18n.t("review.note_hint"),
-            hint_style=ft.TextStyle(color=TEXT_HINT),
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
             border_radius=8,
-            color=TEXT_MUTED,
-            cursor_color=ACCENT,
+            color=theme.TEXT_MUTED,
+            cursor_color=theme.ACCENT,
             text_size=12.5,
             expand=True,
             multiline=True,
@@ -2102,7 +2086,7 @@ class ReviewView:
             """
             if (note_field.value or "") == note_on_focus:
                 return
-            self._show_status(i18n.t("review.note_saved"), SUCCESS)
+            self._show_status(i18n.t("review.note_saved"), theme.SUCCESS)
 
         note_field.on_change = _on_note_changed
         note_field.on_focus = _on_note_focus
@@ -2190,7 +2174,7 @@ class ReviewView:
                                     unit.source_text,
                                     expand=True,
                                     size=13,
-                                    color=TEXT,
+                                    color=theme.TEXT,
                                     selectable=True,
                                     no_wrap=False,
                                 ),
@@ -2200,7 +2184,7 @@ class ReviewView:
                                         content=ft.Icon(
                                             ft.Icons.UNFOLD_MORE,
                                             size=13,
-                                            color=TEXT_HINT,
+                                            color=theme.TEXT_HINT,
                                         ),
                                         width=22,
                                         height=22,
@@ -2259,7 +2243,7 @@ class ReviewView:
                 tight=True,
             ),
             padding=ft.Padding(left=12, right=8, top=8, bottom=8),
-            border=ft.Border(bottom=ft.BorderSide(1, "#1e1d27")),
+            border=ft.Border(bottom=ft.BorderSide(1, theme.BORDER_ROW)),
         )
 
     def _build_duplicate_marker(
@@ -2294,7 +2278,7 @@ class ReviewView:
             if elsewhere
             else i18n.t("review.duplicates_here_tooltip").format(here=here)
         )
-        color = ACCENT if elsewhere else TEXT_HINT
+        color = theme.ACCENT if elsewhere else theme.TEXT_HINT
         counts_tooltip = f"{counts} {i18n.t('review.duplicates_badge_action')}"
         return focusable(
             ft.Container(
@@ -2344,13 +2328,13 @@ class ReviewView:
 
         block_ids = self._repo.find_duplicate_block_ids(source_text, block_id)
         if not block_ids:
-            self._show_status(i18n.t("review.duplicates_none"), WARNING)
+            self._show_status(i18n.t("review.duplicates_none"), theme.WARNING)
             self._safe_update()
             return
 
         self._validate_duplicates(block_ids, translated)
         self._show_status(
-            i18n.t("review.duplicates_done").format(n=len(block_ids)), SUCCESS
+            i18n.t("review.duplicates_done").format(n=len(block_ids)), theme.SUCCESS
         )
         self._safe_update()
 
@@ -2380,7 +2364,9 @@ class ReviewView:
                     neighbour, current=neighbour.block_id == unit.block_id
                 )
                 for neighbour in neighbours
-            ] or [ft.Text(i18n.t("review.context_empty"), size=11, color=TEXT_HINT)]
+            ] or [
+                ft.Text(i18n.t("review.context_empty"), size=11, color=theme.TEXT_HINT)
+            ]
         holder.visible = not holder.visible
         self._safe_update()
 
@@ -2408,14 +2394,14 @@ class ReviewView:
         """
         variable = unit.character_variable
         speaker = self._characters.get(variable, variable) if variable else ""
-        color = TEXT if current else TEXT_HINT
+        color = theme.TEXT if current else theme.TEXT_HINT
         return ft.Row(
             [
                 ft.Container(
                     content=ft.Icon(
                         ft.Icons.ARROW_RIGHT,
                         size=13,
-                        color=ACCENT,
+                        color=theme.ACCENT,
                         semantics_label=i18n.t("review.context_current"),
                         tooltip=i18n.t("review.context_current"),
                         visible=current,
@@ -2433,7 +2419,7 @@ class ReviewView:
                 ft.Text(
                     unit.translated_text,
                     size=11.5,
-                    color=TEXT_HINT,
+                    color=theme.TEXT_HINT,
                     expand=True,
                 ),
             ],
@@ -2462,7 +2448,7 @@ class ReviewView:
             self._characters.get(variable, variable),
             size=11,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
 
     @staticmethod
@@ -2479,13 +2465,13 @@ class ReviewView:
         return ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.FLAG, size=13, color=WARNING),
+                    ft.Icon(ft.Icons.FLAG, size=13, color=theme.WARNING),
                     note_field,
                 ],
                 spacing=8,
                 vertical_alignment=ft.CrossAxisAlignment.START,
             ),
-            border=ft.Border(left=ft.BorderSide(2, WARNING)),
+            border=ft.Border(left=ft.BorderSide(2, theme.WARNING)),
             padding=ft.Padding(left=8, right=0, top=2, bottom=2),
             visible=visible,
         )
@@ -2516,7 +2502,7 @@ class ReviewView:
             needs_review: The state it must now show.
         """
         icon.icon = ft.Icons.FLAG if needs_review else ft.Icons.OUTLINED_FLAG
-        icon.color = WARNING if needs_review else TEXT_HINT
+        icon.color = theme.WARNING if needs_review else theme.TEXT_HINT
         icon.semantics_label = i18n.t(
             "review.needs_review_on" if needs_review else "review.needs_review_off"
         )
@@ -2563,17 +2549,17 @@ class ReviewView:
 
         return ft.AlertDialog(
             modal=True,
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             title=ft.Text(
                 i18n.t("review.drop_note_title"),
                 size=18,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
             content=ft.Text(
                 i18n.t("review.drop_note_message").format(note=row.unit.note),
                 size=13.5,
-                color=TEXT_MUTED,
+                color=theme.TEXT_MUTED,
                 width=320,
             ),
             actions=[
@@ -2659,7 +2645,7 @@ class ReviewView:
         """
         issues = quality_check(source_text, translated) if translated else []
         warning.value = "; ".join(issue.detail for issue in issues)
-        warning.color = WARNING
+        warning.color = theme.WARNING
         warning.visible = bool(issues)
 
     def _set_row_text(self, row: _Row, text: str) -> None:
@@ -2806,7 +2792,7 @@ class ReviewView:
             message: What keeps the translation from being validated.
         """
         warning.value = message
-        warning.color = ERROR
+        warning.color = theme.ERROR
         warning.visible = True
         self._safe_update()
 
@@ -2826,7 +2812,7 @@ class ReviewView:
         """
         if not duplicates:
             if warning:
-                self._show_status(warning, WARNING)
+                self._show_status(warning, theme.WARNING)
             else:
                 self._hide_status()
             return
@@ -2839,7 +2825,7 @@ class ReviewView:
         notice = i18n.t(key).format(count=len(duplicates))
         self._show_status(
             f"{warning} {notice}" if warning else notice,
-            WARNING if warning else SUCCESS,
+            theme.WARNING if warning else theme.SUCCESS,
             action=i18n.t("review.duplicates_action"),
             on_action=lambda: self._validate_duplicates(duplicates, translated),
         )
@@ -2882,13 +2868,15 @@ class ReviewView:
         )
 
         if not filled:
-            self._show_status(i18n.t("review.memory_none"), WARNING)
+            self._show_status(i18n.t("review.memory_none"), theme.WARNING)
             self._safe_update()
             return
 
         self._load_page()
         self._load_files()
-        self._show_status(i18n.t("review.memory_filled").format(n=filled), SUCCESS)
+        self._show_status(
+            i18n.t("review.memory_filled").format(n=filled), theme.SUCCESS
+        )
         self._safe_update()
 
     # ── Import / export bilingue ──────────────────────────────────────────── #
@@ -2911,19 +2899,19 @@ class ReviewView:
         """
         return ft.AlertDialog(
             modal=True,
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             title=ft.Text(
                 i18n.t("interchange.title"),
                 size=18,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
             content=ft.Column(
                 [
                     ft.Text(
                         i18n.t("interchange.message"),
                         size=13.5,
-                        color=TEXT_MUTED,
+                        color=theme.TEXT_MUTED,
                         width=360,
                     ),
                     self._interchange_format_dropdown,
@@ -2985,7 +2973,7 @@ class ReviewView:
         self._page.pop_dialog()
 
         if scope == "file" and source_file is None:
-            self._show_status(i18n.t("translation.scope_file_none"), WARNING)
+            self._show_status(i18n.t("translation.scope_file_none"), theme.WARNING)
             self._safe_update()
             return
 
@@ -3011,10 +2999,10 @@ class ReviewView:
                 target_language=self._state.target_language,
             )
         except (InterchangeError, OSError) as exc:
-            self._show_status(str(exc), ERROR)
+            self._show_status(str(exc), theme.ERROR)
         else:
             self._show_status(
-                i18n.t("interchange.export_done").format(n=len(units)), SUCCESS
+                i18n.t("interchange.export_done").format(n=len(units)), theme.SUCCESS
             )
         self._safe_update()
 
@@ -3045,13 +3033,13 @@ class ReviewView:
         try:
             units = read_interchange(Path(picked[0].path))
         except (InterchangeError, OSError) as exc:
-            self._show_status(str(exc), ERROR)
+            self._show_status(str(exc), theme.ERROR)
             self._safe_update()
             return
 
         plan = plan_import(units, self._repo)
         if not plan.applicable:
-            self._show_status(self._import_summary(plan, 0), WARNING)
+            self._show_status(self._import_summary(plan, 0), theme.WARNING)
             self._safe_update()
             return
         self._page.show_dialog(self._build_import_confirm_dialog(plan))
@@ -3081,23 +3069,25 @@ class ReviewView:
             ft.Text(
                 i18n.t("interchange.confirm_applicable").format(n=plan.applicable),
                 size=13.5,
-                color=TEXT,
+                color=theme.TEXT,
                 width=360,
             )
         ]
         lines.extend(
-            ft.Text(i18n.t(key).format(n=count), size=13, color=TEXT_MUTED, width=360)
+            ft.Text(
+                i18n.t(key).format(n=count), size=13, color=theme.TEXT_MUTED, width=360
+            )
             for key, count in counts
             if count
         )
         return ft.AlertDialog(
             modal=True,
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             title=ft.Text(
                 i18n.t("interchange.confirm_title"),
                 size=18,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
             content=ft.Column(lines, spacing=8, tight=True),
             actions=[
@@ -3128,7 +3118,7 @@ class ReviewView:
         self._rebuild_translate_controls()
         self._show_status(
             self._import_summary(plan, applied),
-            SUCCESS if applied else WARNING,
+            theme.SUCCESS if applied else theme.WARNING,
         )
         self._safe_update()
 
@@ -3312,7 +3302,7 @@ class ReviewView:
             i18n.t("translation.options_title"),
             size=16,
             weight=ft.FontWeight.W_700,
-            color=TEXT_H,
+            color=theme.TEXT_H,
         )
         self._show_job_dialog()
         self._safe_update()
@@ -3345,7 +3335,7 @@ class ReviewView:
         """
         scope, source_file = self._dialog_scope(self._scope_dropdown, "all")
         if scope == "file" and source_file is None:
-            self._show_status(i18n.t("translation.scope_file_none"), WARNING)
+            self._show_status(i18n.t("translation.scope_file_none"), theme.WARNING)
             self._safe_update()
             return
 
@@ -3376,17 +3366,17 @@ class ReviewView:
 
         dialog = ft.AlertDialog(
             modal=True,
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             title=ft.Text(
                 i18n.t("translation.include_drafts_title"),
                 size=16,
                 weight=ft.FontWeight.W_700,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
             content=ft.Text(
                 i18n.t("translation.include_drafts_message").format(n=draft_count),
                 size=13.5,
-                color=TEXT,
+                color=theme.TEXT,
             ),
             actions=[
                 dialog_action(
@@ -3440,7 +3430,7 @@ class ReviewView:
         if not units:
             self._show_status(
                 i18n.t("translation.translation_done").format(done=0, failed=0),
-                WARNING,
+                theme.WARNING,
             )
             self._safe_update()
             return
@@ -3603,9 +3593,9 @@ class ReviewView:
         self._load_files()
 
         if progress.error:
-            self._show_status(progress.error, ERROR)
+            self._show_status(progress.error, theme.ERROR)
         else:
-            color = SUCCESS if progress.failed == 0 else WARNING
+            color = theme.SUCCESS if progress.failed == 0 else theme.WARNING
             self._show_status(
                 i18n.t("translation.translation_done").format(
                     done=progress.done, failed=progress.failed
@@ -3634,7 +3624,9 @@ class ReviewView:
         self._flush_pending_edit()
         available = registry.available()
         if not available:
-            self._show_status(i18n.t("translation.no_provider_configured"), WARNING)
+            self._show_status(
+                i18n.t("translation.no_provider_configured"), theme.WARNING
+            )
             self._safe_update()
             return
 
@@ -3643,7 +3635,7 @@ class ReviewView:
                 i18n.t("translation.unsupported_language").format(
                     lang=self._state.target_language
                 ),
-                WARNING,
+                theme.WARNING,
             )
             self._safe_update()
             return
@@ -3670,11 +3662,11 @@ class ReviewView:
                 ft.dropdown.Option(key=pid, text=_PROVIDER_LABELS.get(pid, pid))
                 for pid in available
             ],
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             width=260,
             dense=True,
@@ -3687,12 +3679,12 @@ class ReviewView:
 
         dialog = ft.AlertDialog(
             modal=True,
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             title=ft.Text(
                 i18n.t("translation.translate_unit_title"),
                 size=16,
                 weight=ft.FontWeight.W_700,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
             content=ft.Column(
                 [
@@ -3700,7 +3692,7 @@ class ReviewView:
                         i18n.t("translation.choose_provider_label").upper(),
                         size=12,
                         weight=ft.FontWeight.W_600,
-                        color=TEXT_MUTED,
+                        color=theme.TEXT_MUTED,
                     ),
                     dropdown,
                 ],
@@ -3749,7 +3741,9 @@ class ReviewView:
                 characters=self._character_repo.get_all(),
             )
         except ValueError:
-            self._show_status(i18n.t("translation.no_provider_configured"), WARNING)
+            self._show_status(
+                i18n.t("translation.no_provider_configured"), theme.WARNING
+            )
             self._safe_update()
             return
 
@@ -3790,7 +3784,7 @@ class ReviewView:
         Args:
             message: Human-readable description of what happened.
         """
-        self._show_status(message, TEXT_MUTED)
+        self._show_status(message, theme.TEXT_MUTED)
         self._safe_update()
 
     def _on_unit_job_complete(self, block_id: str, progress: JobProgress) -> None:
@@ -3811,9 +3805,9 @@ class ReviewView:
         self._translating_units.discard(block_id)
 
         if progress.error:
-            self._show_status(progress.error, ERROR)
+            self._show_status(progress.error, theme.ERROR)
         elif progress.failed:
-            self._show_status(i18n.t("translation.unit_failed"), ERROR)
+            self._show_status(i18n.t("translation.unit_failed"), theme.ERROR)
 
         self._flush_pending_edit()
         if not self._editing:
@@ -3838,7 +3832,9 @@ class ReviewView:
         self._pagination_row.controls = [
             focusable(
                 ft.Container(
-                    content=ft.Icon(ft.Icons.CHEVRON_LEFT, size=18, color=TEXT_MUTED),
+                    content=ft.Icon(
+                        ft.Icons.CHEVRON_LEFT, size=18, color=theme.TEXT_MUTED
+                    ),
                     width=36,
                     height=36,
                     alignment=ft.Alignment(0, 0),
@@ -3858,13 +3854,13 @@ class ReviewView:
                 height=34,
                 text_size=13,
                 text_align=ft.TextAlign.CENTER,
-                bgcolor=BG_INPUT,
-                border_color=BORDER_COLOR,
-                focused_border_color=FOCUS_RING,
-                focused_border_width=FOCUS_RING_WIDTH,
+                bgcolor=theme.BG_INPUT,
+                border_color=theme.BORDER_COLOR,
+                focused_border_color=theme.FOCUS_RING,
+                focused_border_width=theme.FOCUS_RING_WIDTH,
                 border_radius=8,
-                color=TEXT,
-                cursor_color=ACCENT,
+                color=theme.TEXT,
+                cursor_color=theme.ACCENT,
                 content_padding=ft.Padding(left=4, right=4, top=0, bottom=0),
                 tooltip=i18n.t("review.page_jump"),
                 on_submit=self._on_page_submitted,
@@ -3872,11 +3868,13 @@ class ReviewView:
             ft.Text(
                 i18n.t("review.pagination_total").format(total=total_pages),
                 size=13,
-                color=TEXT_MUTED,
+                color=theme.TEXT_MUTED,
             ),
             focusable(
                 ft.Container(
-                    content=ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=TEXT_MUTED),
+                    content=ft.Icon(
+                        ft.Icons.CHEVRON_RIGHT, size=18, color=theme.TEXT_MUTED
+                    ),
                     width=36,
                     height=36,
                     alignment=ft.Alignment(0, 0),
@@ -4029,15 +4027,15 @@ class ReviewView:
                 i18n.t("review.clear_title"),
                 size=18,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             content=ft.Column(
                 [
                     ft.Text(
                         i18n.t("review.clear_message"),
                         size=13.5,
-                        color=TEXT_MUTED,
+                        color=theme.TEXT_MUTED,
                         width=320,
                     ),
                     self._scope_control(self._clear_scope_dropdown),
@@ -4070,7 +4068,7 @@ class ReviewView:
         scope, source_file = self._dialog_scope(self._clear_scope_dropdown, "file")
         if scope == "file" and source_file is None:
             self._page.pop_dialog()
-            self._show_status(i18n.t("translation.scope_file_none"), WARNING)
+            self._show_status(i18n.t("translation.scope_file_none"), theme.WARNING)
             self._safe_update()
             return
 
@@ -4080,7 +4078,7 @@ class ReviewView:
         self._load_page()
         self._load_files()
         self._rebuild_translate_controls()
-        self._show_status(i18n.t("review.clear_done").format(n=count), SUCCESS)
+        self._show_status(i18n.t("review.clear_done").format(n=count), theme.SUCCESS)
         self._safe_update()
 
     def _on_save_clicked(self, _: Any) -> None:
@@ -4120,7 +4118,7 @@ class ReviewView:
         )
 
         if not dialogue and not old_to_new:
-            self._show_status(i18n.t("review.error_save_nothing"), WARNING)
+            self._show_status(i18n.t("review.error_save_nothing"), theme.WARNING)
             self._safe_update()
             return
 
@@ -4128,7 +4126,7 @@ class ReviewView:
         project = self._state.project_path
 
         if tl_output is None or project is None:
-            self._show_status(i18n.t("review.error_save_no_path"), ERROR)
+            self._show_status(i18n.t("review.error_save_no_path"), theme.ERROR)
             self._safe_update()
             return
 
@@ -4140,9 +4138,9 @@ class ReviewView:
             writer.write_all(dialogue, old_to_new=old_to_new or None)
             record_save(self._project_meta_repo, lang_dir)
             n = sum(1 for u in stored if u.translated_text)
-            self._show_status(i18n.t("review.saved_ok").format(n=n), SUCCESS)
+            self._show_status(i18n.t("review.saved_ok").format(n=n), theme.SUCCESS)
         except Exception as exc:
-            self._show_status(str(exc), ERROR)
+            self._show_status(str(exc), theme.ERROR)
 
         self._update_sync_indicator()
         self._safe_update()
@@ -4217,10 +4215,10 @@ class ReviewView:
 
         if pending:
             self._sync_text.value = i18n.t("review.sync_pending").format(n=pending)
-            self._sync_text.color = WARNING
+            self._sync_text.color = theme.WARNING
         else:
             self._sync_text.value = i18n.t("review.sync_ok")
-            self._sync_text.color = TEXT_HINT
+            self._sync_text.color = theme.TEXT_HINT
 
         self._save_box.opacity = 1.0 if pending else 0.45
 
@@ -4234,23 +4232,13 @@ class ReviewView:
     ) -> None:
         """Show a toast notification with a status message.
 
-        Builds a fresh SnackBar for every message, as Flet's own
-        documentation does. A single reused instance only ever shows its
-        first message: once the client reports the toast dismissed, Flet
-        drops it from the page's dialog stack without flipping its `open`
-        flag back to False, so setting `open = True` again produces no
-        diff and page.update() sends nothing.
-
-        The previous toast is closed first, otherwise the client queues
-        the new one behind the remainder of its display duration.
-
-        Page.show_dialog() mutates the dialog stack and pushes it to the
-        client directly, so it is scheduled on the event loop the same way
-        _safe_update() does — status messages also come from Flet's
-        handler threads.
-
-        A toast carrying an action stays up longer: five seconds is enough
-        to read a message, not to notice a button, aim and click it.
+        The toast itself is built by app.toasts, which every other screen
+        already uses. This one only adds what a screen driving background
+        threads needs: closing the previous toast, since the client would
+        otherwise queue the new one behind the remainder of its display
+        duration, and scheduling the push on the event loop the way
+        _safe_update() does, status messages arriving from Flet's handler
+        threads.
 
         Args:
             message: Text to display.
@@ -4261,34 +4249,8 @@ class ReviewView:
             action: Label of an optional button shown next to the message.
             on_action: Called when that button is clicked.
         """
-        if color == SUCCESS:
-            bgcolor = "#16281c"
-        elif color == WARNING:
-            bgcolor = "#2b2210"
-        elif color == ERROR:
-            bgcolor = "#2b1c1c"
-        else:
-            bgcolor = BG_MENU
-
         self._hide_status()
-        snack = ft.SnackBar(
-            content=ft.Text(message, size=13, color=color),
-            bgcolor=bgcolor,
-            behavior=ft.SnackBarBehavior.FLOATING,
-            show_close_icon=True,
-            close_icon_color=TEXT_HINT,
-            duration=ft.Duration(seconds=10 if action else 5),
-            margin=ft.Margin(left=20, right=20, bottom=20),
-            action=(
-                ft.SnackBarAction(
-                    label=action,
-                    text_color=ACCENT,
-                    on_click=lambda _e: on_action() if on_action else None,
-                )
-                if action
-                else None
-            ),
-        )
+        snack = build_toast(message, color, action=action, on_action=on_action)
         self._status_snack = snack
         self._page.session.connection.loop.call_soon_threadsafe(
             self._page.show_dialog, snack
@@ -4347,7 +4309,7 @@ class ReviewView:
                                     i18n.t("review.files_panel_title"),
                                     size=11,
                                     weight=ft.FontWeight.W_700,
-                                    color=TEXT_HINT,
+                                    color=theme.TEXT_HINT,
                                 ),
                                 self._progress_bar,
                                 self._progress_text,
@@ -4363,7 +4325,7 @@ class ReviewView:
                 expand=True,
             ),
             width=_PANEL_WIDTH,
-            border=ft.Border(right=ft.BorderSide(1, "#1a1820")),
+            border=ft.Border(right=ft.BorderSide(1, theme.BORDER)),
         )
 
     def _build_right_panel(self) -> ft.Column:
@@ -4441,8 +4403,8 @@ class ReviewView:
         return ft.Container(
             content=ft.Column([actions, view], spacing=10, tight=True),
             padding=ft.Padding(left=14, right=14, top=10, bottom=10),
-            border=ft.Border(bottom=ft.BorderSide(1, "#1a1820")),
-            bgcolor="#17161f",
+            border=ft.Border(bottom=ft.BorderSide(1, theme.BORDER)),
+            bgcolor=theme.TOOLBAR_BG,
         )
 
     def _build_table_header(self) -> ft.Container:
@@ -4453,7 +4415,7 @@ class ReviewView:
         Returns:
             A styled Container with column labels.
         """
-        lbl = ft.TextStyle(size=10, weight=ft.FontWeight.W_700, color=TEXT_HINT)
+        lbl = ft.TextStyle(size=10, weight=ft.FontWeight.W_700, color=theme.TEXT_HINT)
         return ft.Container(
             content=ft.Row(
                 [
@@ -4461,7 +4423,7 @@ class ReviewView:
                         content=ft.Icon(
                             ft.Icons.LABEL_OUTLINE,
                             size=12,
-                            color=TEXT_HINT,
+                            color=theme.TEXT_HINT,
                             semantics_label=i18n.t("review.status_column"),
                         ),
                         width=_COL_STATUS,
@@ -4481,8 +4443,8 @@ class ReviewView:
                 spacing=_ROW_SPACING,
             ),
             padding=ft.Padding(left=12, right=8, top=8, bottom=8),
-            bgcolor="#15141d",
-            border=ft.Border(bottom=ft.BorderSide(1, "#201e2c")),
+            bgcolor=theme.TABLE_HEADER_BG,
+            border=ft.Border(bottom=ft.BorderSide(1, theme.BORDER_ROW)),
         )
 
     # ── Navigation ────────────────────────────────────────────────────────── #
@@ -4505,13 +4467,13 @@ class ReviewView:
                 i18n.t("review.back_confirm_title"),
                 size=18,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             content=ft.Text(
                 i18n.t("review.back_confirm_message"),
                 size=13.5,
-                color=TEXT_MUTED,
+                color=theme.TEXT_MUTED,
                 width=320,
             ),
             actions=[
@@ -4545,7 +4507,7 @@ class ReviewView:
         """
         if self._job is None or not self._job.progress.running:
             return False
-        self._show_status(i18n.t("translation.job_running"), WARNING)
+        self._show_status(i18n.t("translation.job_running"), theme.WARNING)
         self._safe_update()
         return True
 

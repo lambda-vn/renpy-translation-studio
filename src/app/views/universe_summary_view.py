@@ -6,27 +6,11 @@ from collections.abc import Callable
 import flet as ft
 from flet.controls.control_event import Event
 
+from app import theme
 from app.components.back_link import build_back_link
 from app.dialogs import dialog_action
 from app.state import AppState
-from app.theme import (
-    ACCENT,
-    ACCENT_ON,
-    BG_INPUT,
-    BORDER_COLOR,
-    BORDER_STRONG,
-    ERROR,
-    FOCUS_RING,
-    FOCUS_RING_WIDTH,
-    SUCCESS,
-    TEXT,
-    TEXT_DIM,
-    TEXT_H,
-    TEXT_HINT,
-    TEXT_MUTED,
-    border_all,
-    focusable,
-)
+from app.theme import border_all, focusable
 from app.ui_thread import safe_update
 from core.i18n import i18n
 from core.settings import settings
@@ -80,19 +64,19 @@ class UniverseSummaryView:
             i18n.t("universe.title"),
             size=26,
             weight=ft.FontWeight.W_700,
-            color=TEXT_H,
+            color=theme.TEXT_H,
         )
-        self._subtitle = ft.Text(i18n.t("universe.hint"), size=13, color=TEXT_DIM)
+        self._subtitle = ft.Text(i18n.t("universe.hint"), size=13, color=theme.TEXT_DIM)
         self._summary_field = ft.TextField(
             value=self._repo.get(_META_KEY) or "",
             hint_text=i18n.t("universe.placeholder"),
-            hint_style=ft.TextStyle(color=TEXT_HINT),
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
-            cursor_color=ACCENT,
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             border_radius=11,
             multiline=True,
             min_lines=10,
@@ -104,9 +88,9 @@ class UniverseSummaryView:
             i18n.t("universe.field_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
-        self._length_text = ft.Text("", size=11.5, color=TEXT_HINT)
+        self._length_text = ft.Text("", size=11.5, color=theme.TEXT_HINT)
         self._refresh_length()
         available_llm = registry.available_llm()
         self._provider_dropdown = ft.Dropdown(
@@ -116,11 +100,11 @@ class UniverseSummaryView:
                 ft.dropdown.Option(key=pid, text=_LLM_LABELS.get(pid, pid))
                 for pid in available_llm
             ],
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=8,
             width=180,
             dense=True,
@@ -131,20 +115,20 @@ class UniverseSummaryView:
             i18n.t("universe.generate"),
             size=13,
             weight=ft.FontWeight.W_500,
-            color=TEXT,
+            color=theme.TEXT,
         )
         self._generate_btn = focusable(
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.AUTO_AWESOME, size=15, color=TEXT),
+                        ft.Icon(ft.Icons.AUTO_AWESOME, size=15, color=theme.TEXT),
                         self._generate_text,
                     ],
                     spacing=7,
                     tight=True,
                 ),
-                bgcolor=BG_INPUT,
-                border=border_all(1, BORDER_STRONG),
+                bgcolor=theme.BG_INPUT,
+                border=border_all(1, theme.BORDER_STRONG),
                 border_radius=8,
                 padding=ft.Padding(left=14, right=14, top=9, bottom=9),
                 ink=True,
@@ -153,13 +137,13 @@ class UniverseSummaryView:
             disabled=not registry.available_llm(),
         )
         self._generate_ring = ft.ProgressRing(
-            width=16, height=16, stroke_width=2, color=ACCENT, visible=False
+            width=16, height=16, stroke_width=2, color=theme.ACCENT, visible=False
         )
         self._generate_status = ft.Text("", size=12.5)
         self._generate_hint = ft.Text(
             i18n.t("universe.generate_no_llm"),
             size=12,
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
             visible=not registry.available_llm(),
         )
 
@@ -167,12 +151,12 @@ class UniverseSummaryView:
             i18n.t("common.save"),
             size=14.5,
             weight=ft.FontWeight.W_600,
-            color=ACCENT_ON,
+            color=theme.ACCENT_ON,
         )
         self._save_btn = focusable(
             ft.Container(
                 content=self._save_text,
-                bgcolor=ACCENT,
+                bgcolor=theme.ACCENT,
                 border_radius=12,
                 padding=ft.Padding(left=28, right=28, top=14, bottom=14),
                 ink=True,
@@ -242,16 +226,16 @@ class UniverseSummaryView:
                         i18n.t("universe.purpose_title"),
                         size=13,
                         weight=ft.FontWeight.W_600,
-                        color=TEXT_H,
+                        color=theme.TEXT_H,
                     ),
                     *(
                         ft.Row(
                             [
-                                ft.Icon(icon, size=15, color=ACCENT),
+                                ft.Icon(icon, size=15, color=theme.ACCENT),
                                 ft.Text(
                                     i18n.t(key),
                                     size=12.5,
-                                    color=TEXT_MUTED,
+                                    color=theme.TEXT_MUTED,
                                     expand=True,
                                 ),
                             ],
@@ -264,8 +248,8 @@ class UniverseSummaryView:
                 spacing=9,
                 tight=True,
             ),
-            bgcolor=BG_INPUT,
-            border=border_all(1, BORDER_COLOR),
+            bgcolor=theme.BG_INPUT,
+            border=border_all(1, theme.BORDER_COLOR),
             border_radius=12,
             padding=ft.Padding(left=18, right=18, top=15, bottom=15),
         )
@@ -283,12 +267,12 @@ class UniverseSummaryView:
                         i18n.t("universe.generate_title"),
                         size=13,
                         weight=ft.FontWeight.W_600,
-                        color=TEXT_H,
+                        color=theme.TEXT_H,
                     ),
                     ft.Text(
                         i18n.t("universe.generate_desc"),
                         size=12.5,
-                        color=TEXT_MUTED,
+                        color=theme.TEXT_MUTED,
                     ),
                     ft.Row(
                         [
@@ -305,7 +289,7 @@ class UniverseSummaryView:
                 spacing=9,
                 tight=True,
             ),
-            border=border_all(1, BORDER_COLOR),
+            border=border_all(1, theme.BORDER_COLOR),
             border_radius=12,
             padding=ft.Padding(left=18, right=18, top=15, bottom=15),
         )
@@ -386,13 +370,13 @@ class UniverseSummaryView:
                 i18n.t("universe.generate_confirm_title"),
                 size=18,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_H,
+                color=theme.TEXT_H,
             ),
-            bgcolor="#1a1822",
+            bgcolor=theme.BG_MENU,
             content=ft.Text(
                 i18n.t("universe.generate_confirm_message").format(provider=label),
                 size=13.5,
-                color=TEXT_MUTED,
+                color=theme.TEXT_MUTED,
                 width=360,
             ),
             actions=[
@@ -419,7 +403,7 @@ class UniverseSummaryView:
         self._generating = True
         self._generate_ring.visible = True
         self._generate_status.value = i18n.t("universe.generating")
-        self._generate_status.color = TEXT_MUTED
+        self._generate_status.color = theme.TEXT_MUTED
         self._page.update()
         self._page.run_thread(self._run_generation, provider_id)
 
@@ -441,17 +425,17 @@ class UniverseSummaryView:
             units = self._units_repo.get_all()
             if not units:
                 self._generate_status.value = i18n.t("universe.generate_no_units")
-                self._generate_status.color = ERROR
+                self._generate_status.color = theme.ERROR
                 return
             target_lang = self._state.target_language or self._state.source_language
             summary = UniverseGenerator().generate(units, provider, target_lang)
             self._summary_field.value = summary
             self._generate_status.value = i18n.t("universe.generate_done")
-            self._generate_status.color = SUCCESS
+            self._generate_status.color = theme.SUCCESS
         except (ValueError, TranslationProviderError) as exc:
             logger.warning("Universe summary generation failed: %s", exc)
             self._generate_status.value = i18n.t("universe.generate_failed")
-            self._generate_status.color = ERROR
+            self._generate_status.color = theme.ERROR
         finally:
             self._generating = False
             self._generate_ring.visible = False

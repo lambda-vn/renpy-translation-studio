@@ -8,25 +8,8 @@ import flet as ft
 import httpx
 from flet.controls.control_event import Event
 
-from app.theme import (
-    ACCENT,
-    ACCENT_ON,
-    BG_INPUT,
-    BORDER_COLOR,
-    BORDER_STRONG,
-    ERROR,
-    FOCUS_RING,
-    FOCUS_RING_WIDTH,
-    SUCCESS,
-    TEXT,
-    TEXT_DIM,
-    TEXT_H,
-    TEXT_HINT,
-    TEXT_MUTED,
-    WARNING,
-    border_all,
-    focusable,
-)
+from app import theme
+from app.theme import border_all, focusable
 from app.ui_thread import on_ui_thread, safe_update
 from core.i18n import i18n
 from core.logging_config import configure_logging
@@ -82,32 +65,32 @@ class ProviderConfigView:
             i18n.t("provider_config.title"),
             size=26,
             weight=ft.FontWeight.W_700,
-            color=TEXT_H,
+            color=theme.TEXT_H,
         )
         self._subtitle = ft.Text(
             i18n.t("provider_config.subtitle"),
             size=13,
-            color=TEXT_DIM,
+            color=theme.TEXT_DIM,
         )
 
         self._api_key_label = ft.Text(
             i18n.t("provider_config.api_key_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._api_key_field = ft.TextField(
             value=settings.get("deepl_api_key") or "",
             hint_text=i18n.t("provider_config.api_key_hint"),
-            hint_style=ft.TextStyle(color=TEXT_HINT),
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
             password=True,
             can_reveal_password=True,
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
-            cursor_color=ACCENT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             border_radius=11,
             height=48,
             width=380,
@@ -121,20 +104,20 @@ class ProviderConfigView:
             i18n.t("provider_config.test_connection"),
             size=13,
             weight=ft.FontWeight.W_500,
-            color=TEXT,
+            color=theme.TEXT,
         )
         self._test_btn = focusable(
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.WIFI_TETHERING, size=15, color=TEXT),
+                        ft.Icon(ft.Icons.WIFI_TETHERING, size=15, color=theme.TEXT),
                         self._test_text,
                     ],
                     spacing=7,
                     tight=True,
                 ),
-                bgcolor=BG_INPUT,
-                border=border_all(1, BORDER_STRONG),
+                bgcolor=theme.BG_INPUT,
+                border=border_all(1, theme.BORDER_STRONG),
                 border_radius=8,
                 padding=ft.Padding(left=14, right=14, top=9, bottom=9),
                 ink=True,
@@ -146,12 +129,12 @@ class ProviderConfigView:
             i18n.t("common.save"),
             size=14.5,
             weight=ft.FontWeight.W_600,
-            color=ACCENT_ON,
+            color=theme.ACCENT_ON,
         )
         self._save_btn = focusable(
             ft.Container(
                 content=self._save_text,
-                bgcolor=ACCENT,
+                bgcolor=theme.ACCENT,
                 border_radius=12,
                 padding=ft.Padding(left=28, right=28, top=14, bottom=14),
                 ink=True,
@@ -162,7 +145,7 @@ class ProviderConfigView:
         self._later_text = ft.Text(
             i18n.t("provider_config.configure_later"),
             size=13,
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
         )
         self._later_btn = focusable(
             ft.Container(
@@ -178,22 +161,22 @@ class ProviderConfigView:
         self._ollama_reliability_hint = ft.Text(
             i18n.t("provider_config.ollama_reliability_hint"),
             size=12,
-            color=WARNING,
+            color=theme.WARNING,
         )
         self._ollama_endpoint_label = ft.Text(
             i18n.t("provider_config.ollama_endpoint_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._ollama_endpoint_field = ft.TextField(
             value=settings.get("ollama_endpoint") or "http://localhost:11434",
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
-            cursor_color=ACCENT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             border_radius=11,
             height=48,
             width=380,
@@ -203,7 +186,7 @@ class ProviderConfigView:
             i18n.t("provider_config.ollama_model_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         saved_model = settings.get("ollama_model")
         self._ollama_model_dropdown = ft.Dropdown(
@@ -215,11 +198,11 @@ class ProviderConfigView:
             ),
             hint_text=i18n.t("provider_config.ollama_model_hint"),
             on_select=self._on_badge_source_changed,
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
             border_radius=11,
             width=380,
             dense=True,
@@ -229,19 +212,19 @@ class ProviderConfigView:
             i18n.t("provider_config.ollama_batch_size_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._ollama_batch_size_field = ft.TextField(
             value=settings.get("ollama_batch_size") or "",
             hint_text=str(MAX_UNITS_PER_BATCH),
-            hint_style=ft.TextStyle(color=TEXT_HINT),
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
             keyboard_type=ft.KeyboardType.NUMBER,
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
-            cursor_color=ACCENT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             border_radius=11,
             height=48,
             width=380,
@@ -249,7 +232,7 @@ class ProviderConfigView:
         )
         self._ollama_batch_size_help = ft.Text(
             i18n.t("provider_config.ollama_batch_size_hint"),
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
             size=11.5,
         )
         self._ollama_status_text = ft.Text("", size=12.5)
@@ -257,20 +240,20 @@ class ProviderConfigView:
             i18n.t("provider_config.test_connection"),
             size=13,
             weight=ft.FontWeight.W_500,
-            color=TEXT,
+            color=theme.TEXT,
         )
         self._ollama_test_btn = focusable(
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.WIFI_TETHERING, size=15, color=TEXT),
+                        ft.Icon(ft.Icons.WIFI_TETHERING, size=15, color=theme.TEXT),
                         self._ollama_test_text,
                     ],
                     spacing=7,
                     tight=True,
                 ),
-                bgcolor=BG_INPUT,
-                border=border_all(1, BORDER_STRONG),
+                bgcolor=theme.BG_INPUT,
+                border=border_all(1, theme.BORDER_STRONG),
                 border_radius=8,
                 padding=ft.Padding(left=14, right=14, top=9, bottom=9),
                 ink=True,
@@ -281,19 +264,19 @@ class ProviderConfigView:
         self._lt_warning = ft.Text(
             i18n.t("provider_config.libretranslate_public_warning"),
             size=12,
-            color=WARNING,
+            color=theme.WARNING,
         )
         self._lt_cleartext_warning = ft.Text(
             i18n.t("provider_config.libretranslate_cleartext_warning"),
             size=12,
-            color=WARNING,
+            color=theme.WARNING,
             visible=False,
         )
         self._lt_url_label = ft.Text(
             i18n.t("provider_config.libretranslate_url_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._lt_url_field = self._make_text_field(
             value=settings.get("libretranslate_url") or "",
@@ -304,7 +287,7 @@ class ProviderConfigView:
             i18n.t("provider_config.libretranslate_api_key_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._lt_key_field = self._make_text_field(
             value=settings.get("libretranslate_api_key") or "",
@@ -319,7 +302,7 @@ class ProviderConfigView:
             i18n.t("provider_config.claude_api_key_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._claude_key_field = self._make_text_field(
             value=settings.get("claude_api_key") or "",
@@ -331,7 +314,7 @@ class ProviderConfigView:
             i18n.t("provider_config.claude_model_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._claude_model_field = self._make_text_field(
             value=settings.get("claude_model") or "",
@@ -344,7 +327,7 @@ class ProviderConfigView:
             i18n.t("provider_config.mistral_api_key_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._mistral_key_field = self._make_text_field(
             value=settings.get("mistral_api_key") or "",
@@ -356,7 +339,7 @@ class ProviderConfigView:
             i18n.t("provider_config.mistral_model_label").upper(),
             size=12,
             weight=ft.FontWeight.W_600,
-            color=TEXT_MUTED,
+            color=theme.TEXT_MUTED,
         )
         self._mistral_model_field = self._make_text_field(
             value=settings.get("mistral_model") or "",
@@ -366,20 +349,20 @@ class ProviderConfigView:
         self._mistral_test_btn = self._make_test_button(self._on_mistral_test_clicked)
 
         configured = i18n.t("provider_config.configured")
-        self._deepl_badge = self._make_badge(configured, SUCCESS)
-        self._ollama_badge = self._make_badge(configured, SUCCESS)
-        self._lt_badge = self._make_badge(configured, SUCCESS)
-        self._claude_badge = self._make_badge(configured, SUCCESS)
-        self._mistral_badge = self._make_badge(configured, SUCCESS)
+        self._deepl_badge = self._make_badge(configured, theme.SUCCESS)
+        self._ollama_badge = self._make_badge(configured, theme.SUCCESS)
+        self._lt_badge = self._make_badge(configured, theme.SUCCESS)
+        self._claude_badge = self._make_badge(configured, theme.SUCCESS)
+        self._mistral_badge = self._make_badge(configured, theme.SUCCESS)
         self._claude_beta_badge = self._make_badge(
             i18n.t("provider_config.beta_badge"),
-            WARNING,
+            theme.WARNING,
             tooltip=i18n.t("provider_config.beta_hint"),
             visible=True,
         )
         self._mistral_beta_badge = self._make_badge(
             i18n.t("provider_config.beta_badge"),
-            WARNING,
+            theme.WARNING,
             tooltip=i18n.t("provider_config.beta_hint"),
             visible=True,
         )
@@ -389,16 +372,18 @@ class ProviderConfigView:
             i18n.t("provider_config.verbose_logging_label"),
             size=13,
             weight=ft.FontWeight.W_600,
-            color=TEXT,
+            color=theme.TEXT,
         )
         self._verbose_hint = ft.Text(
             i18n.t("provider_config.verbose_logging_hint"),
             size=12,
-            color=TEXT_HINT,
+            color=theme.TEXT_HINT,
         )
         self._verbose_switch = ft.Switch(
             value=bool(settings.get("verbose_logging")),
-            active_color=ACCENT,
+            active_color=theme.ACCENT,
+            inactive_thumb_color=theme.TEXT_HINT,
+            inactive_track_color=theme.BG_INPUT,
             on_change=self._on_verbose_changed,
         )
 
@@ -423,16 +408,16 @@ class ProviderConfigView:
         return ft.TextField(
             value=value,
             hint_text=hint,
-            hint_style=ft.TextStyle(color=TEXT_HINT),
+            hint_style=ft.TextStyle(color=theme.TEXT_HINT),
             password=password,
             can_reveal_password=password,
             on_change=on_change,
-            bgcolor=BG_INPUT,
-            border_color=BORDER_COLOR,
-            focused_border_color=FOCUS_RING,
-            focused_border_width=FOCUS_RING_WIDTH,
-            color=TEXT,
-            cursor_color=ACCENT,
+            bgcolor=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            focused_border_color=theme.FOCUS_RING,
+            focused_border_width=theme.FOCUS_RING_WIDTH,
+            color=theme.TEXT,
+            cursor_color=theme.ACCENT,
             border_radius=11,
             height=48,
             width=380,
@@ -454,19 +439,19 @@ class ProviderConfigView:
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.WIFI_TETHERING, size=15, color=TEXT),
+                        ft.Icon(ft.Icons.WIFI_TETHERING, size=15, color=theme.TEXT),
                         ft.Text(
                             i18n.t("provider_config.test_connection"),
                             size=13,
                             weight=ft.FontWeight.W_500,
-                            color=TEXT,
+                            color=theme.TEXT,
                         ),
                     ],
                     spacing=7,
                     tight=True,
                 ),
-                bgcolor=BG_INPUT,
-                border=border_all(1, BORDER_STRONG),
+                bgcolor=theme.BG_INPUT,
+                border=border_all(1, theme.BORDER_STRONG),
                 border_radius=8,
                 padding=ft.Padding(left=14, right=14, top=9, bottom=9),
                 ink=True,
@@ -526,7 +511,7 @@ class ProviderConfigView:
             padding=ft.Padding(left=16, right=16, top=2, bottom=16),
             visible=False,
         )
-        chevron = ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN, size=20, color=TEXT_MUTED)
+        chevron = ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN, size=20, color=theme.TEXT_MUTED)
 
         def _toggle(_e: Event[ft.TextButton]) -> None:
             content.visible = not content.visible
@@ -547,7 +532,7 @@ class ProviderConfigView:
                                     title,
                                     size=16,
                                     weight=ft.FontWeight.W_700,
-                                    color=TEXT_H,
+                                    color=theme.TEXT_H,
                                 ),
                                 *badges,
                             ],
@@ -569,7 +554,7 @@ class ProviderConfigView:
         )
         return ft.Container(
             content=ft.Column([header, content], spacing=0),
-            border=border_all(1, BORDER_COLOR),
+            border=border_all(1, theme.BORDER_COLOR),
             border_radius=12,
         )
 
@@ -686,7 +671,7 @@ class ProviderConfigView:
                                 ],
                                 spacing=12,
                             ),
-                            ft.Container(height=1, bgcolor=BORDER_COLOR),
+                            ft.Container(height=1, bgcolor=theme.BORDER_COLOR),
                             ft.Row(
                                 [
                                     ft.Column(
@@ -738,7 +723,9 @@ class ProviderConfigView:
         if self._test_running:
             return
         self._test_running = True
-        self._set_status(status_control, i18n.t("provider_config.testing"), TEXT_HINT)
+        self._set_status(
+            status_control, i18n.t("provider_config.testing"), theme.TEXT_HINT
+        )
         self._page.update()
 
         def _run() -> None:
@@ -760,7 +747,7 @@ class ProviderConfigView:
         if not key:
             self._show_status(
                 i18n.t("translation.provider_not_configured").format(provider="DeepL"),
-                ERROR,
+                theme.ERROR,
             )
             self._page.update()
             return
@@ -776,10 +763,11 @@ class ProviderConfigView:
                     f"{available:,}".replace(",", " ") if available is not None else "?"
                 )
                 self._show_status(
-                    i18n.t("translation.connection_ok").format(chars=chars), SUCCESS
+                    i18n.t("translation.connection_ok").format(chars=chars),
+                    theme.SUCCESS,
                 )
             except deepl.DeepLException:
-                self._show_status(i18n.t("translation.connection_failed"), ERROR)
+                self._show_status(i18n.t("translation.connection_failed"), theme.ERROR)
 
         self._run_connection_test(self._status_text, _worker)
 
@@ -797,11 +785,15 @@ class ProviderConfigView:
             try:
                 batch_size = int(batch_size_text)
             except ValueError:
-                self._show_ollama_status(self._batch_size_invalid_message(), ERROR)
+                self._show_ollama_status(
+                    self._batch_size_invalid_message(), theme.ERROR
+                )
                 self._page.update()
                 return
             if not (MIN_OLLAMA_BATCH_SIZE <= batch_size <= MAX_OLLAMA_BATCH_SIZE):
-                self._show_ollama_status(self._batch_size_invalid_message(), ERROR)
+                self._show_ollama_status(
+                    self._batch_size_invalid_message(), theme.ERROR
+                )
                 self._page.update()
                 return
 
@@ -834,7 +826,9 @@ class ProviderConfigView:
                 (self._mistral_model_field.value or "").strip() or None,
             )
         except SettingsError:
-            self._show_status(i18n.t("provider_config.keyring_unavailable"), ERROR)
+            self._show_status(
+                i18n.t("provider_config.keyring_unavailable"), theme.ERROR
+            )
             self._page.update()
             return
 
@@ -881,7 +875,7 @@ class ProviderConfigView:
             )
             if not provider.test_connection():
                 self._show_ollama_status(
-                    i18n.t("provider_config.ollama_connection_failed"), ERROR
+                    i18n.t("provider_config.ollama_connection_failed"), theme.ERROR
                 )
                 return
 
@@ -889,13 +883,13 @@ class ProviderConfigView:
                 models = provider.list_models()
             except httpx.HTTPError:
                 self._show_ollama_status(
-                    i18n.t("provider_config.ollama_connection_failed"), ERROR
+                    i18n.t("provider_config.ollama_connection_failed"), theme.ERROR
                 )
                 return
 
             if not models:
                 self._show_ollama_status(
-                    i18n.t("provider_config.ollama_no_models"), WARNING
+                    i18n.t("provider_config.ollama_no_models"), theme.WARNING
                 )
                 return
 
@@ -920,7 +914,7 @@ class ProviderConfigView:
         self._ollama_model_dropdown.value = current if current in models else models[0]
         self._show_ollama_status(
             i18n.t("provider_config.ollama_connection_ok").format(n=len(models)),
-            SUCCESS,
+            theme.SUCCESS,
         )
         self._refresh_badges()
 
@@ -957,7 +951,7 @@ class ProviderConfigView:
                 i18n.t("translation.provider_not_configured").format(
                     provider="LibreTranslate"
                 ),
-                ERROR,
+                theme.ERROR,
             )
             self._page.update()
             return
@@ -969,13 +963,13 @@ class ProviderConfigView:
                 self._set_status(
                     self._lt_status_text,
                     i18n.t("provider_config.llm_connection_ok"),
-                    SUCCESS,
+                    theme.SUCCESS,
                 )
             else:
                 self._set_status(
                     self._lt_status_text,
                     i18n.t("provider_config.ollama_connection_failed"),
-                    ERROR,
+                    theme.ERROR,
                 )
 
         self._run_connection_test(self._lt_status_text, _worker)
@@ -991,7 +985,7 @@ class ProviderConfigView:
             self._set_status(
                 self._claude_status_text,
                 i18n.t("translation.provider_not_configured").format(provider="Claude"),
-                ERROR,
+                theme.ERROR,
             )
             self._page.update()
             return
@@ -1003,13 +997,13 @@ class ProviderConfigView:
                 self._set_status(
                     self._claude_status_text,
                     i18n.t("provider_config.llm_connection_ok"),
-                    SUCCESS,
+                    theme.SUCCESS,
                 )
             else:
                 self._set_status(
                     self._claude_status_text,
                     i18n.t("translation.connection_failed"),
-                    ERROR,
+                    theme.ERROR,
                 )
 
         self._run_connection_test(self._claude_status_text, _worker)
@@ -1027,7 +1021,7 @@ class ProviderConfigView:
                 i18n.t("translation.provider_not_configured").format(
                     provider="Mistral"
                 ),
-                ERROR,
+                theme.ERROR,
             )
             self._page.update()
             return
@@ -1039,13 +1033,13 @@ class ProviderConfigView:
                 self._set_status(
                     self._mistral_status_text,
                     i18n.t("provider_config.llm_connection_ok"),
-                    SUCCESS,
+                    theme.SUCCESS,
                 )
             else:
                 self._set_status(
                     self._mistral_status_text,
                     i18n.t("translation.connection_failed"),
-                    ERROR,
+                    theme.ERROR,
                 )
 
         self._run_connection_test(self._mistral_status_text, _worker)

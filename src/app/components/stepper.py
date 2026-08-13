@@ -4,21 +4,9 @@ from collections.abc import Callable
 
 import flet as ft
 
-from app.theme import (
-    ACCENT,
-    ACCENT_ON,
-    TEXT,
-    TEXT_HINT,
-    TEXT_MUTED,
-    border_all,
-    focusable,
-)
+from app import theme
+from app.theme import border_all, focusable
 from core.i18n import i18n
-
-_CONNECTOR_TODO = "#322f3d"
-_CIRCLE_DONE_BG = "#2a2638"
-_CIRCLE_TODO_BORDER = "#423f4d"
-_STEPPER_BORDER = "#1a1820"
 
 
 def _circle(number: int, *, active: bool, done: bool) -> ft.Container:
@@ -36,24 +24,24 @@ def _circle(number: int, *, active: bool, done: bool) -> ft.Container:
     if done:
         icon = ft.Icon(
             ft.Icons.CHECK,
-            color=ACCENT,
+            color=theme.ACCENT,
             size=14,
             semantics_label=i18n.t("project_setup.step_done"),
         )
-        bg = _CIRCLE_DONE_BG
+        bg = theme.STEP_DONE_BG
         border: ft.Border | None = None
     elif active:
         icon = ft.Text(
-            str(number), color=ACCENT_ON, size=13, weight=ft.FontWeight.W_600
+            str(number), color=theme.ACCENT_ON, size=13, weight=ft.FontWeight.W_600
         )
-        bg = ACCENT
+        bg = theme.ACCENT
         border = None
     else:
         icon = ft.Text(
-            str(number), color=TEXT_HINT, size=13, weight=ft.FontWeight.W_600
+            str(number), color=theme.TEXT_HINT, size=13, weight=ft.FontWeight.W_600
         )
         bg = "transparent"
-        border = border_all(1.5, _CIRCLE_TODO_BORDER)
+        border = border_all(1.5, theme.STEP_TODO_BORDER)
     return ft.Container(
         content=icon,
         width=30,
@@ -85,11 +73,11 @@ def _step(
     done = number < active_step
     active = number == active_step
     if done:
-        label_color = TEXT_MUTED
+        label_color = theme.TEXT_MUTED
     elif active:
-        label_color = TEXT
+        label_color = theme.TEXT
     else:
-        label_color = TEXT_HINT
+        label_color = theme.TEXT_HINT
     label = i18n.t(label_key)
     row = ft.Row(
         [
@@ -126,7 +114,7 @@ def _connector(*, done: bool) -> ft.Container:
         expand=True,
         height=2,
         border_radius=2,
-        bgcolor=ACCENT if done else _CONNECTOR_TODO,
+        bgcolor=theme.ACCENT if done else theme.BORDER_SUBTLE,
     )
 
 
@@ -164,5 +152,5 @@ def build_stepper(
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
         padding=ft.Padding(left=40, right=40, top=22, bottom=18),
-        border=ft.Border(bottom=ft.BorderSide(1, _STEPPER_BORDER)),
+        border=ft.Border(bottom=ft.BorderSide(1, theme.BORDER)),
     )

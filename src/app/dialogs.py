@@ -5,16 +5,32 @@ from typing import Any, Literal
 
 import flet as ft
 
-from app.theme import ACCENT, ACCENT_ON, ERROR, TEXT_MUTED, focusable
+from app import theme
+from app.theme import focusable
 
 DialogTone = Literal["neutral", "accent", "primary", "danger"]
 
-_TONE_COLORS: dict[DialogTone, tuple[str, str | None, ft.FontWeight]] = {
-    "neutral": (TEXT_MUTED, None, ft.FontWeight.W_500),
-    "accent": (ACCENT, None, ft.FontWeight.W_600),
-    "primary": (ACCENT_ON, ACCENT, ft.FontWeight.W_600),
-    "danger": (ERROR, None, ft.FontWeight.W_600),
-}
+
+def _tone_style(tone: DialogTone) -> tuple[str, str | None, ft.FontWeight]:
+    """Return the text color, fill and weight carrying a tone.
+
+    Resolved on each call rather than held in a module-level table: the
+    colours move with the theme, and a table filled at import would keep
+    the palette the application started with.
+
+    Args:
+        tone: What the action is.
+
+    Returns:
+        The text color, the fill behind it if any, and the font weight.
+    """
+    styles: dict[DialogTone, tuple[str, str | None, ft.FontWeight]] = {
+        "neutral": (theme.TEXT_MUTED, None, ft.FontWeight.W_500),
+        "accent": (theme.ACCENT, None, ft.FontWeight.W_600),
+        "primary": (theme.ACCENT_ON, theme.ACCENT, ft.FontWeight.W_600),
+        "danger": (theme.ERROR, None, ft.FontWeight.W_600),
+    }
+    return styles[tone]
 
 
 def dialog_action(
@@ -40,7 +56,7 @@ def dialog_action(
     Returns:
         The focusable action, ready to sit in an AlertDialog's actions.
     """
-    color, bgcolor, weight = _TONE_COLORS[tone]
+    color, bgcolor, weight = _tone_style(tone)
     horizontal = 18 if tone == "primary" else 12
     return focusable(
         ft.Container(

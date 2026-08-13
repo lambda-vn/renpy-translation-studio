@@ -2,16 +2,9 @@
 
 import flet as ft
 
+from app import theme
 from app.shortcuts import GLOBAL_SHORTCUTS, REVIEW_SHORTCUTS, Shortcut, combination
-from app.theme import (
-    ACCENT,
-    BORDER_COLOR,
-    TEXT_H,
-    TEXT_HINT,
-    TEXT_MUTED,
-    border_all,
-    focusable,
-)
+from app.theme import border_all, focusable
 from core.i18n import i18n
 
 
@@ -28,13 +21,13 @@ def _build_shortcut_row(keys: str, label_key: str) -> ft.Row:
     return ft.Row(
         [
             ft.Container(
-                content=ft.Text(keys, size=12, color=TEXT_H),
+                content=ft.Text(keys, size=12, color=theme.TEXT_H),
                 width=104,
-                border=border_all(1, BORDER_COLOR),
+                border=border_all(1, theme.BORDER_COLOR),
                 border_radius=6,
                 padding=ft.Padding(left=8, right=8, top=4, bottom=4),
             ),
-            ft.Text(i18n.t(label_key), size=13, color=TEXT_MUTED, expand=True),
+            ft.Text(i18n.t(label_key), size=13, color=theme.TEXT_MUTED, expand=True),
         ],
         spacing=12,
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -57,7 +50,7 @@ def _build_group(title_key: str, table: tuple[Shortcut, ...]) -> ft.Control:
                 i18n.t(title_key),
                 size=11,
                 weight=ft.FontWeight.W_700,
-                color=TEXT_HINT,
+                color=theme.TEXT_HINT,
             ),
             *(_build_shortcut_row(combination(s), s.label_key) for s in table),
         ],
@@ -81,9 +74,9 @@ def build_help_dialog(page: ft.Page) -> ft.AlertDialog:
             i18n.t("help.title"),
             size=18,
             weight=ft.FontWeight.W_600,
-            color=TEXT_H,
+            color=theme.TEXT_H,
         ),
-        bgcolor="#1a1822",
+        bgcolor=theme.BG_MENU,
         content=ft.Column(
             [
                 _build_group("help.scope_global", GLOBAL_SHORTCUTS),
@@ -100,7 +93,7 @@ def build_help_dialog(page: ft.Page) -> ft.AlertDialog:
                         i18n.t("common.close"),
                         size=13.5,
                         weight=ft.FontWeight.W_500,
-                        color=ACCENT,
+                        color=theme.ACCENT,
                     ),
                     padding=ft.Padding(left=12, right=12, top=8, bottom=8),
                     ink=True,
