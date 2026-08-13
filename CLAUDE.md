@@ -525,13 +525,19 @@ chaque commit, y compris entre deux phases d'une même roadmap.
 - **Les locales vivent dans `src/`** parce que `[tool.flet.app] path`
   vaut `src` et que le binaire n'embarque que ça. Les remonter à la
   racine produirait une application sans une seule chaîne d'interface.
-- **Compilation Windows en local** : elle échoue si le seul CMake de la
-  machine est celui de Visual Studio, qui est 32 bits. Le plugin
-  `serious_python_windows` lit `$ENV{WINDIR}/System32`, redirigé vers
-  `SysWOW64` pour un processus 32 bits, et y prend des DLL 32 bits pour
-  une application 64 bits avant d'échouer sur `vcruntime140_1.dll`, qui
-  n'existe qu'en 64 bits. C'est un bug amont ; les runners GitHub n'y
-  sont pas exposés, la CI passe.
+- **Les binaires se construisent en CI**, pas sur le poste : `build.yml`
+  produit les trois cibles et publie un artefact par cible. C'est le
+  chemin normal pour obtenir une application packagée, et le seul moyen
+  de voir l'icône de `src/assets/icon.png`, que `flet run` n'utilise
+  jamais.
+  Une compilation Windows **locale** peut échouer là où la CI passe : si
+  le seul CMake de la machine est celui de Visual Studio, qui est
+  32 bits, le plugin `serious_python_windows` lit
+  `$ENV{WINDIR}/System32`, redirigé vers `SysWOW64` pour un processus
+  32 bits, et y prend des DLL 32 bits pour une application 64 bits avant
+  d'échouer sur `vcruntime140_1.dll`, qui n'existe qu'en 64 bits. C'est
+  un bug amont, propre à cette configuration ; les runners GitHub n'y
+  sont pas exposés.
 - **Ne pas modifier les prompts LLM** (`build_system_prompt`,
   `build_batch_prompt`) ni le schéma de sortie structurée sans test réel
   sur un petit modèle : ils encodent des contournements de bugs.
