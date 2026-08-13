@@ -1,6 +1,7 @@
 """Entry point for Ren'Py Translation Studio."""
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Protocol
 
 import flet as ft
@@ -21,6 +22,18 @@ from app.views.universe_summary_view import UniverseSummaryView
 from core.i18n import i18n
 from core.logging_config import configure_logging
 from core.settings import settings
+
+# Windows draws the task bar icon from the resources of the executable it
+# launched, and `flet run` launches Flet's own prebuilt client, so a
+# development window carries Flet's icon whatever assets/ holds. This is
+# the one thing that overrides it, and only there: page.window.icon is
+# Windows-only and wants an .ico. A packaged build needs none of it,
+# flet build having put the icon in the binary itself.
+#
+# Not named icon.ico on purpose. flet build globs assets/icon.* and takes
+# the first match, so an icon.ico would beat icon.png on Windows builds
+# and derive every size from 256 pixels instead of 1024.
+_WINDOW_ICON = Path(__file__).parent / "assets" / "window.ico"
 
 
 class DisposableView(Protocol):
@@ -105,6 +118,7 @@ def main(page: ft.Page) -> None:
 
     page.title = "Ren'Py Translation Studio"
     page.padding = 0
+    page.window.icon = str(_WINDOW_ICON)
     page.window.min_width = 800
     page.window.min_height = 700
     page.window.width = 1000

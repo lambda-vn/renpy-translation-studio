@@ -72,6 +72,16 @@ def test_the_packaged_icon_exists() -> None:
     assert (_ASSETS_DIR / "icon.png").is_file()
 
 
+def test_the_window_icon_exists() -> None:
+    """main.py points page.window.icon at this file by name.
+
+    Its name must stay outside the icon.* glob flet build reads, or a
+    Windows build would take this 256-pixel icon over the 1024 one.
+    """
+    assert (_ASSETS_DIR / "window.ico").is_file()
+    assert not (_ASSETS_DIR / "icon.ico").exists()
+
+
 def test_following_the_system_lands_on_declared_themes() -> None:
     """Both ends of the system setting must name a theme that exists."""
     dark = palettes.get_theme(palettes.SYSTEM_DARK)
