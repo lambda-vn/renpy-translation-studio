@@ -126,6 +126,23 @@ def active_theme() -> palettes.Theme:
     return _active
 
 
+def logo_asset(size: int) -> str:
+    """Return the application logo matching the active theme.
+
+    The two variants differ by the background they are drawn on, so the
+    one to show is the one the theme names. Keeping the file naming here
+    means a theme only has to declare its folder.
+
+    Args:
+        size: Edge of the square image, in pixels. Must be one of the
+            sizes shipped under src/assets.
+
+    Returns:
+        A path relative to the assets directory, for ft.Image.
+    """
+    return f"{_active.icons}/icon-{size}x{size}.png"
+
+
 def set_theme(code: str) -> None:
     """Apply a theme and notify every listener.
 

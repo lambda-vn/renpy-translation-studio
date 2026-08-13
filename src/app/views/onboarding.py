@@ -179,8 +179,18 @@ class OnboardingView:
                     content=ft.Column(
                         controls=[
                             ft.Column(
-                                [self._title, self._subtitle],
-                                spacing=6,
+                                [
+                                    ft.Image(
+                                        src=theme.logo_asset(256),
+                                        width=96,
+                                        height=96,
+                                    ),
+                                    ft.Column(
+                                        [self._title, self._subtitle],
+                                        spacing=6,
+                                    ),
+                                ],
+                                spacing=16,
                             ),
                             ft.Column(
                                 [self._lang_label, self._lang_dropdown],

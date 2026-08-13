@@ -20,6 +20,8 @@ import pytest
 from app import palettes, theme
 from core.i18n import LOCALES_DIR, SUPPORTED_LOCALES
 
+_ASSETS_DIR = Path(__file__).resolve().parent.parent / "src" / "assets"
+
 _APP_DIR = Path(__file__).resolve().parent.parent / "src" / "app"
 
 _HEX_PATTERN = re.compile(r"^#[0-9a-f]{6}$")
@@ -56,6 +58,18 @@ def test_every_colour_is_a_hex_value(entry: palettes.Theme) -> None:
         if field.name in _VEILS:
             continue
         assert _HEX_PATTERN.match(value), f"{entry.code}.{field.name} = {value!r}"
+
+
+@pytest.mark.parametrize("entry", palettes.THEMES, ids=lambda e: e.code)
+def test_every_theme_ships_its_logo(entry: palettes.Theme) -> None:
+    """The folder a theme names has to hold the size onboarding asks for."""
+    logo = _ASSETS_DIR / entry.icons / "icon-256x256.png"
+    assert logo.is_file(), f"{entry.code}: {logo} is missing"
+
+
+def test_the_packaged_icon_exists() -> None:
+    """flet build reads this exact name to make every platform's icon."""
+    assert (_ASSETS_DIR / "icon.png").is_file()
 
 
 def test_following_the_system_lands_on_declared_themes() -> None:
