@@ -44,6 +44,8 @@
   "settings": {
     "title": "Settings",
     "language_label": "Interface language",
+    "theme_label": "Appearance",
+    "theme_system": "Follow the system",
     "sdk_label": "Ren'Py SDK path",
     "sdk_hint": "Optional: used only when a game does not ship an engine this system can run.",
     "sdk_browse": "Browse",
@@ -401,6 +403,10 @@
     "engine_failed": "Ren'Py failed (exit {code}):",
     "engine_wrong_platform": "This game only ships a {platforms} engine, which cannot run on this system. Select a Ren'Py SDK to extract it.",
     "no_engine": "This game ships no engine that can run here, and no Ren'Py SDK is selected. Select one in the settings."
+  },
+  "themes": {
+    "dark": "Dark",
+    "light": "Light"
   },
   "languages": {
     "english": "English",

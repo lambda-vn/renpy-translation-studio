@@ -5,7 +5,7 @@ from collections.abc import Callable
 import flet as ft
 from flet.controls.control_event import Event
 
-from app import theme
+from app import palettes, theme
 from app.theme import border_all, focusable
 from core.i18n import SUPPORTED_LOCALES, i18n
 from core.languages import localized_label
@@ -16,6 +16,28 @@ _LOCALE_OPTIONS = [
     ft.dropdown.Option(key="en", text="English"),
     ft.dropdown.Option(key="fr", text="Français"),
 ]
+
+
+def _theme_options() -> list[ft.dropdown.Option]:
+    """List the themes to choose from, the platform's own choice first.
+
+    Built on each call rather than held in a module-level table: the
+    labels are localized, and a table filled at import would keep the
+    language the application started with. It reads palettes.THEMES, so a
+    theme added there shows up here with nothing to change.
+
+    Returns:
+        One option per declared theme, headed by the option deferring to
+        the host platform.
+    """
+    options = [
+        ft.dropdown.Option(key=palettes.SYSTEM, text=i18n.t("settings.theme_system"))
+    ]
+    options.extend(
+        ft.dropdown.Option(key=entry.code, text=palettes.localized_label(entry.code))
+        for entry in palettes.THEMES
+    )
+    return options
 
 
 def build_settings_dialog(
@@ -43,6 +65,27 @@ def build_settings_dialog(
             return
         i18n.set_locale(locale)
         settings.set("locale", locale)
+        page.pop_dialog()
+        page.show_dialog(
+            build_settings_dialog(
+                page,
+                on_configure_provider=on_configure_provider,
+                on_close=on_close,
+            )
+        )
+
+    def on_theme_changed(e: Event[ft.Dropdown]) -> None:
+        """Persist the chosen theme and repaint everything that is up.
+
+        Applies before dismissing, in the order the locale switch uses:
+        the listener rebuilds the view behind the dialog, and the dialog
+        itself is not part of that view, so it is rebuilt by hand here.
+        """
+        value = e.control.value or palettes.SYSTEM
+        if value != palettes.SYSTEM and palettes.get_theme(value) is None:
+            return
+        settings.set("theme", value)
+        theme.apply_setting(page.platform_brightness)
         page.pop_dialog()
         page.show_dialog(
             build_settings_dialog(
@@ -270,6 +313,31 @@ def build_settings_dialog(
                             dense=True,
                             width=220,
                             on_select=on_locale_changed,
+                        ),
+                    ],
+                    spacing=9,
+                ),
+                ft.Column(
+                    [
+                        ft.Text(
+                            i18n.t("settings.theme_label"),
+                            size=12,
+                            weight=ft.FontWeight.W_600,
+                            color=theme.TEXT_MUTED,
+                        ),
+                        ft.Dropdown(
+                            options=_theme_options(),
+                            value=settings.get("theme") or palettes.SYSTEM,
+                            bgcolor=theme.BG_INPUT,
+                            border_color=theme.BORDER_STRONG,
+                            focused_border_color=theme.FOCUS_RING,
+                            focused_border_width=theme.FOCUS_RING_WIDTH,
+                            color=theme.TEXT_H,
+                            border_radius=11,
+                            height=48,
+                            dense=True,
+                            width=220,
+                            on_select=on_theme_changed,
                         ),
                     ],
                     spacing=9,

@@ -5,7 +5,7 @@ from typing import Protocol
 
 import flet as ft
 
-from app import shortcuts, theme
+from app import palettes, shortcuts, theme
 from app.components.app_header import build_app_header
 from app.components.help_dialog import build_help_dialog
 from app.components.settings_dialog import build_settings_dialog
@@ -38,6 +38,63 @@ class DisposableView(Protocol):
         """Release everything the view registered outside its controls."""
 
 
+def _page_theme() -> ft.Theme:
+    """Build the Material theme backing the controls we do not paint.
+
+    Most of the interface carries its own colours, but not all of it: the
+    ink ripple of every clickable container, the popup menu items, the
+    text cursor and the selection handles come from Material's own
+    scheme. Left to Flet's default that scheme is a dark one, which is
+    invisible work as long as the application is dark and glaring the
+    moment it is not.
+
+    Returns:
+        The theme to hand to both of the page's theme slots.
+    """
+    return ft.Theme(
+        color_scheme=ft.ColorScheme(
+            primary=theme.ACCENT,
+            on_primary=theme.ACCENT_ON,
+            surface=theme.BG,
+            on_surface=theme.TEXT,
+            surface_container=theme.BG_MENU,
+            outline=theme.BORDER_COLOR,
+            error=theme.ERROR,
+        ),
+        popup_menu_theme=ft.PopupMenuTheme(
+            color=theme.BG_MENU,
+            icon_color=theme.TEXT_MUTED,
+            label_text_style=ft.TextStyle(size=13, color=theme.TEXT),
+            shape=ft.RoundedRectangleBorder(radius=10),
+        ),
+    )
+
+
+def apply_page_theme(page: ft.Page) -> None:
+    """Repaint the page itself with the palette now active.
+
+    Both theme slots get the same object. Flet reads `theme` in light
+    mode and `dark_theme` in dark mode, and the palette has already
+    resolved which one of those we are in, so filling only one would
+    leave the popup menus and the ink ripple to Material's defaults
+    exactly half the time.
+
+    Args:
+        page: The page to repaint. Its controls are not touched; the
+            caller rebuilds them.
+    """
+    page.bgcolor = theme.BG
+    if (settings.get("theme") or palettes.SYSTEM) == palettes.SYSTEM:
+        page.theme_mode = ft.ThemeMode.SYSTEM
+    elif theme.active_theme().dark:
+        page.theme_mode = ft.ThemeMode.DARK
+    else:
+        page.theme_mode = ft.ThemeMode.LIGHT
+    built = _page_theme()
+    page.theme = built
+    page.dark_theme = built
+
+
 def main(page: ft.Page) -> None:
     """Configure and render the main application page.
 
@@ -47,17 +104,7 @@ def main(page: ft.Page) -> None:
     configure_logging()
 
     page.title = "Ren'Py Translation Studio"
-    page.bgcolor = theme.BG
     page.padding = 0
-    page.theme_mode = ft.ThemeMode.DARK
-    page.theme = ft.Theme(
-        popup_menu_theme=ft.PopupMenuTheme(
-            color=theme.BG_MENU,
-            icon_color=theme.TEXT_MUTED,
-            label_text_style=ft.TextStyle(size=13, color=theme.TEXT),
-            shape=ft.RoundedRectangleBorder(radius=10),
-        )
-    )
     page.window.min_width = 800
     page.window.min_height = 700
     page.window.width = 1000
@@ -66,6 +113,8 @@ def main(page: ft.Page) -> None:
 
     saved_locale = settings.get("locale") or "en"
     i18n.set_locale(saved_locale)
+    theme.apply_setting(page.platform_brightness)
+    apply_page_theme(page)
 
     state = AppState()
 
@@ -263,6 +312,37 @@ def main(page: ft.Page) -> None:
             return
         current_show()
 
+    def repaint() -> None:
+        """Re-render the current view so it reflects the active theme.
+
+        Drops itself when its session is gone, for the same reason
+        rerender() does: the palette is a module singleton outliving the
+        page, so a second window would find this one's listener still
+        registered.
+
+        A view refusing to leave, which the review does while it is
+        translating, keeps the colours it was built with until the next
+        navigation. That is already what a locale change does.
+        """
+        try:
+            _ = page.session
+        except RuntimeError:
+            theme.remove_listener(repaint)
+            return
+        apply_page_theme(page)
+        current_show()
+
+    def on_brightness_change(_e: ft.PlatformBrightnessChangeEvent) -> None:
+        """Follow the host platform when the settings say to follow it.
+
+        Args:
+            _e: The event, whose brightness is read back from the page so
+                a stale value can never be applied.
+        """
+        if (settings.get("theme") or palettes.SYSTEM) != palettes.SYSTEM:
+            return
+        theme.apply_setting(page.platform_brightness)
+
     async def on_window_event(e: ft.WindowEvent[ft.Window]) -> None:
         """Let the view being closed write what it still holds.
 
@@ -309,8 +389,10 @@ def main(page: ft.Page) -> None:
     page.window.prevent_close = True
     page.window.on_event = on_window_event
     page.on_keyboard_event = on_keyboard
+    page.on_platform_brightness_change = on_brightness_change
 
     i18n.on_locale_change(rerender)
+    theme.on_theme_change(repaint)
 
     if settings.is_first_launch:
         show_onboarding()

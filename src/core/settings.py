@@ -30,6 +30,7 @@ class SettingsError(Exception):
 
 DEFAULTS: dict[str, str | None] = {
     "locale": "en",
+    "theme": "system",
     "sdk_path": None,
     "default_provider": None,
     "ollama_endpoint": "http://localhost:11434",

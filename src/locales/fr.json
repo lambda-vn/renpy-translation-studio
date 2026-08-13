@@ -44,6 +44,8 @@
   "settings": {
     "title": "Paramètres",
     "language_label": "Langue de l'interface",
+    "theme_label": "Apparence",
+    "theme_system": "Suivre le système",
     "sdk_label": "Chemin du SDK Ren'Py",
     "sdk_hint": "Facultatif : utilisé seulement si un jeu n'embarque pas de moteur exécutable sur ce système.",
     "sdk_browse": "Parcourir",
@@ -401,6 +403,10 @@
     "engine_failed": "Échec de Ren'Py (code {code}) :",
     "engine_wrong_platform": "Ce jeu n'embarque qu'un moteur {platforms}, qui ne peut pas s'exécuter sur ce système. Sélectionnez un SDK Ren'Py pour l'extraire.",
     "no_engine": "Ce jeu n'embarque aucun moteur exécutable ici, et aucun SDK Ren'Py n'est sélectionné. Sélectionnez-en un dans les paramètres."
+  },
+  "themes": {
+    "dark": "Sombre",
+    "light": "Clair"
   },
   "languages": {
     "english": "Anglais",
