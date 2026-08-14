@@ -4277,6 +4277,7 @@ class ReviewView:
                 build_stepper(
                     2,
                     on_setup=lambda: self._on_setup_step_clicked(None),
+                    on_export=self._navigate_export,
                     export_label_key="review.step_export",
                 ),
                 ft.Row(

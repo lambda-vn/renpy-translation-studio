@@ -59,16 +59,18 @@ def _step(
     active_step: int,
     on_click: Callable[[], None] | None,
 ) -> ft.Control:
-    """Build one step (circle plus label), clickable once completed.
+    """Build one step (circle plus label), clickable when it navigates.
 
     Args:
         number: Step number (1, 2 or 3).
         label_key: i18n key for the step label.
         active_step: The currently active step.
-        on_click: Navigation callback, wired only when the step is completed.
+        on_click: Navigation callback, wired for every step but the
+            current one. A completed step goes back, a pending one goes
+            forward, and the tooltip says which.
 
     Returns:
-        A Row, or a focusable button wrapping it for completed steps.
+        A Row, or a focusable button wrapping it for navigable steps.
     """
     done = number < active_step
     active = number == active_step
@@ -92,11 +94,15 @@ def _step(
         spacing=11,
         tight=True,
     )
-    if done and on_click is not None:
+    if on_click is not None and not active:
+        if done:
+            tooltip = i18n.t("project_setup.step_back_to")
+        else:
+            tooltip = i18n.t("project_setup.step_go_to")
         return focusable(
             ft.Container(content=row, ink=True, border_radius=8),
             on_click=lambda _e: on_click(),
-            tooltip=i18n.t("project_setup.step_back_to").format(step=label),
+            tooltip=tooltip.format(step=label),
         )
     return row
 
@@ -123,6 +129,7 @@ def build_stepper(
     *,
     on_setup: Callable[[], None] | None = None,
     on_review: Callable[[], None] | None = None,
+    on_export: Callable[[], None] | None = None,
     export_label_key: str = "project_setup.step_export",
 ) -> ft.Container:
     """Build the three-step progress bar shown at the top of each main view.
@@ -133,6 +140,9 @@ def build_stepper(
             that step is completed.
         on_review: Navigation callback for the Review step, wired only once
             that step is completed.
+        on_export: Navigation callback for the Export step. This one leads
+            forward rather than back, and it is the only way into the
+            export screen: nothing else in the review view opens it.
         export_label_key: i18n key for the Export step label, which differs
             between the review and export views.
 
@@ -146,7 +156,7 @@ def build_stepper(
                 _connector(done=active_step > 1),
                 _step(2, "project_setup.step_review", active_step, on_review),
                 _connector(done=active_step > 2),
-                _step(3, export_label_key, active_step, None),
+                _step(3, export_label_key, active_step, on_export),
             ],
             spacing=16,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,

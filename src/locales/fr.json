@@ -189,6 +189,7 @@
     "step_export": "Export",
     "step_done": "Étape terminée",
     "step_back_to": "Revenir à : {step}",
+    "step_go_to": "Aller à : {step}",
     "game_folder": "DOSSIER DU JEU",
     "no_folder": "Aucun dossier sélectionné",
     "source_lang": "LANGUE SOURCE",

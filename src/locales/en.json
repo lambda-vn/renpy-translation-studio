@@ -189,6 +189,7 @@
     "step_export": "Export",
     "step_done": "Step completed",
     "step_back_to": "Back to: {step}",
+    "step_go_to": "Go to: {step}",
     "game_folder": "GAME FOLDER",
     "no_folder": "No folder selected",
     "source_lang": "SOURCE LANGUAGE",
