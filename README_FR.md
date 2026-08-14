@@ -7,6 +7,12 @@ réécriture des fichiers `tl/`, puis export d'un zip prêt à livrer.
 
 Version anglaise : [README.md](README.md).
 
+![L'écran de révision, montrant The Question — le jeu d'exemple livré avec le
+SDK Ren'Py — en cours de traduction vers le français](docs/images/03-review-fr.png)
+
+La documentation complète, écran par écran, est dans
+[`docs/fr/`](docs/fr/README.md) ([English](docs/en/README.md)).
+
 ## Fonctionnalités
 
 - Extraction des textes traduisibles d'un jeu Ren'Py via le moteur embarqué

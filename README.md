@@ -7,6 +7,12 @@ and export a ready-to-ship zip.
 
 Read this in French: [README_FR.md](README_FR.md).
 
+![The review screen, showing The Question — the sample game shipped with the
+Ren'Py SDK — being translated into French](docs/images/03-review-en.png)
+
+Full documentation, screen by screen, is in
+[`docs/en/`](docs/en/README.md) ([français](docs/fr/README.md)).
+
 ## Features
 
 - Extract translatable text from a Ren'Py game through the engine the game
