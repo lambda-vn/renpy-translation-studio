@@ -72,11 +72,18 @@ jobs:
 
       # The list comes from flet itself rather than being copied here, so
       # it cannot drift from the version the project actually pins.
+      #
+      # The warm-up call is not redundant. Since 0.86 flet installs
+      # flet-cli on first use and says so on stdout, ahead of anything
+      # the command was asked for, which is a parse error for whatever
+      # reads it. Spending that first call on nothing leaves the second
+      # one clean.
       - name: Install the Linux build dependencies
         if: matrix.target == 'linux'
         shell: bash
         run: |
           sudo apt-get update --allow-releaseinfo-change
+          uv run flet --version > /dev/null
           deps="$(uv run flet --version --json | jq -r '.linux_dependencies | join(" ")')"
           sudo apt-get install -y --no-install-recommends $deps
           sudo apt-get clean
