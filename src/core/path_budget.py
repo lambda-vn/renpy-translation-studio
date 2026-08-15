@@ -13,7 +13,7 @@ Nothing here imports the packages at risk.
 """
 
 import sys
-from pathlib import Path
+from pathlib import PureWindowsPath
 
 from core.i18n import i18n
 from core.settings import settings
@@ -34,8 +34,13 @@ the packages actually installed.
 _MESSAGE_BOX_ERROR_ICON = 0x10
 
 
-def _site_packages() -> Path | None:
+def _site_packages() -> PureWindowsPath | None:
     """Return the site-packages directory this process imports from.
+
+    Read as a Windows path whatever system is running, since a Windows
+    path is the only thing this module has an opinion about. Read as the
+    local flavour instead, a backslash would stop being a separator off
+    Windows and the tests could no longer state the case they cover.
 
     Returns:
         The directory, or None when no import path looks like one, which
@@ -43,8 +48,8 @@ def _site_packages() -> Path | None:
         without a virtual environment.
     """
     for entry in sys.path:
-        if entry and Path(entry).name == "site-packages":
-            return Path(entry)
+        if entry and PureWindowsPath(entry).name == "site-packages":
+            return PureWindowsPath(entry)
     return None
 
 
