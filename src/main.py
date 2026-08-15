@@ -6,6 +6,14 @@ from typing import Protocol
 
 import flet as ft
 
+from core.path_budget import refuse_to_start_on_long_path
+
+# Windows refuses a path over 260 characters, and every import below is
+# one this call decides whether the interpreter can reach at all. Run
+# from main() it would be too late: the failure it explains happens
+# while this very block is being executed.
+refuse_to_start_on_long_path()
+
 from app import palettes, shortcuts, theme
 from app.components.app_header import build_app_header
 from app.components.help_dialog import build_help_dialog

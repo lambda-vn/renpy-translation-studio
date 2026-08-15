@@ -429,5 +429,10 @@
     "korean": "Coréen",
     "schinese": "Chinois (simplifié)",
     "tchinese": "Chinois (traditionnel)"
+  },
+  "startup": {
+    "long_path_title": "Chemin trop long",
+    "long_path_body": "Windows refuse un chemin de plus de 260 caractères, et ce dossier laisse à l'application trop peu de place pour atteindre ses propres fichiers. Elle ne démarrera pas d'ici :",
+    "long_path_fix": "Déplacez le dossier dans un emplacement plus court, vos téléchargements par exemple. Caractères à retirer :"
   }
 }

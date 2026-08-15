@@ -429,5 +429,10 @@
     "korean": "Korean",
     "schinese": "Chinese (Simplified)",
     "tchinese": "Chinese (Traditional)"
+  },
+  "startup": {
+    "long_path_title": "Path too long",
+    "long_path_body": "Windows refuses a path longer than 260 characters, and this folder leaves the application too little room to reach its own files. It will not start from here:",
+    "long_path_fix": "Move the folder somewhere shorter, such as your Downloads folder. Characters to cut:"
   }
 }
