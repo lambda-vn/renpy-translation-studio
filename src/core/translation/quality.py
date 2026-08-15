@@ -23,6 +23,28 @@ class QualityIssue:
     detail: str
 
 
+def has_blocking_issue(source: str, translation: str) -> bool:
+    """Return whether a translation carries a problem that blocks it.
+
+    Everything check() reports counts except the length warning, which
+    blocks nothing: a translation running long is a suspicion, and
+    counting it here would drown the tag and interpolation problems it
+    shares the list with. This is the definition the review screen's
+    error filter selects on, and the one the export warning counts, so
+    the two cannot drift apart.
+
+    Args:
+        source: The original source text.
+        translation: The translated text to weigh against it.
+
+    Returns:
+        True when at least one non-length issue was found.
+    """
+    return any(
+        issue.kind != LENGTH_WARNING_KIND for issue in check(source, translation)
+    )
+
+
 def check(source: str, translation: str) -> list[QualityIssue]:
     """Run all quality checks between source and translation.
 

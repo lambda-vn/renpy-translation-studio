@@ -1,6 +1,6 @@
 """Tests for core/quality.py."""
 
-from core.translation.quality import LENGTH_WARNING_KIND, check
+from core.translation.quality import LENGTH_WARNING_KIND, check, has_blocking_issue
 
 
 def test_no_issues() -> None:
@@ -131,3 +131,23 @@ def test_multiple_issues() -> None:
     kinds = [i.kind for i in issues]
     assert "missing_tag" in kinds
     assert "missing_var" in kinds
+
+
+class TestHasBlockingIssue:
+    """The shared definition of a translation that must not ship."""
+
+    def test_a_clean_translation_blocks_nothing(self) -> None:
+        assert not has_blocking_issue("Hello [name]!", "Bonjour [name] !")
+
+    def test_a_lost_tag_blocks(self) -> None:
+        assert has_blocking_issue("{b}Hello{/b}", "Bonjour")
+
+    def test_an_invented_interpolation_blocks(self) -> None:
+        """The security check: Ren'Py runs what stands in the brackets."""
+        assert has_blocking_issue("Hello", "Bonjour [player_name]")
+
+    def test_a_length_warning_alone_does_not_block(self) -> None:
+        source = "Back"
+        translation = "Retourner au menu principal du jeu"
+        assert any(i.kind == LENGTH_WARNING_KIND for i in check(source, translation))
+        assert not has_blocking_issue(source, translation)

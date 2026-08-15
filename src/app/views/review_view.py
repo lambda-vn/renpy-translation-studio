@@ -51,7 +51,7 @@ from core.storage.translation_memory import translation_memory
 from core.translation.job import JobProgress, TranslationJob, needs_translation
 from core.translation.providers.base import TranslateBatchResult, TranslationUnitPayload
 from core.translation.providers.registry import registry
-from core.translation.quality import LENGTH_WARNING_KIND
+from core.translation.quality import LENGTH_WARNING_KIND, has_blocking_issue
 from core.translation.quality import check as quality_check
 from core.validators import is_recognized_language
 
@@ -246,10 +246,7 @@ def _has_blocking_issue(unit: TranslationUnit) -> bool:
         warning is left out: it blocks nothing and is a suspicion, not an
         error.
     """
-    return any(
-        issue.kind != LENGTH_WARNING_KIND
-        for issue in quality_check(unit.source_text, unit.translated_text)
-    )
+    return has_blocking_issue(unit.source_text, unit.translated_text)
 
 
 def _retranslatable(units: list[TranslationUnit]) -> list[TranslationUnit]:

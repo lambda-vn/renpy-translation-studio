@@ -1395,3 +1395,37 @@ def test_connecting_twice_keeps_one_set_of_indexes(tmp_path: Path) -> None:
     second.close()
 
     assert names >= _EXPECTED_INDEXES
+
+
+class TestGetTranslated:
+    """Reading only the lines that carry text to weigh."""
+
+    def test_untranslated_lines_are_left_out(
+        self, repo: TranslationUnitRepository
+    ) -> None:
+        repo.bulk_insert([_unit("block_a"), _unit("block_b")])
+        repo.update_translations([("block_a", "Bonjour", "ai_suggested")])
+
+        translated = repo.get_translated()
+
+        assert [u.block_id for u in translated] == ["block_a"]
+
+    def test_every_translated_status_comes_back(
+        self, repo: TranslationUnitRepository
+    ) -> None:
+        """An imported line ships like a validated one, so both are read."""
+        repo.bulk_insert([_unit(name) for name in ("a", "b", "c", "d")])
+        repo.update_translations(
+            [
+                ("a", "un", "ai_suggested"),
+                ("b", "deux", "draft"),
+                ("c", "trois", "imported"),
+                ("d", "quatre", "human_validated"),
+            ]
+        )
+
+        assert len(repo.get_translated()) == 4
+
+    def test_nothing_translated_yet(self, repo: TranslationUnitRepository) -> None:
+        repo.bulk_insert([_unit("block_a")])
+        assert repo.get_translated() == []
