@@ -113,17 +113,23 @@ jobs:
       # The name comes from pyproject rather than from the tag: it is the
       # version flet just wrote into the binary, and it is the one that
       # still makes sense for a build started by hand, off any tag.
+      #
+      # The build directory is renamed and archived as itself rather than
+      # from the inside, so that the zip holds one folder instead of six
+      # thousand loose files. Unpacked into a downloads folder, the flat
+      # form scatters all of them next to whatever was already there.
       - name: Package
         shell: bash
         run: |
           version="$(uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
           name="renpy-translation-studio-$version-${{ matrix.target }}"
           mkdir dist
-          cd "build/${{ matrix.target }}"
+          mv "build/${{ matrix.target }}" "build/$name"
+          cd build
           if [ "${{ matrix.target }}" = windows ]; then
-            7z a -tzip "../../dist/$name.zip" .
+            7z a -tzip "../dist/$name.zip" "$name"
           else
-            zip -r -y "../../dist/$name.zip" .
+            zip -r -y "../dist/$name.zip" "$name"
           fi
 
       - uses: actions/upload-artifact@v4
