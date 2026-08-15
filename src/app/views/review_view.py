@@ -69,6 +69,11 @@ _ERROR_FILTER = "blocking_error"
 # "mes marques parmi les suggestions IA".
 _REVIEW_FILTER = "needs_review"
 
+# Portee de traduction visant les lignes que le filtre affiche, la seule qui
+# atteigne un statut deja traduit. Les deux autres, "all" et "file", designent
+# un perimetre de fichiers et laissent le statut au job.
+_FILTER_SCOPE = "filter"
+
 _CLEAR_STATUS_SETS: dict[str, list[TranslationStatus]] = {
     "unvalidated": ["ai_suggested", "draft", "imported"],
     "ai_suggested": ["ai_suggested"],
@@ -245,6 +250,24 @@ def _has_blocking_issue(unit: TranslationUnit) -> bool:
         issue.kind != LENGTH_WARNING_KIND
         for issue in quality_check(unit.source_text, unit.translated_text)
     )
+
+
+def _retranslatable(units: list[TranslationUnit]) -> list[TranslationUnit]:
+    """Keep the lines a batch is allowed to overwrite.
+
+    A validated line is dropped however the filter got to it. Asking for
+    a filter is asking for what it shows, but a suggestion never replaces
+    work a human signed off on, and that rule is not one a filter can
+    waive. The lines a batch does replace are suggestions, drafts and
+    imports, which is the point of retranslating a selection at all.
+
+    Args:
+        units: The lines the current filter matches, in file order.
+
+    Returns:
+        The same lines, minus the validated ones.
+    """
+    return [unit for unit in units if unit.status != "human_validated"]
 
 
 # ── Etat local de la vue ──────────────────────────────────────────────────── #
@@ -2000,6 +2023,31 @@ class ReviewView:
         start = self._vstate.current_page * _PAGE_SIZE
         return matching[start : start + _PAGE_SIZE], len(matching)
 
+    def _filtered_units(self) -> list[TranslationUnit]:
+        """Return every line the running filter matches, page or not.
+
+        The same reading _fetch_page() pages through, taken whole: a
+        selection is what the filter selects, not the fifty lines that
+        happen to be on screen. The error filter is applied in Python
+        here for the reason _load_error_page() states.
+
+        Returns:
+            The matching units in file order, empty when no file is open.
+        """
+        selected = self._vstate.selected_file
+        if selected is None:
+            return []
+        matching = self._repo.get_matching(
+            selected,
+            self._vstate.status_filter or None,
+            self._vstate.search_query,
+            self._vstate.character_filter,
+            self._vstate.review_only,
+        )
+        if self._vstate.errors_only:
+            return [u for u in matching if u.translated_text and _has_blocking_issue(u)]
+        return matching
+
     def _build_unit_row(
         self, unit: TranslationUnit, duplicates: DuplicateStats | None = None
     ) -> ft.Control:
@@ -3292,6 +3340,7 @@ class ReviewView:
             )
             controls += [self._provider_choice_label, self._provider_choice_dropdown]
 
+        self._refresh_scope_options()
         controls += [
             self._scope_choice_label,
             self._scope_control(self._scope_dropdown),
@@ -3306,6 +3355,41 @@ class ReviewView:
         )
         self._show_job_dialog()
         self._safe_update()
+
+    def _refresh_scope_options(self) -> None:
+        """Offer the running filter as a scope, when it selects anything.
+
+        Rebuilt on every opening rather than once at build time: the
+        count belongs to the filter as it stands, and an entry naming a
+        number from the last time the dialog was open would read as a
+        promise it does not keep. The entry is dropped when the filter
+        selects nothing a batch may overwrite, and the chooser falls back
+        to the whole project rather than staying on an entry that is no
+        longer there.
+
+        A dialog pinned to a file shows that file's name instead of the
+        chooser, so nothing here would be read: counting the filter there
+        is a full pass over the open file, quality checks included under
+        the error filter, for an entry nobody sees.
+        """
+        if self._menu_file is not None:
+            return
+
+        options = [
+            ft.dropdown.Option(key="all", text=i18n.t("translation.scope_all")),
+            ft.dropdown.Option(key="file", text=i18n.t("translation.scope_file")),
+        ]
+        count = len(_retranslatable(self._filtered_units()))
+        if count:
+            options.append(
+                ft.dropdown.Option(
+                    key=_FILTER_SCOPE,
+                    text=i18n.t("translation.scope_filter").format(n=count),
+                )
+            )
+        elif self._scope_dropdown.value == _FILTER_SCOPE:
+            self._scope_dropdown.value = "all"
+        self._scope_dropdown.options = options
 
     def _on_provider_choice_confirmed(self, _e: Event[ft.Container]) -> None:
         """Close the dialog and start the job with the chosen options.
@@ -3330,6 +3414,12 @@ class ReviewView:
         default. When the chosen scope contains any, the user is asked
         whether to retranslate and overwrite them before the job starts.
 
+        The filter scope asks nothing: naming a filter already says which
+        lines are meant, drafts included, and a prompt about a category
+        the user just selected on purpose is a question with one answer.
+        It is also the only scope that reaches an already translated
+        line, which is what makes a bad suggestion fixable in bulk.
+
         Args:
             provider_id: Id of the provider to translate with.
         """
@@ -3337,6 +3427,15 @@ class ReviewView:
         if scope == "file" and source_file is None:
             self._show_status(i18n.t("translation.scope_file_none"), theme.WARNING)
             self._safe_update()
+            return
+
+        if scope == _FILTER_SCOPE:
+            self._launch_translation_job(
+                provider_id,
+                self._vstate.selected_file,
+                include_drafts=False,
+                units=_retranslatable(self._filtered_units()),
+            )
             return
 
         draft_count = len(
@@ -3399,7 +3498,11 @@ class ReviewView:
         self._page.show_dialog(dialog)
 
     def _launch_translation_job(
-        self, provider_id: str, source_file: str | None, include_drafts: bool
+        self,
+        provider_id: str,
+        source_file: str | None,
+        include_drafts: bool,
+        units: list[TranslationUnit] | None = None,
     ) -> None:
         """Build the provider and payload, then run the translation job.
 
@@ -3407,7 +3510,12 @@ class ReviewView:
             provider_id: Id of the provider to translate with.
             source_file: File to restrict the job to, or None for all files.
             include_drafts: Whether to also retranslate (and overwrite)
-                existing draft lines in the chosen scope.
+                existing draft lines in the chosen scope. Ignored when
+                units are handed in, those having been chosen already.
+            units: The exact lines to translate, for a caller that
+                selected them itself. Left out, the job takes the
+                untranslated lines of the scope, which is what the whole
+                project and single file scopes mean.
         """
         try:
             provider = registry.get(
@@ -3420,13 +3528,14 @@ class ReviewView:
             self._safe_update()
             return
 
-        units = self._repo.get_all(
-            status_filter="not_translated", source_file=source_file
-        )
-        if include_drafts:
-            units = units + self._repo.get_all(
-                status_filter="draft", source_file=source_file
+        if units is None:
+            units = self._repo.get_all(
+                status_filter="not_translated", source_file=source_file
             )
+            if include_drafts:
+                units = units + self._repo.get_all(
+                    status_filter="draft", source_file=source_file
+                )
         if not units:
             self._show_status(
                 i18n.t("translation.translation_done").format(done=0, failed=0),

@@ -125,6 +125,7 @@
     "connection_failed": "Connection failed — check your API key",
     "scope_all": "All files",
     "scope_file": "This file",
+    "scope_filter": "Filtered lines ({n})",
     "scope_file_none": "Select a file first",
     "unsupported_language": "Automatic translation isn't available for '{lang}' (not a language recognized by providers)",
     "translate_unit_title": "Translate this line",

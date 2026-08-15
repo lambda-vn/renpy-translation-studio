@@ -125,6 +125,7 @@
     "connection_failed": "Connexion échouée — vérifiez votre clé API",
     "scope_all": "Tous les fichiers",
     "scope_file": "Ce fichier",
+    "scope_filter": "Lignes filtrées ({n})",
     "scope_file_none": "Sélectionnez un fichier d'abord",
     "unsupported_language": "Traduction automatique non disponible pour '{lang}' (langue non reconnue par les fournisseurs)",
     "translate_unit_title": "Traduire cette ligne",

@@ -3,7 +3,8 @@
 from pathlib import Path
 
 from app.state import AppState, ReviewViewState
-from app.views.review_view import _filter_key
+from app.views.review_view import _filter_key, _retranslatable
+from core.storage.repositories import TranslationStatus, TranslationUnit
 
 
 class TestReviewStatePersistence:
@@ -68,3 +69,46 @@ class TestFilterKey:
     def test_review_flag_replaces_the_status(self) -> None:
         state = ReviewViewState(status_filter=None, review_only=True)
         assert _filter_key(state) == "needs_review"
+
+
+def _unit(block_id: str, status: TranslationStatus) -> TranslationUnit:
+    """Build a stored unit carrying the status under test."""
+    return TranslationUnit(
+        id=0,
+        block_id=block_id,
+        source_file="game/script.rpy",
+        source_line=1,
+        character_variable=None,
+        source_text="Hello",
+        translated_text="",
+        status=status,
+    )
+
+
+class TestRetranslatable:
+    """Which of the filtered lines a batch may actually overwrite."""
+
+    def test_validated_lines_are_dropped(self) -> None:
+        units = [_unit("a", "ai_suggested"), _unit("b", "human_validated")]
+        assert [u.block_id for u in _retranslatable(units)] == ["a"]
+
+    def test_every_other_status_goes_through(self) -> None:
+        """The three statuses a bad job leaves behind are the point."""
+        units = [
+            _unit("a", "not_translated"),
+            _unit("b", "draft"),
+            _unit("c", "imported"),
+            _unit("d", "ai_suggested"),
+        ]
+        assert len(_retranslatable(units)) == 4
+
+    def test_file_order_survives(self) -> None:
+        units = [
+            _unit("a", "ai_suggested"),
+            _unit("b", "human_validated"),
+            _unit("c", "draft"),
+        ]
+        assert [u.block_id for u in _retranslatable(units)] == ["a", "c"]
+
+    def test_nothing_selected_stays_nothing(self) -> None:
+        assert _retranslatable([]) == []
