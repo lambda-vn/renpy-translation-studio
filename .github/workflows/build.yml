@@ -220,8 +220,16 @@ jobs:
           fi
           echo "the process is still alive"
           screencapture -x smoke-macos.png
-          echo "screen captured"
           kill "$app" 2>/dev/null || true
+
+          # screencapture can return 0 having written nothing usable, so
+          # the file is weighed rather than announced. This proves a
+          # picture exists and is not empty, nothing about what it shows:
+          # that is what the artifact is for.
+          test -f smoke-macos.png
+          bytes="$(wc -c < smoke-macos.png | tr -d ' ')"
+          echo "captured $bytes bytes"
+          test "$bytes" -gt 10000
 
       - uses: actions/upload-artifact@v7
         if: matrix.target == 'linux'
