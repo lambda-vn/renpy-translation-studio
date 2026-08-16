@@ -134,6 +134,17 @@ jobs:
             | sort >> "$out"
           cat "$out"
 
+          # Where site-packages lands is a flet implementation detail, so
+          # a layout change would leave find matching nothing while this
+          # step still passed, and every archive would carry a one-line
+          # file presenting itself as an inventory. The count is asserted
+          # rather than shown: the three targets recorded 62, 61 and 59
+          # the day this was written, so twenty is far below any real
+          # tree and far above an empty one.
+          packages="$(grep -c '==' "$out" || echo 0)"
+          echo "$packages packages recorded"
+          test "$packages" -gt 20
+
       # Nobody has ever launched the Linux binary. v0.1.0 shipped it
       # unverified and said so, and the class of bug that hides there is
       # the one that already happened: under flet 0.85.3 the Windows
@@ -230,6 +241,100 @@ jobs:
           bytes="$(wc -c < smoke-macos.png | tr -d ' ')"
           echo "captured $bytes bytes"
           test "$bytes" -gt 10000
+
+      # Windows was the platform where the application shipped unable to
+      # start, and it is the one with no check here: the other two are
+      # launched and photographed on every build while this one rested on
+      # a developer having run it by hand once.
+      #
+      # It photographs the window rather than the screen. The runner
+      # desktop is not the bare X root of the Linux job, and a metric
+      # taken over the whole thing would report on the wallpaper.
+      #
+      # This run measures and does not judge, as the Linux one did before
+      # its threshold existed. Whatever number it reports is what the
+      # gate will be built from.
+      - name: Smoke-test the Windows binary
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          Add-Type @'
+          using System;
+          using System.Collections.Generic;
+          using System.Runtime.InteropServices;
+          public class Win {
+              [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+              delegate bool EnumProc(IntPtr h, IntPtr p);
+              [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr p);
+              [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+              [DllImport("user32.dll")] static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
+              [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+              public static List<IntPtr> Windows(int wanted) {
+                  var found = new List<IntPtr>();
+                  EnumWindows((h, p) => {
+                      int pid; GetWindowThreadProcessId(h, out pid);
+                      if (pid == wanted && IsWindowVisible(h)) found.Add(h);
+                      return true;
+                  }, IntPtr.Zero);
+                  return found;
+              }
+          }
+          '@
+
+          $exe = Get-ChildItem 'build/windows' -Filter '*.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'no executable found in build/windows' }
+          "binary: $($exe.FullName)"
+
+          $app = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 30
+          if ($app.HasExited) { throw "the application exited on its own, code $($app.ExitCode)" }
+          'the process is still alive'
+
+          $handles = [Win]::Windows($app.Id)
+          "visible windows: $($handles.Count)"
+          if ($handles.Count -eq 0) { throw 'the application opened no visible window' }
+
+          $r = New-Object Win+RECT
+          [void][Win]::GetWindowRect($handles[0], [ref]$r)
+          $w = $r.R - $r.L
+          $h = $r.B - $r.T
+          "window: ${w}x${h}"
+          if ($w -le 0 -or $h -le 0) { throw 'the window has no surface' }
+
+          $shot = New-Object System.Drawing.Bitmap $w, $h
+          $g = [System.Drawing.Graphics]::FromImage($shot)
+          $g.CopyFromScreen($r.L, $r.T, 0, 0, (New-Object System.Drawing.Size $w, $h))
+          $g.Dispose()
+          $shot.Save('smoke-windows.png', [System.Drawing.Imaging.ImageFormat]::Png)
+          Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+
+          # Measured on a thumbnail: reading a million pixels one call at
+          # a time is minutes of marshalling for a number that a 64 by 64
+          # sample answers just as well.
+          $small = New-Object System.Drawing.Bitmap $shot, (New-Object System.Drawing.Size 64, 64)
+          $shot.Dispose()
+          $values = New-Object System.Collections.Generic.List[double]
+          $seen = New-Object System.Collections.Generic.HashSet[int]
+          for ($x = 0; $x -lt 64; $x++) {
+            for ($y = 0; $y -lt 64; $y++) {
+              $p = $small.GetPixel($x, $y)
+              [void]$seen.Add($p.ToArgb())
+              $values.Add(($p.R + $p.G + $p.B) / 3.0)
+            }
+          }
+          $small.Dispose()
+          $mean = ($values | Measure-Object -Average).Average
+          $sd = [math]::Sqrt((($values | ForEach-Object { ($_ - $mean) * ($_ - $mean) } | Measure-Object -Sum).Sum) / $values.Count)
+          "mean:               $([math]::Round($mean, 1)) of 255"
+          "standard deviation: $([math]::Round($sd, 1))"
+          "distinct colours:   $($seen.Count) of 4096 sampled"
+
+      - uses: actions/upload-artifact@v7
+        if: matrix.target == 'windows'
+        with:
+          name: smoke-windows
+          path: smoke-windows.png
 
       - uses: actions/upload-artifact@v7
         if: matrix.target == 'linux'
