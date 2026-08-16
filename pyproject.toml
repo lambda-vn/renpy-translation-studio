@@ -5,16 +5,26 @@ description = "Desktop app for managing Ren'Py game translations"
 license = "CECILL-2.1"
 license-files = ["LICENSE.md"]
 requires-python = ">=3.12"
+# Pinned exactly, because this list is what ships. `flet build` reads
+# `project.dependencies` and installs from those specifiers; uv.lock is
+# never consulted, so a lower bound let the binary carry whatever PyPI
+# served that day. v0.1.0 went out with anthropic 0.122.0, deepl 1.32.0
+# and mistralai 2.9.3 while the lock pinned 0.116.0, 1.30.0 and 2.6.0,
+# and `flet` had no bound at all, on a framework whose 0.85.3 never
+# reached main() in a packaged build.
+#
+# Raising one is an edit here followed by `uv lock`, which is the point:
+# the version a release shipped is readable in the repository at its tag.
 dependencies = [
-    "anthropic>=0.116.0",
-    "deepl>=1.30.0",
-    "defusedxml>=0.7.1",
-    "flet",
-    "httpx>=0.28.1",
-    "keyring>=25.7.0",
-    "mcp>=2.0.0",
-    "mistralai>=2.6.0",
-    "platformdirs>=4.10.0",
+    "anthropic==0.116.0",
+    "deepl==1.30.0",
+    "defusedxml==0.7.1",
+    "flet==0.86.5",
+    "httpx==0.28.1",
+    "keyring==25.7.0",
+    "mcp==2.0.0",
+    "mistralai==2.6.0",
+    "platformdirs==4.10.0",
 ]
 
 [tool.flet]

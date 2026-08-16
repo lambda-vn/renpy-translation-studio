@@ -1307,15 +1307,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=0.116.0" },
-    { name = "deepl", specifier = ">=1.30.0" },
-    { name = "defusedxml", specifier = ">=0.7.1" },
-    { name = "flet" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "keyring", specifier = ">=25.7.0" },
-    { name = "mcp", specifier = ">=2.0.0" },
-    { name = "mistralai", specifier = ">=2.6.0" },
-    { name = "platformdirs", specifier = ">=4.10.0" },
+    { name = "anthropic", specifier = "==0.116.0" },
+    { name = "deepl", specifier = "==1.30.0" },
+    { name = "defusedxml", specifier = "==0.7.1" },
+    { name = "flet", specifier = "==0.86.5" },
+    { name = "httpx", specifier = "==0.28.1" },
+    { name = "keyring", specifier = "==25.7.0" },
+    { name = "mcp", specifier = "==2.0.0" },
+    { name = "mistralai", specifier = "==2.6.0" },
+    { name = "platformdirs", specifier = "==4.10.0" },
 ]
 
 [package.metadata.requires-dev]
