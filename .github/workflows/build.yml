@@ -330,6 +330,22 @@ jobs:
           "standard deviation: $([math]::Round($sd, 1))"
           "distinct colours:   $($seen.Count) of 4096 sampled"
 
+          # Not the deviation the Linux job gates on, and the measuring
+          # run is why. There the capture is a whole screen where a large
+          # unpainted band sits beside the window, so the spread is
+          # enormous; here it is the window alone, a light interface on a
+          # near-white ground, and it measured 11.7 of 255. A blank white
+          # window would measure much the same, so that number separates
+          # nothing.
+          #
+          # The count of distinct colours does: the rendered onboarding
+          # screen sampled 254 where an unpainted window is one flat fill
+          # worth a colour or two. Twenty sits far from both.
+          if ($seen.Count -le 20) {
+            throw "the window drew $($seen.Count) distinct colours, which is a flat fill rather than an interface"
+          }
+          'the application drew its interface'
+
       - uses: actions/upload-artifact@v7
         if: matrix.target == 'windows'
         with:
