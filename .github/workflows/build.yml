@@ -134,6 +134,55 @@ jobs:
             | sort >> "$out"
           cat "$out"
 
+      # Nobody has ever launched the Linux binary. v0.1.0 shipped it
+      # unverified and said so, and the class of bug that hides there is
+      # the one that already happened: under flet 0.85.3 the Windows
+      # build opened its window and never called main(), so the process
+      # was alive, the window was titled, and nothing had run.
+      #
+      # A liveness check would therefore have been green through that
+      # bug, and so would a window title, which the native side sets
+      # before Python speaks. What separates a working application from
+      # a shell is the pixels, so this photographs the screen and reports
+      # how much it varies: a window that never rendered is one flat
+      # colour.
+      #
+      # This run only measures and keeps the screenshot. The threshold
+      # that turns it into a gate is set from what it reports, not from a
+      # number invented here.
+      - name: Smoke-test the Linux binary
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get install -y --no-install-recommends xvfb imagemagick
+          binary="$(find build/linux -maxdepth 3 -type f -executable \
+            -name 'renpy*' | head -1)"
+          echo "binary: ${binary:-NONE FOUND}"
+          test -n "$binary"
+
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1280x800x24 &
+          sleep 3
+
+          "$binary" &
+          app=$!
+          sleep 30
+
+          if ! kill -0 "$app" 2>/dev/null; then
+            echo "the application exited on its own"
+            exit 1
+          fi
+          import -window root smoke-linux.png
+          echo "standard deviation: $(identify -format '%[standard-deviation]' smoke-linux.png)"
+          echo "mean:               $(identify -format '%[mean]' smoke-linux.png)"
+          kill "$app" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.target == 'linux'
+        with:
+          name: smoke-linux
+          path: smoke-linux.png
+
       # upload-artifact drops the Unix permission bits, so a macOS bundle or
       # a Linux binary that made the round trip through it is no longer
       # executable. The archive is therefore written here, on the machine
