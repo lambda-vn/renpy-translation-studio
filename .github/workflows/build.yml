@@ -147,9 +147,10 @@ jobs:
       # how much it varies: a window that never rendered is one flat
       # colour.
       #
-      # This run only measures and keeps the screenshot. The threshold
-      # that turns it into a gate is set from what it reports, not from a
-      # number invented here.
+      # The threshold is read off a real run rather than invented: the
+      # onboarding screen measured 26482 of a 65535 quantum, where an
+      # unpainted window is one flat colour and lands near zero. 5000 sits
+      # far above blank and far below what rendering produces.
       - name: Smoke-test the Linux binary
         if: matrix.target == 'linux'
         shell: bash
@@ -173,8 +174,43 @@ jobs:
             exit 1
           fi
           import -window root smoke-linux.png
-          echo "standard deviation: $(identify -format '%[standard-deviation]' smoke-linux.png)"
-          echo "mean:               $(identify -format '%[mean]' smoke-linux.png)"
+          deviation="$(identify -format '%[standard-deviation]' smoke-linux.png)"
+          echo "standard deviation: $deviation"
+          kill "$app" 2>/dev/null || true
+          awk -v d="$deviation" 'BEGIN {
+            if (d < 5000) {
+              print "the window never rendered anything"
+              exit 1
+            }
+            print "the application drew its interface"
+          }'
+
+      # macOS has never been launched either, and whether its runner even
+      # has a display server to draw into is exactly what nobody knows.
+      # So this asks rather than asserts: it is allowed to fail, and what
+      # it reports decides whether there is a gate to build here at all.
+      - name: Probe whether the macOS binary can be launched
+        if: matrix.target == 'macos'
+        continue-on-error: true
+        shell: bash
+        run: |
+          bundle="$(find build/macos -maxdepth 2 -name '*.app' | head -1)"
+          echo "bundle: ${bundle:-NONE FOUND}"
+          test -n "$bundle"
+          binary="$(find "$bundle/Contents/MacOS" -type f -perm +111 | head -1)"
+          echo "binary: ${binary:-NONE FOUND}"
+
+          "$binary" &
+          app=$!
+          sleep 30
+
+          if ! kill -0 "$app" 2>/dev/null; then
+            echo "the application exited on its own"
+            exit 1
+          fi
+          echo "the process is still alive"
+          screencapture -x smoke-macos.png && echo "screen captured" \
+            || echo "screencapture refused, no session to photograph"
           kill "$app" 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
@@ -182,6 +218,14 @@ jobs:
         with:
           name: smoke-linux
           path: smoke-linux.png
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.target == 'macos'
+        continue-on-error: true
+        with:
+          name: smoke-macos
+          path: smoke-macos.png
+          if-no-files-found: warn
 
       # upload-artifact drops the Unix permission bits, so a macOS bundle or
       # a Linux binary that made the round trip through it is no longer
