@@ -105,6 +105,35 @@ jobs:
         shell: bash
         run: uv run flet build ${{ matrix.target }} ${{ matrix.args }} --yes --verbose
 
+      # `flet build` reads project.dependencies from pyproject and installs
+      # from those specifiers; uv.lock is never consulted. The direct ones
+      # are pinned there so they cannot move, but pip still resolves the
+      # transitive tree freshly on every build, and a dozen of those
+      # packages differed from the lock the day this was written.
+      #
+      # Nothing here can prevent that, so this records it instead: the
+      # archive carries the list of what is inside it, and comparing two
+      # releases becomes a subtraction rather than an excavation. A gate
+      # was considered and dropped, since the only remedy when it fired
+      # would be to re-lock until the build agreed, which lets the build
+      # dictate the lock rather than the reverse.
+      #
+      # Read from the built tree rather than from any manifest, and
+      # recursively, since where site-packages lands differs per platform.
+      # A distribution directory is `<name>-<version>.dist-info`, and a
+      # name may hold hyphens and dots of its own, so the split is on the
+      # last hyphen that introduces a digit.
+      - name: Record what the archive contains
+        shell: bash
+        run: |
+          version="$(uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          out="build/${{ matrix.target }}/packaged-dependencies.txt"
+          echo "# renpy-translation-studio $version ${{ matrix.target }}" > "$out"
+          find "build/${{ matrix.target }}" -type d -name '*.dist-info' \
+            | sed 's|.*[/\\]||; s|\.dist-info$||; s|-\([0-9][^-]*\)$|==\1|' \
+            | sort >> "$out"
+          cat "$out"
+
       # upload-artifact drops the Unix permission bits, so a macOS bundle or
       # a Linux binary that made the round trip through it is no longer
       # executable. The archive is therefore written here, on the machine
