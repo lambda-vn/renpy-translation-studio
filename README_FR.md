@@ -1,4 +1,15 @@
-# Ren'Py Translation Studio
+<div align="center">
+  <img src="src/assets/icon.png" alt="" width="96">
+  <h1>Ren'Py Translation Studio</h1>
+
+[![Derniere version](https://img.shields.io/github/v/release/lambda-vn/renpy-translation-studio?label=version)](https://github.com/lambda-vn/renpy-translation-studio/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/lambda-vn/renpy-translation-studio/ci.yml?branch=main&label=CI)](https://github.com/lambda-vn/renpy-translation-studio/actions/workflows/ci.yml)
+[![Build](https://img.shields.io/github/actions/workflow/status/lambda-vn/renpy-translation-studio/build.yml?label=build)](https://github.com/lambda-vn/renpy-translation-studio/actions/workflows/build.yml)
+[![Licence : CeCILL-2.1](https://img.shields.io/badge/licence-CeCILL--2.1-blue)](LICENSE.md)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
+[![Plateformes : Windows, macOS, Linux](https://img.shields.io/badge/plateformes-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/lambda-vn/renpy-translation-studio/releases/latest)
+
+</div>
 
 Application desktop de gestion des traductions pour jeux Ren'Py. Elle couvre le
 workflow complet : extraction des textes du jeu, révision ligne par ligne dans
