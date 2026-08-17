@@ -28,6 +28,8 @@ REQUEST_TIMEOUT = 300.0
 DEFAULT_CONTEXT_LENGTH = 4096
 MAX_NUM_CTX = 8192
 TRANSLATION_TEMPERATURE = 0.2
+COMPLETION_TEMPERATURE = 0.2
+COMPLETION_MAX_TOKENS = 1024
 _MIN_DUPLICATE_TEXT_LENGTH = 4
 _PS_TIMEOUT = 5.0
 _CPU_OFFLOAD_WARNING_THRESHOLD = 0.95
@@ -358,6 +360,22 @@ class OllamaProvider:
     def complete(self, prompt: str) -> str:
         """Send a single free-form prompt and return the text reply.
 
+        Pins the temperature for the same reason _translate_single_batch()
+        does. Left at the model's own default, which is 1.0 for the small
+        models this application targets, the reply to one fixed prompt is
+        a lottery: five runs of the universe summary on gemma3:1b returned
+        a five-character "Okay.", a safety refusal, and three attempts to
+        translate the excerpts rather than describe them. There is one
+        request here and no retry, so an unlucky sample is what the user
+        gets.
+
+        Caps the reply for the same reason ClaudeProvider does, at the same
+        value. A length asked for in the prompt is a request a small model
+        need not honour: gemma3:1b answered one 1500-character brief with
+        10 712 characters. What comes back here is carried into every
+        later batch prompt, so an unbounded reply is a cost paid on every
+        request of every job that follows.
+
         Args:
             prompt: The full prompt to send.
 
@@ -385,7 +403,11 @@ class OllamaProvider:
                     "model": self._model,
                     "messages": [{"role": "user", "content": prompt}],
                     "stream": False,
-                    "options": {"num_ctx": self._num_ctx},
+                    "options": {
+                        "num_ctx": self._num_ctx,
+                        "temperature": COMPLETION_TEMPERATURE,
+                        "num_predict": COMPLETION_MAX_TOKENS,
+                    },
                 },
                 timeout=REQUEST_TIMEOUT,
             )

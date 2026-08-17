@@ -11,6 +11,8 @@ from core.translation.providers.base import (
     TranslationProviderError,
 )
 from core.translation.providers.ollama import (
+    COMPLETION_MAX_TOKENS,
+    COMPLETION_TEMPERATURE,
     DEFAULT_CONTEXT_LENGTH,
     MAX_NUM_CTX,
     TRANSLATION_TEMPERATURE,
@@ -873,3 +875,41 @@ def test_is_cloud_model_reads_the_suffix() -> None:
     assert is_cloud_model("qwen3-coder:480b-cloud")
     assert not is_cloud_model("mistral:7b")
     assert not is_cloud_model("cloud-atlas:3b")
+
+
+def test_complete_pins_the_temperature(monkeypatch: pytest.MonkeyPatch) -> None:
+    chat_payloads: list[dict[str, Any]] = []
+
+    def _post(url: str, json: dict[str, Any], timeout: float) -> _FakeResponse:
+        if "show" in url:
+            return _FakeResponse(
+                {
+                    "model_info": {
+                        "general.architecture": "gemma3",
+                        "gemma3.context_length": 8192,
+                    }
+                }
+            )
+        chat_payloads.append(json)
+        return _FakeResponse({"message": {"content": "A brief."}})
+
+    monkeypatch.setattr("core.translation.providers.ollama.httpx.post", _post)
+    provider = OllamaProvider(endpoint="http://localhost:11434", model="gemma3:1b")
+
+    assert provider.complete("Describe this game.") == "A brief."
+    assert chat_payloads[0]["options"]["temperature"] == COMPLETION_TEMPERATURE
+    assert chat_payloads[0]["options"]["num_predict"] == COMPLETION_MAX_TOKENS
+    assert chat_payloads[0]["options"]["num_ctx"] == 8192
+
+
+def test_complete_raises_on_unreachable_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _post(url: str, json: dict[str, Any], timeout: float) -> _FakeResponse:
+        raise httpx.HTTPError("unreachable")
+
+    monkeypatch.setattr("core.translation.providers.ollama.httpx.post", _post)
+    provider = OllamaProvider(endpoint="http://localhost:11434", model="gemma3:1b")
+
+    with pytest.raises(TranslationProviderError):
+        provider.complete("Describe this game.")
