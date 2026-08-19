@@ -31,7 +31,8 @@ def fill_from_memory(
     Only not_translated units are touched, so nothing reviewed can be
     overwritten and the action needs no confirmation. The text comes from
     another project and nobody has read it in this one, which is exactly
-    what the imported status means.
+    what the imported status means, and it is also what lets the memory
+    answer a source text it holds only a punctuation apart.
 
     The whole project is filled, never a single file: the memory answers
     for a language pair, not for a file, and a per-file scope would only

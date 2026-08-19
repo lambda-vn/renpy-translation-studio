@@ -343,8 +343,10 @@ def build_server(state: ServerState) -> MCPServer:
     def fill_from_memory() -> dict[str, object]:
         """Fill untranslated lines the shared memory already answers for.
 
-        Exact matches only, taken from the translations validated by hand
-        in other projects. Nothing already translated is touched.
+        Taken from the translations validated by hand in other projects,
+        matched on the source text or on a source text differing from it
+        only in case, spacing or trailing punctuation. Nothing already
+        translated is touched.
 
         Returns:
             How many lines were filled.
