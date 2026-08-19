@@ -18,7 +18,7 @@ wheels = [
 
 [[package]]
 name = "anthropic"
-version = "0.116.0"
+version = "0.122.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -30,9 +30,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/66/a2/d31f14e28d49bae983a3634e38dfb4b31c50110b5e403596c5c6a20b23f8/anthropic-0.116.0.tar.gz", hash = "sha256:5fc248fbb9fe03ef686f8a774f81586bca31a043260aab88b387ea3660f4a396", size = 949149, upload-time = "2026-07-02T19:08:10.534Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/23/9987d70b74e3481d5bc5d2021d3e10fd5f60c1f7b54088ea86506d9b7f2b/anthropic-0.122.0.tar.gz", hash = "sha256:ffec56ae96657c8d19fa575ec96f140f380c353a07ab7d61b92eb18ee6536601", size = 1021535, upload-time = "2026-08-13T18:36:00.307Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c7/dd/2a1e81cf1b163acc340afc4ec74ed1d86f5eed1a809fabdeed3e0997b346/anthropic-0.116.0-py3-none-any.whl", hash = "sha256:6c0a7698e8d652455da3499978279bb2588c7264d0a35be3666009a4258c8256", size = 956896, upload-time = "2026-07-02T19:08:08.756Z" },
+    { url = "https://files.pythonhosted.org/packages/26/5b/f5c87e71097a9f89f1b414d1ef7ae8439051fae57d5e4ee90946082982b8/anthropic-0.122.0-py3-none-any.whl", hash = "sha256:45ec906452ffae6b5f7f0c53d01f50bfb7e4ce878d7ae8e4309d13171e557e67", size = 1041853, upload-time = "2026-08-13T18:36:01.831Z" },
 ]
 
 [[package]]
@@ -346,14 +346,14 @@ wheels = [
 
 [[package]]
 name = "deepl"
-version = "1.30.0"
+version = "1.32.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/f2/87bf02eb97d20695bd39e1f8b33563bb85fc86301241c33f1c5e1a6dab86/deepl-1.30.0.tar.gz", hash = "sha256:491da545da6f6145db69a19bc4460a8fb66b29307c68d55f9297910cdcb577d9", size = 56527, upload-time = "2026-04-09T18:38:50.727Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/29/c54ffa32b73e91ca72f71be3ab282cb7d88521df96bc72865a3b75f33d17/deepl-1.32.0.tar.gz", hash = "sha256:3016bf86f1f53eb6e5fedb458746c6bf6579a840b57c54a2ed701b0344bc79e1", size = 68648, upload-time = "2026-08-13T12:58:46.587Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/41/1174945272c2d5331d5e49d29110c95e24458d681d4949ffef3b67210745/deepl-1.30.0-py3-none-any.whl", hash = "sha256:b4e08ef484522ba62ba4895a9c43a980981b07d2e989cc99b5ee68e00d3675c3", size = 49903, upload-time = "2026-04-09T18:38:49.481Z" },
+    { url = "https://files.pythonhosted.org/packages/10/e0/8cbb7c17012cc9a7f896c8c7aedc79fb58840e827c927b16cbbf49b1e8e7/deepl-1.32.0-py3-none-any.whl", hash = "sha256:36f2faadc79a64712489bfeab32f344536eab25b3c38ea2e39a72084a71e0a7e", size = 60623, upload-time = "2026-08-13T12:58:45.231Z" },
 ]
 
 [[package]]
@@ -793,7 +793,7 @@ wheels = [
 
 [[package]]
 name = "mistralai"
-version = "2.6.0"
+version = "2.9.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eval-type-backport" },
@@ -805,9 +805,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/39/c1/c6452c81a3d7fc0423b4cfcd84840cf7141c93a0c50755abc27a7619a988/mistralai-2.6.0.tar.gz", hash = "sha256:531a86292ad498fc0fcd6dfcd480a3f4db9e92f558e14ffb22172824831e3a6e", size = 518760, upload-time = "2026-07-06T14:40:08.578Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/be/fa/c6580ed6747c675546e4117eb959d06732e14c0da51bbe3ae4524677e1a3/mistralai-2.9.3.tar.gz", hash = "sha256:aa1bc946cc845a72f4a491ac366498151acae300a2d143a76d73e581609bac4a", size = 542867, upload-time = "2026-08-13T15:47:56.944Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e3/d5/6b9c08ab9b5b890970e8949bf00a9f8f82653826de5cc5ad506fe1c1fb73/mistralai-2.6.0-py3-none-any.whl", hash = "sha256:4b7202b0cab84ea03f8ff4a933c8cfc615b3057520d9d76467c07aa23939dab2", size = 1235945, upload-time = "2026-07-06T14:40:06.226Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/e7/467fd42d1c2f1ee0a6e117d79795b86a06668ec7ec875632ecdd5514dc68/mistralai-2.9.3-py3-none-any.whl", hash = "sha256:e5c401caa6e862528ec41ceda4b551c9483081dd7bdb2a1ed73d8e9d0db3d6d0", size = 1297009, upload-time = "2026-08-13T15:47:55.253Z" },
 ]
 
 [[package]]
@@ -988,11 +988,11 @@ wheels = [
 
 [[package]]
 name = "platformdirs"
-version = "4.10.0"
+version = "4.11.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d7/47/e4501f49c178ae1d9f4a75073fda4204f52647993f075a9db4d14930e0c5/platformdirs-4.10.0.tar.gz", hash = "sha256:31e761a6a0ca04faf7353ea759bdba55652be214725111e5aac52dfa29d4bef7", size = 31224, upload-time = "2026-05-28T03:32:53.587Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b8/d7/e7bfbc86e9f99ff7807e24de7703f032e9c9ba80bb355cf26e0e9bc5a75e/platformdirs-4.11.3.tar.gz", hash = "sha256:66a73d38a849810252df809a3d8bcbda8e26f6c189920e7535ad608a48dbb5ab", size = 33050, upload-time = "2026-08-13T22:43:27.52Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/e6/cd9575ac904136b3cbf7aa7ee819ef86eedb7274e46f230e94ea4342e729/platformdirs-4.10.0-py3-none-any.whl", hash = "sha256:fb516cdb12eb0d857d0cd85a7c57cea4d060bee4578d6cf5a14dfdf8cbf8784a", size = 22743, upload-time = "2026-05-28T03:32:52.175Z" },
+    { url = "https://files.pythonhosted.org/packages/19/a9/c34aebedd3a4c9afe5101b1b8713710b3fec18087c8a36c35d2f909861bd/platformdirs-4.11.3-py3-none-any.whl", hash = "sha256:5ed065d443751de711da036041a7a214122efc4a4de393b3f4137ba5576540e7", size = 23491, upload-time = "2026-08-13T22:43:26.121Z" },
 ]
 
 [[package]]
@@ -1307,15 +1307,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = "==0.116.0" },
-    { name = "deepl", specifier = "==1.30.0" },
+    { name = "anthropic", specifier = "==0.122.0" },
+    { name = "deepl", specifier = "==1.32.0" },
     { name = "defusedxml", specifier = "==0.7.1" },
     { name = "flet", specifier = "==0.86.5" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "keyring", specifier = "==25.7.0" },
     { name = "mcp", specifier = "==2.0.0" },
-    { name = "mistralai", specifier = "==2.6.0" },
-    { name = "platformdirs", specifier = "==4.10.0" },
+    { name = "mistralai", specifier = "==2.9.3" },
+    { name = "platformdirs", specifier = "==4.11.3" },
 ]
 
 [package.metadata.requires-dev]
