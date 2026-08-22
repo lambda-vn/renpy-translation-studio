@@ -385,8 +385,12 @@ jobs:
           }
           '@
 
-          $exe = Get-ChildItem 'build/windows' -Filter '*.exe' | Select-Object -First 1
-          if (-not $exe) { throw 'no executable found in build/windows' }
+          # Named, not "the first .exe found". The bundle stopped holding
+          # only one the day the MCP interpreter moved in beside it, and
+          # python.exe sorts first, so this step launched that instead and
+          # then failed for want of a window it was never going to draw.
+          $exe = Get-ChildItem 'build/windows' -Filter 'renpy*.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'no application executable found in build/windows' }
           "binary: $($exe.FullName)"
 
           $app = Start-Process -FilePath $exe.FullName -PassThru
