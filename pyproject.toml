@@ -1,6 +1,6 @@
 [project]
 name = "renpy-translation-studio"
-version = "0.3.0"
+version = "0.4.0"
 description = "Desktop app for managing Ren'Py game translations"
 license = "CECILL-2.1"
 license-files = ["LICENSE.md"]
