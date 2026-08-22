@@ -224,6 +224,44 @@ par Windows tant qu'un client tient le serveur ouvert, ce qui empêche
 `uv run` de réinstaller le projet et donc de lancer l'application. Ne
 pas réintroduire `[project.scripts]`.
 
+Cette interdiction porte sur l'environnement de développement, pas sur
+l'archive publiée, où le problème n'existe pas : rien n'y réinstalle
+quoi que ce soit.
+
+**Dans une archive, le serveur se lance par `rts-mcp`** (`rts-mcp.cmd`
+sous Windows), posé à côté de l'application par `build.yml`. Un bundle
+flet ne contient aucun exécutable Python, l'hôte Flutter ne transmet pas
+sa ligne de commande et redirige la sortie vers un fichier journal : ni
+un drapeau sur l'application ni le transport stdio n'étaient
+atteignables, alors que le serveur et le paquet `mcp` étaient déjà dans
+l'archive. Il ne manquait que de quoi les démarrer.
+
+`flet build` télécharge un CPython complet et le laisse dans l'arbre de
+build. **Seul son exécutable est copié**, la distribution pesant de 68 à
+117 Mo dont presque tout est déjà dans le bundle. Coût mesuré sur
+v0.3.0 : Windows +0,0 Mo, macOS +7,9 Mo, Linux +12,6 Mo, l'écart venant
+d'un interpréteur lié statiquement là où Windows partage `python314.dll`.
+
+Chaque système demande une aide différente, dictée par sa disposition.
+Windows n'en demande aucune, `Lib` et `DLLs` étant déjà à côté de la
+DLL. Linux garde `libpython` sous `lib/` mais renomme la bibliothèque
+standard en `python3.14` à la racine, d'où un lien symbolique que le
+`zip -y` de l'empaquetage transporte. macOS ne contient aucune
+libpython, son interpréteur étant lié dans le binaire du plugin, et son
+exécutable standalone tient donc debout seul, ce qui a été vérifié et
+non supposé.
+
+**Le lanceur enregistre `site-packages` avec `site.addsitedir()`, pas
+via `PYTHONPATH`**, et c'est la ligne dont tout dépend. pywin32 livre un
+`pywin32.pth` qui ajoute ses sous-dossiers, un `.pth` n'est exécuté que
+sur un répertoire de site, et sans lui `import mcp` échoue sous Windows
+sur `pywintypes`.
+
+`scripts/mcp_handshake.py` est la barrière de build : elle envoie un
+`initialize`, demande la liste des outils et échoue si la réponse n'en
+est pas une. Démarrer le processus ne prouverait rien, ce dépôt ayant
+déjà payé pour l'apprendre.
+
 Un serveur sert tous les projets de la machine : `list_projects` lit le
 registre des projets récents, `use_project` en ouvre un. Il **refuse
 tout dossier absent de ce registre**, écrit par l'application quand un
