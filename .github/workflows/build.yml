@@ -123,6 +123,30 @@ jobs:
       # A distribution directory is `<name>-<version>.dist-info`, and a
       # name may hold hyphens and dots of its own, so the split is on the
       # last hyphen that introduces a digit.
+      # TEMPORARY reconnaissance. The archive holds the MCP server and the
+      # mcp package but nothing that can start them, and the cheapest fix
+      # is to ship the interpreter the build already downloaded. Where it
+      # sits, and what it weighs, is a per-platform fact nobody here has
+      # read, so this reads it before any step is written against it.
+      - name: Locate the bundled Python distribution
+        shell: bash
+        run: |
+          echo "== candidate interpreters under build/"
+          find build -maxdepth 6 -type f \( -name 'python.exe' -o -name 'python3'             -o -name 'python3.14' -o -name 'python' \) 2>/dev/null | head -20
+
+          echo "== build_python* directories"
+          find build -maxdepth 5 -type d -name 'build_python*' 2>/dev/null | head -5
+
+          for d in $(find build -maxdepth 5 -type d -name 'build_python*' 2>/dev/null | head -2); do
+            echo "== $d"
+            du -sh "$d" 2>/dev/null || true
+            find "$d" -maxdepth 3 -type d | head -20
+          done
+
+          echo "== what the built bundle already carries"
+          du -sh "build/${{ matrix.target }}" 2>/dev/null || true
+          find "build/${{ matrix.target }}" -maxdepth 2 -type d | head -25
+
       - name: Record what the archive contains
         shell: bash
         run: |
