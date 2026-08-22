@@ -70,9 +70,21 @@ The application also exposes its projects over the
 assistant such as Claude Code can do the translating through a
 subscription you already have, instead of an API key or a local GPU.
 
+From a release archive, the launcher sits beside the application:
+
+```bash
+claude mcp add renpy-studio -- /path/to/renpy-translation-studio/rts-mcp
+```
+
+On Windows that is `rts-mcp.cmd`. From a checkout of this repository:
+
 ```bash
 claude mcp add renpy-studio -- uv run --directory /path/to/renpy-translation-studio python -m mcp_server
 ```
+
+The server is its own process, started by the client rather than by the
+application, so the application does not have to be running. The two
+meet only through the project database.
 
 Ask it to list your projects, pick one, and translate a file. It sees
 the same actions the review screen offers: search and filters, the

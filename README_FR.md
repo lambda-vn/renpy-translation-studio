@@ -73,9 +73,21 @@ L'application expose aussi ses projets via le
 assistant comme Claude Code fasse la traduction avec un abonnement que
 vous avez déjà, plutôt qu'avec une clé API ou un GPU local.
 
+Depuis une archive publiée, le lanceur est à côté de l'application :
+
+```bash
+claude mcp add renpy-studio -- /chemin/vers/renpy-translation-studio/rts-mcp
+```
+
+Sous Windows, c'est `rts-mcp.cmd`. Depuis un clone de ce dépôt :
+
 ```bash
 claude mcp add renpy-studio -- uv run --directory /chemin/vers/renpy-translation-studio python -m mcp_server
 ```
+
+Le serveur est un processus à part, lancé par le client et non par
+l'application, qui n'a donc pas besoin d'être ouverte. Les deux ne se
+rejoignent que par la base du projet.
 
 Demandez-lui la liste de vos projets, choisissez-en un, et faites-lui
 traduire un fichier. Il dispose des mêmes actions que l'écran de
