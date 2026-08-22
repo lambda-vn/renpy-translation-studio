@@ -64,6 +64,9 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "S"]
 # S603/S607: the build script runs uv with a fixed argument list, the only
 # variable being a target picked from a closed mapping of sys.platform
 "scripts/build.py" = ["S603", "S607"]
+# S603: the command tested is the one the workflow just built, named on
+# the command line of a build step, never anything a user or a game supplies
+"scripts/mcp_handshake.py" = ["S603"]
 # S608: false positive, query fragments are fixed literals, values are always bound via placeholders
 "src/core/storage/repositories.py" = ["S608"]
 "src/core/storage/translation_memory.py" = ["S608"]
