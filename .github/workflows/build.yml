@@ -224,7 +224,7 @@ jobs:
         run: |
           echo "launcher: $RTS_MCP"
           test -n "$RTS_MCP"
-          uv run python scripts/mcp_handshake.py "./$RTS_MCP"
+          uv run python scripts/mcp_handshake.py "$RTS_MCP"
 
       - name: Record what the archive contains
         shell: bash

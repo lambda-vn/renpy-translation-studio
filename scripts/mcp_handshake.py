@@ -9,7 +9,7 @@ reply is not one.
 
 Run it with the command to test as arguments:
 
-    python scripts/mcp_handshake.py ./rts-mcp
+    python scripts/mcp_handshake.py build/linux/rts-mcp
 
 The three tools it insists on are the ones the workflow is built from,
 naming a project, opening it and sending translations back. Asserting the
@@ -21,6 +21,7 @@ server.
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 _REQUIRED = ("list_projects", "use_project", "submit_translations")
 _TIMEOUT = 90
@@ -70,6 +71,26 @@ def _read(proc: subprocess.Popen[str]) -> dict[str, object]:
         raise HandshakeError(f"not JSON: {line.strip()[:200]}") from exc
 
 
+def _resolve(program: str) -> str:
+    """Return a program named by path in the form its system accepts.
+
+    A relative path is made absolute and given the separators of the
+    running system. Windows runs a .cmd through the command interpreter,
+    which rejects a leading `./` and the forward slashes a bash step
+    naturally produces, so the gate would fail on the shape of its
+    argument rather than on the server.
+
+    Args:
+        program: The first element of the command, a path or a name to
+            be looked up on PATH.
+
+    Returns:
+        The resolved path, or the name unchanged when it is not one.
+    """
+    candidate = Path(program)
+    return str(candidate.resolve()) if candidate.exists() else program
+
+
 def handshake(command: list[str]) -> list[str]:
     """Initialize a server and return the tools it offers.
 
@@ -83,7 +104,7 @@ def handshake(command: list[str]) -> list[str]:
         HandshakeError: If the exchange failed at any point.
     """
     proc = subprocess.Popen(
-        command,
+        [_resolve(command[0]), *command[1:]],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
