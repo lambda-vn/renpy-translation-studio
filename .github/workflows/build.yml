@@ -123,29 +123,108 @@ jobs:
       # A distribution directory is `<name>-<version>.dist-info`, and a
       # name may hold hyphens and dots of its own, so the split is on the
       # last hyphen that introduces a digit.
-      # TEMPORARY reconnaissance. The archive holds the MCP server and the
-      # mcp package but nothing that can start them, and the cheapest fix
-      # is to ship the interpreter the build already downloaded. Where it
-      # sits, and what it weighs, is a per-platform fact nobody here has
-      # read, so this reads it before any step is written against it.
-      - name: Locate the bundled Python distribution
+      # The archive used to carry the MCP server and the mcp package with
+      # nothing able to start them. A flet bundle holds no interpreter
+      # executable, the Flutter host passes no command line to Python and
+      # redirects its output to a log file, so neither a flag on the
+      # application nor the stdio transport the protocol needs was ever
+      # reachable. Everything else was already inside.
+      #
+      # `flet build` downloads a complete CPython to build against and
+      # leaves it in the build tree. Only its executable is taken here:
+      # the distribution weighs 68 to 117 MB depending on the system,
+      # nearly all of it a standard library, tcl/tk and headers that the
+      # bundle either already carries or never needs.
+      #
+      # Windows needs nothing more. Its bundle is the standard layout
+      # already, Lib and DLLs beside python314.dll, which is how a CPython
+      # executable finds its own home.
+      - name: Ship the MCP server (Windows)
+        if: matrix.target == 'windows'
         shell: bash
         run: |
-          echo "== candidate interpreters under build/"
-          find build -maxdepth 6 -type f \( -name 'python.exe' -o -name 'python3'             -o -name 'python3.14' -o -name 'python' \) 2>/dev/null | head -20
+          dist="$(find build/flutter/build -maxdepth 2 -type d -name 'build_python_*' -print -quit)"
+          test -n "$dist"
+          test -f "$dist/python/python.exe"
+          cp "$dist/python/python.exe" build/windows/python.exe
+          cp scripts/rts_mcp.py build/windows/rts-mcp.py
+          cat > build/windows/rts-mcp.cmd <<'LAUNCHER'
+          @echo off
+          "%~dp0python.exe" "%~dp0rts-mcp.py" %*
+          LAUNCHER
+          echo "RTS_MCP=build/windows/rts-mcp.cmd" >> "$GITHUB_ENV"
 
-          echo "== build_python* directories"
-          find build -maxdepth 5 -type d -name 'build_python*' 2>/dev/null | head -5
+      # Linux keeps libpython3.14.so.1.0 under lib/, which is where an
+      # executable sitting in bin/ looks for it, but it renames the
+      # standard library to python3.14 at the root where CPython expects
+      # lib/python3.14. The symlink is the whole fix, and the `zip -y` of
+      # the packaging step is what carries it into the archive intact.
+      - name: Ship the MCP server (Linux)
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          dist="$(find build/flutter/build -maxdepth 2 -type d -name 'build_python_*' -print -quit)"
+          test -n "$dist"
+          test -f "$dist/python/bin/python3.14"
+          mkdir -p build/linux/bin
+          cp "$dist/python/bin/python3.14" build/linux/bin/python3.14
+          chmod +x build/linux/bin/python3.14
+          ln -sfn ../python3.14 build/linux/lib/python3.14
+          cp scripts/rts_mcp.py build/linux/rts-mcp.py
+          cat > build/linux/rts-mcp <<'LAUNCHER'
+          #!/bin/sh
+          here="$(cd "$(dirname "$0")" && pwd)"
+          PYTHONHOME="$here" exec "$here/bin/python3.14" "$here/rts-mcp.py" "$@"
+          LAUNCHER
+          chmod +x build/linux/rts-mcp
+          echo "RTS_MCP=build/linux/rts-mcp" >> "$GITHUB_ENV"
 
-          for d in $(find build -maxdepth 5 -type d -name 'build_python*' 2>/dev/null | head -2); do
-            echo "== $d"
-            du -sh "$d" 2>/dev/null || true
-            find "$d" -maxdepth 3 -type d | head -20
-          done
+      # macOS buries everything inside the .app and carries no libpython
+      # at all, its interpreter being linked into the plugin binary, so
+      # nothing there can be reused and the copied executable has to stand
+      # on its own. Whether it does is exactly what the handshake below
+      # answers. The launcher itself sits at the archive root rather than
+      # eight directories down, since that is where someone unpacking the
+      # zip will look for it.
+      - name: Ship the MCP server (macOS)
+        if: matrix.target == 'macos'
+        shell: bash
+        run: |
+          dist="$(find build/flutter/build -maxdepth 2 -type d -name 'build_python_*' -print -quit)"
+          test -n "$dist"
+          test -f "$dist/python/bin/python3.14"
+          res="$(find build/macos -type d -name Resources -path '*serious_python*' -print -quit)"
+          test -n "$res"
+          test -d "$res/stdlib"
+          echo "bundle resources: $res"
+          mkdir -p "$res/bin" "$res/lib"
+          cp "$dist/python/bin/python3.14" "$res/bin/python3.14"
+          chmod +x "$res/bin/python3.14"
+          ln -sfn ../stdlib "$res/lib/python3.14"
+          cp scripts/rts_mcp.py "$res/rts-mcp.py"
+          printf '%s\n' '#!/bin/sh' > build/macos/rts-mcp
+          printf '%s\n' 'here="$(cd "$(dirname "$0")" && pwd)"' >> build/macos/rts-mcp
+          printf 'res="$here/%s"\n' "${res#build/macos/}" >> build/macos/rts-mcp
+          printf '%s\n' 'PYTHONHOME="$res" exec "$res/bin/python3.14" "$res/rts-mcp.py" "$@"' >> build/macos/rts-mcp
+          chmod +x build/macos/rts-mcp
+          echo "RTS_MCP=build/macos/rts-mcp" >> "$GITHUB_ENV"
 
-          echo "== what the built bundle already carries"
-          du -sh "build/${{ matrix.target }}" 2>/dev/null || true
-          find "build/${{ matrix.target }}" -maxdepth 2 -type d | head -25
+      # Starting the process would prove nothing. The launcher can find
+      # its interpreter, import every module and still answer nothing a
+      # client understands, stdio being precisely what a packaged
+      # application does not hand over. So this holds a real conversation
+      # instead: initialize, list the tools, and fail when the reply is
+      # not one.
+      #
+      # Verified in both directions before it was trusted: it returns 0
+      # against a bundle listing all seventeen tools, and 1 against an
+      # interpreter that exits without speaking.
+      - name: Smoke-test the packaged MCP server
+        shell: bash
+        run: |
+          echo "launcher: $RTS_MCP"
+          test -n "$RTS_MCP"
+          uv run python scripts/mcp_handshake.py "./$RTS_MCP"
 
       - name: Record what the archive contains
         shell: bash
