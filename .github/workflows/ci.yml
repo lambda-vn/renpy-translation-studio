@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# A push superseded by another before CI finishes leaves a stale run with
+# nothing left to report on; cancel it instead of letting it run to the end.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # Reading the code is all any of these jobs does. Stated rather than
 # inherited, so a token that grows by default does not grow here.
 permissions:
