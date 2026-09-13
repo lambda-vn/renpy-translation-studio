@@ -8,10 +8,8 @@ import pytest
 
 from core.settings import Settings
 from core.translation.providers.base import TranslateBatchRequest
-from core.translation.providers.claude_provider import ClaudeProvider
 from core.translation.providers.deepl import DeepLProvider
 from core.translation.providers.libretranslate import LibreTranslateProvider
-from core.translation.providers.mistral_provider import MistralProvider
 from core.translation.providers.ollama import OllamaProvider
 from core.translation.providers.registry import (
     ProviderRegistry,
@@ -138,8 +136,6 @@ def test_get_returns_ollama_provider_honoring_batch_size(
     ("setting_key", "provider_id", "provider_class"),
     [
         ("libretranslate_url", "libretranslate", LibreTranslateProvider),
-        ("claude_api_key", "claude", ClaudeProvider),
-        ("mistral_api_key", "mistral", MistralProvider),
     ],
 )
 def test_new_providers_available_and_buildable(
@@ -162,10 +158,8 @@ def test_available_llm_excludes_non_llm_providers(fake_settings: Settings) -> No
     fake_settings.set("deepl_api_key", "abc")
     fake_settings.set("libretranslate_url", "http://x")
     fake_settings.set("ollama_model", "llama3")
-    fake_settings.set("claude_api_key", "key")
-    fake_settings.set("mistral_api_key", "key")
     registry = ProviderRegistry()
-    assert registry.available_llm() == ["ollama", "claude", "mistral"]
+    assert registry.available_llm() == ["ollama"]
 
 
 @pytest.mark.parametrize("raw", ["abc", "0", "999", None])

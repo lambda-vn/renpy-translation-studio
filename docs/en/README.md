@@ -24,7 +24,7 @@ and ship a zip.
 
 | Page | What it covers |
 |---|---|
-| [Translation providers](translation-providers.md) | DeepL, Ollama, LibreTranslate, Claude, Mistral |
+| [Translation providers](translation-providers.md) | DeepL, Ollama, LibreTranslate |
 | [MCP server](mcp-server.md) | Letting an assistant you already pay for do the translating |
 | [Context for the AI](context-for-the-ai.md) | Character glossary and universe summary |
 | [Bilingual files](bilingual-files.md) | CSV, XLIFF and JSON round trips, and the translation memory |

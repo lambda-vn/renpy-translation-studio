@@ -103,29 +103,29 @@ def test_api_key_set_goes_to_keyring_not_json(
 ) -> None:
     """API keys are stored in the keyring, and never written to settings.json."""
     tmp_settings.set("locale", "fr")
-    tmp_settings.set("claude_api_key", "sk-secret")
+    tmp_settings.set("deepl_api_key", "d-secret")
 
-    assert fake_keyring.get_password(settings_module.APP_NAME, "claude_api_key") == (
-        "sk-secret"
+    assert fake_keyring.get_password(settings_module.APP_NAME, "deepl_api_key") == (
+        "d-secret"
     )
     on_disk = json.loads(tmp_settings._config_file.read_text(encoding="utf-8"))
-    assert "claude_api_key" not in on_disk
+    assert "deepl_api_key" not in on_disk
 
 
 def test_api_key_set_alone_creates_no_settings_file(
     tmp_settings: Settings,
 ) -> None:
     """Setting only an API key never touches settings.json at all."""
-    tmp_settings.set("claude_api_key", "sk-secret")
+    tmp_settings.set("deepl_api_key", "d-secret")
 
     assert not tmp_settings._config_file.exists()
 
 
 def test_api_key_get_reads_from_keyring(tmp_settings: Settings) -> None:
     """get() for an API key returns the value stored in the keyring."""
-    tmp_settings.set("mistral_api_key", "m-secret")
+    tmp_settings.set("libretranslate_api_key", "lt-secret")
 
-    assert _reload(tmp_settings).get("mistral_api_key") == "m-secret"
+    assert _reload(tmp_settings).get("libretranslate_api_key") == "lt-secret"
 
 
 def test_api_key_cleared_with_none(tmp_settings: Settings) -> None:
@@ -142,7 +142,7 @@ def test_plaintext_api_key_migrated_to_keyring_on_load(
     """An API key left in plaintext JSON by an older version is migrated."""
     config_file = tmp_path / "settings.json"
     config_file.write_text(
-        json.dumps({"claude_api_key": "old-plaintext-key"}), encoding="utf-8"
+        json.dumps({"deepl_api_key": "old-plaintext-key"}), encoding="utf-8"
     )
 
     s = Settings.__new__(Settings)
@@ -151,13 +151,13 @@ def test_plaintext_api_key_migrated_to_keyring_on_load(
     s._data = {}
     s._load()
 
-    assert s.get("claude_api_key") == "old-plaintext-key"
+    assert s.get("deepl_api_key") == "old-plaintext-key"
     assert (
-        fake_keyring.get_password(settings_module.APP_NAME, "claude_api_key")
+        fake_keyring.get_password(settings_module.APP_NAME, "deepl_api_key")
         == "old-plaintext-key"
     )
     on_disk = json.loads(config_file.read_text(encoding="utf-8"))
-    assert "claude_api_key" not in on_disk
+    assert "deepl_api_key" not in on_disk
 
 
 def test_keyring_unavailable_raises_on_set(
@@ -173,9 +173,9 @@ def test_keyring_unavailable_raises_on_set(
     s._load()
 
     with pytest.raises(SettingsError):
-        s.set("claude_api_key", "some-key")
+        s.set("deepl_api_key", "some-key")
 
-    assert s.get("claude_api_key") is None
+    assert s.get("deepl_api_key") is None
     assert not s._config_file.exists()
 
 
@@ -185,7 +185,7 @@ def test_keyring_unavailable_leaves_legacy_plaintext_key_unmigrated(
     """A pre-keyring plaintext key is left alone if migration cannot succeed."""
     config_file = tmp_path / "settings.json"
     config_file.write_text(
-        json.dumps({"claude_api_key": "old-plaintext-key"}), encoding="utf-8"
+        json.dumps({"deepl_api_key": "old-plaintext-key"}), encoding="utf-8"
     )
     monkeypatch.setattr(settings_module, "keyring", _NoBackendKeyring())
 
@@ -195,4 +195,4 @@ def test_keyring_unavailable_leaves_legacy_plaintext_key_unmigrated(
     s._data = {}
     s._load()
 
-    assert s.get("claude_api_key") is None
+    assert s.get("deepl_api_key") is None

@@ -15,16 +15,8 @@ from core.i18n import i18n
 from core.logging_config import configure_logging
 from core.settings import SettingsError, settings
 from core.translation.context_builder import MAX_UNITS_PER_BATCH
-from core.translation.providers.claude_provider import (
-    CLAUDE_DEFAULT_MODEL,
-    ClaudeProvider,
-)
 from core.translation.providers.deepl import DeepLProvider
 from core.translation.providers.libretranslate import LibreTranslateProvider
-from core.translation.providers.mistral_provider import (
-    MISTRAL_DEFAULT_MODEL,
-    MistralProvider,
-)
 from core.translation.providers.ollama import OllamaProvider
 from core.translation.providers.registry import (
     MAX_OLLAMA_BATCH_SIZE,
@@ -298,74 +290,10 @@ class ProviderConfigView:
         self._lt_status_text = ft.Text("", size=12.5)
         self._lt_test_btn = self._make_test_button(self._on_lt_test_clicked)
 
-        self._claude_key_label = ft.Text(
-            i18n.t("provider_config.claude_api_key_label").upper(),
-            size=12,
-            weight=ft.FontWeight.W_600,
-            color=theme.TEXT_MUTED,
-        )
-        self._claude_key_field = self._make_text_field(
-            value=settings.get("claude_api_key") or "",
-            hint=i18n.t("provider_config.claude_api_key_hint"),
-            password=True,
-            on_change=self._on_badge_source_changed,
-        )
-        self._claude_model_label = ft.Text(
-            i18n.t("provider_config.claude_model_label").upper(),
-            size=12,
-            weight=ft.FontWeight.W_600,
-            color=theme.TEXT_MUTED,
-        )
-        self._claude_model_field = self._make_text_field(
-            value=settings.get("claude_model") or "",
-            hint=CLAUDE_DEFAULT_MODEL,
-        )
-        self._claude_status_text = ft.Text("", size=12.5)
-        self._claude_test_btn = self._make_test_button(self._on_claude_test_clicked)
-
-        self._mistral_key_label = ft.Text(
-            i18n.t("provider_config.mistral_api_key_label").upper(),
-            size=12,
-            weight=ft.FontWeight.W_600,
-            color=theme.TEXT_MUTED,
-        )
-        self._mistral_key_field = self._make_text_field(
-            value=settings.get("mistral_api_key") or "",
-            hint=i18n.t("provider_config.mistral_api_key_hint"),
-            password=True,
-            on_change=self._on_badge_source_changed,
-        )
-        self._mistral_model_label = ft.Text(
-            i18n.t("provider_config.mistral_model_label").upper(),
-            size=12,
-            weight=ft.FontWeight.W_600,
-            color=theme.TEXT_MUTED,
-        )
-        self._mistral_model_field = self._make_text_field(
-            value=settings.get("mistral_model") or "",
-            hint=MISTRAL_DEFAULT_MODEL,
-        )
-        self._mistral_status_text = ft.Text("", size=12.5)
-        self._mistral_test_btn = self._make_test_button(self._on_mistral_test_clicked)
-
         configured = i18n.t("provider_config.configured")
         self._deepl_badge = self._make_badge(configured, theme.SUCCESS)
         self._ollama_badge = self._make_badge(configured, theme.SUCCESS)
         self._lt_badge = self._make_badge(configured, theme.SUCCESS)
-        self._claude_badge = self._make_badge(configured, theme.SUCCESS)
-        self._mistral_badge = self._make_badge(configured, theme.SUCCESS)
-        self._claude_beta_badge = self._make_badge(
-            i18n.t("provider_config.beta_badge"),
-            theme.WARNING,
-            tooltip=i18n.t("provider_config.beta_hint"),
-            visible=True,
-        )
-        self._mistral_beta_badge = self._make_badge(
-            i18n.t("provider_config.beta_badge"),
-            theme.WARNING,
-            tooltip=i18n.t("provider_config.beta_hint"),
-            visible=True,
-        )
         self._refresh_badges()
 
         self._verbose_label = ft.Text(
@@ -568,10 +496,6 @@ class ProviderConfigView:
         self._lt_cleartext_warning.visible = bool(lt_key) and _is_cleartext_remote(
             lt_url
         )
-        self._claude_badge.visible = bool((self._claude_key_field.value or "").strip())
-        self._mistral_badge.visible = bool(
-            (self._mistral_key_field.value or "").strip()
-        )
 
     def _on_badge_source_changed(
         self, _: Event[ft.TextField] | Event[ft.Dropdown]
@@ -637,35 +561,6 @@ class ProviderConfigView:
                                             self._lt_cleartext_warning,
                                             ft.Row([self._lt_test_btn], spacing=12),
                                             self._lt_status_text,
-                                        ],
-                                    ),
-                                    self._make_section(
-                                        i18n.t("provider_config.claude_title"),
-                                        [self._claude_badge, self._claude_beta_badge],
-                                        [
-                                            self._claude_key_label,
-                                            self._claude_key_field,
-                                            self._claude_model_label,
-                                            self._claude_model_field,
-                                            ft.Row([self._claude_test_btn], spacing=12),
-                                            self._claude_status_text,
-                                        ],
-                                    ),
-                                    self._make_section(
-                                        i18n.t("provider_config.mistral_title"),
-                                        [
-                                            self._mistral_badge,
-                                            self._mistral_beta_badge,
-                                        ],
-                                        [
-                                            self._mistral_key_label,
-                                            self._mistral_key_field,
-                                            self._mistral_model_label,
-                                            self._mistral_model_field,
-                                            ft.Row(
-                                                [self._mistral_test_btn], spacing=12
-                                            ),
-                                            self._mistral_status_text,
                                         ],
                                     ),
                                 ],
@@ -799,8 +694,6 @@ class ProviderConfigView:
 
         key = (self._api_key_field.value or "").strip()
         lt_url = (self._lt_url_field.value or "").strip()
-        claude_key = (self._claude_key_field.value or "").strip()
-        mistral_key = (self._mistral_key_field.value or "").strip()
         model = self._ollama_model_dropdown.value
 
         try:
@@ -816,15 +709,6 @@ class ProviderConfigView:
                 "libretranslate_api_key",
                 (self._lt_key_field.value or "").strip() or None,
             )
-            settings.set("claude_api_key", claude_key or None)
-            settings.set(
-                "claude_model", (self._claude_model_field.value or "").strip() or None
-            )
-            settings.set("mistral_api_key", mistral_key or None)
-            settings.set(
-                "mistral_model",
-                (self._mistral_model_field.value or "").strip() or None,
-            )
         except SettingsError:
             self._show_status(
                 i18n.t("provider_config.keyring_unavailable"), theme.ERROR
@@ -836,8 +720,6 @@ class ProviderConfigView:
             ("deepl", key),
             ("ollama", model),
             ("libretranslate", lt_url),
-            ("claude", claude_key),
-            ("mistral", mistral_key),
         ]
         default = next((pid for pid, value in configured if value), None)
         settings.set("default_provider", default)
@@ -973,76 +855,6 @@ class ProviderConfigView:
                 )
 
         self._run_connection_test(self._lt_status_text, _worker)
-
-    def _on_claude_test_clicked(self, _: Event[ft.TextButton]) -> None:
-        """Test the Anthropic API key with a minimal request.
-
-        Args:
-            _: Unused click event.
-        """
-        key = (self._claude_key_field.value or "").strip()
-        if not key:
-            self._set_status(
-                self._claude_status_text,
-                i18n.t("translation.provider_not_configured").format(provider="Claude"),
-                theme.ERROR,
-            )
-            self._page.update()
-            return
-        model = (self._claude_model_field.value or "").strip() or CLAUDE_DEFAULT_MODEL
-
-        def _worker() -> None:
-            provider = ClaudeProvider(api_key=key, model=model)
-            if provider.test_connection():
-                self._set_status(
-                    self._claude_status_text,
-                    i18n.t("provider_config.llm_connection_ok"),
-                    theme.SUCCESS,
-                )
-            else:
-                self._set_status(
-                    self._claude_status_text,
-                    i18n.t("translation.connection_failed"),
-                    theme.ERROR,
-                )
-
-        self._run_connection_test(self._claude_status_text, _worker)
-
-    def _on_mistral_test_clicked(self, _: Event[ft.TextButton]) -> None:
-        """Test the Mistral API key by listing models.
-
-        Args:
-            _: Unused click event.
-        """
-        key = (self._mistral_key_field.value or "").strip()
-        if not key:
-            self._set_status(
-                self._mistral_status_text,
-                i18n.t("translation.provider_not_configured").format(
-                    provider="Mistral"
-                ),
-                theme.ERROR,
-            )
-            self._page.update()
-            return
-        model = (self._mistral_model_field.value or "").strip() or MISTRAL_DEFAULT_MODEL
-
-        def _worker() -> None:
-            provider = MistralProvider(api_key=key, model=model)
-            if provider.test_connection():
-                self._set_status(
-                    self._mistral_status_text,
-                    i18n.t("provider_config.llm_connection_ok"),
-                    theme.SUCCESS,
-                )
-            else:
-                self._set_status(
-                    self._mistral_status_text,
-                    i18n.t("translation.connection_failed"),
-                    theme.ERROR,
-                )
-
-        self._run_connection_test(self._mistral_status_text, _worker)
 
     def _set_status(self, control: ft.Text, message: str, color: str) -> None:
         """Show a status message on the given text control.

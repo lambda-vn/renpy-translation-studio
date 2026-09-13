@@ -24,7 +24,7 @@ réécrire les fichiers `tl/`, et livrer un zip.
 
 | Page | Contenu |
 |---|---|
-| [Fournisseurs de traduction](translation-providers.md) | DeepL, Ollama, LibreTranslate, Claude, Mistral |
+| [Fournisseurs de traduction](translation-providers.md) | DeepL, Ollama, LibreTranslate |
 | [Serveur MCP](mcp-server.md) | Faire traduire par un assistant que vous payez déjà |
 | [Contexte pour l'IA](context-for-the-ai.md) | Glossaire des personnages et résumé d'univers |
 | [Fichiers bilingues](bilingual-files.md) | Allers-retours CSV, XLIFF, JSON, et mémoire de traduction |

@@ -7,9 +7,10 @@ Workflow complet : extraction des textes d'un jeu → révision dans une UI
 dédiée avec statuts par ligne → traduction automatique via des fournisseurs
 MT/LLM → réécriture des fichiers `tl/` → export zip.
 
-Fournisseurs disponibles : **DeepL**, **Ollama** (LLM local),
-**LibreTranslate**, **Claude** (Anthropic) et **Mistral**.
-Claude et Mistral sont marqués « Bêta » : jamais testés contre l'API réelle.
+Fournisseurs disponibles : **DeepL**, **Ollama** (LLM local) et
+**LibreTranslate**. Claude et Mistral ont été retirés pour la 1.0.0,
+jamais testés contre l'API réelle depuis leur ajout — voir « Points
+d'attention connus ».
 
 Stack : **Python 3.12+ / Flet / uv / SQLite**
 
@@ -100,10 +101,7 @@ renpy-translation-studio/
 │               ├── registry.py        # Construit les providers depuis les settings
 │               ├── deepl.py           # DeepL (+ glossaire serveur)
 │               ├── ollama.py          # LLM local (garde-fous petits modèles)
-│               ├── libretranslate.py  # Instance LibreTranslate (1 requête / unité)
-│               ├── claude_provider.py # API Anthropic (bêta)
-│               ├── mistral_provider.py # API Mistral (bêta)
-│               └── llm_common.py      # Helpers partagés Claude/Mistral
+│               └── libretranslate.py  # Instance LibreTranslate (1 requête / unité)
 │   ├── locales/                       # en.json + fr.json (i18n de l'UI)
 │   └── mcp_server/
 │       ├── __main__.py                # Ligne de commande, transport stdio
@@ -192,8 +190,8 @@ Interface commune `TranslationProvider` (protocole structurel) :
 
 - `SupportsGlossary` (DeepL) : les notes de personnage `Nom -> Traduction`
   deviennent un glossaire serveur, synchronisé paresseusement au premier batch.
-- `SupportsCompletion` (Ollama, Claude, Mistral) : `complete(prompt)` pour
-  la génération du résumé d'univers.
+- `SupportsCompletion` (Ollama) : `complete(prompt)` pour la génération du
+  résumé d'univers.
 
 Le `registry` construit les providers depuis les settings et leur passe le
 contexte (résumé d'univers + glossaire personnages).
@@ -345,6 +343,20 @@ tant que les deux locales ne la traduisent pas.
   (`page.run_thread`) avec un statut immédiat, jamais bloquant.
 
 ---
+
+## Compatibilité (post-1.0.0)
+
+À partir de la 1.0.0, le schéma SQLite (`<jeu>/.rts/translations.db`) et
+les clés de `settings.json` sont un contrat gelé : un projet créé par une
+version 1.x doit rester ouvrable par toute version 1.x ultérieure, sans
+migration destructive. Toute rupture de ce contrat — colonne retirée,
+clé renommée, statut redéfini — exige un bump majeur, documenté dans le
+message de commit et dans le changelog de la release.
+
+Une clé de `settings.DEFAULTS` retirée (comme `claude_model` et
+`mistral_model` pour la 1.0.0) n'est pas une rupture : une valeur
+orpheline dans un `settings.json` existant est simplement ignorée au
+chargement, jamais migrée ni supprimée du disque.
 
 ## Standards de code
 
@@ -548,7 +560,7 @@ chaque commit, y compris entre deux phases d'une même roadmap.
 - **Glossaire de termes écarté** (1er août 2026) : hors personnages, aucun
   besoin mesuré ne le justifie pour l'instant. Pour le vérifier sans rien
   coder, écrire les termes dans le résumé d'univers, qui part déjà dans le
-  prompt système des trois LLM. S'il faut le faire un jour, n'injecter que
+  prompt système d'Ollama. S'il faut le faire un jour, n'injecter que
   les termes présents dans les sources du batch, dans `build_batch_prompt()`
   et jamais dans `build_system_prompt()` : coût constant quelle que soit la
   taille du glossaire, cache de prompt intact. Un tool ne convient pas, un
@@ -592,3 +604,15 @@ chaque commit, y compris entre deux phases d'une même roadmap.
 - Journalisation détaillée (settings) : les providers loggent chaque
   requête/réponse en DEBUG — premier réflexe pour diagnostiquer une
   traduction suspecte.
+- **Fournisseurs Claude et Mistral retirés pour la 1.0.0** : jamais testés
+  contre l'API réelle depuis leur ajout, un 1.0 n'affiche pas de fournisseur
+  dont on ne sait pas s'il fonctionne. DeepL, Ollama et LibreTranslate
+  couvrent le périmètre stable. `claude_provider.py`, `mistral_provider.py`
+  et `llm_common.py` (leur seul consommateur) ont été supprimés avec leurs
+  tests dédiés, ainsi que les dépendances `anthropic` et `mistralai`. Ne
+  pas les réintroduire sans un test réel contre l'API en question.
+- **`LONGEST_SHIPPED_RELATIVE_PATH` (`core/path_budget.py`) à
+  re-mesurer** : la valeur actuelle (141) vient d'un fichier généré par
+  `mistralai` dans l'archive Windows v0.1.0, dépendance retirée pour la
+  1.0.0. Le chemin le plus profond réellement expédié a pu changer ; ne
+  pas ajuster la constante sans la remesurer sur un vrai build Windows.

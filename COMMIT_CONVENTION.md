@@ -59,8 +59,6 @@ using hyphens as separators.
 | `deepl`             | `DeepLProvider` specifically                                  |
 | `ollama`            | `OllamaProvider` specifically                                 |
 | `libretranslate`    | `LibreTranslateProvider` specifically                         |
-| `claude`            | Claude (Anthropic) provider specifically                      |
-| `mistral`           | Mistral provider specifically                                 |
 | `onboarding`        | Onboarding view (`app/views/onboarding.py`)                   |
 | `project-setup`     | Project setup view (`app/views/project_setup.py`)             |
 | `translation-review`| Review view (`app/views/review_view.py`)                      |

@@ -4,7 +4,7 @@
 
 *[Version française](../fr/translation-providers.md)*
 
-Five providers, reached from the gear icon then **Configure a provider**.
+Three providers, reached from the gear icon then **Configure a provider**.
 
 ![The provider list](../images/10-providers-en.png)
 
@@ -13,12 +13,8 @@ Five providers, reached from the gear icon then **Configure a provider**.
 | [DeepL](https://www.deepl.com) | Machine translation | Cloud | API key |
 | [Ollama](https://ollama.com) | LLM | Local, or Ollama's cloud models | A pulled model |
 | [LibreTranslate](https://libretranslate.com) | Machine translation | Cloud or self-hosted | URL, key if the instance asks |
-| [Claude](https://www.anthropic.com) | LLM | Cloud | API key |
-| [Mistral](https://mistral.ai) | LLM | Cloud | API key |
 
-A green **Configured** badge means a key or endpoint is stored. **Beta**
-on Claude and Mistral means exactly what it says: those two have never
-been tested against the real API.
+A green **Configured** badge means a key or endpoint is stored.
 
 **No provider at all is a valid setup.** The application is a review tool
 first; the [MCP server](mcp-server.md) is the other way to get text
@@ -30,16 +26,16 @@ translated without an API key or a GPU.
 cheap and predictable, and they know nothing about your game: no
 character register, no recurring terms, no idea who is speaking.
 
-**Ollama, Claude and Mistral** receive the
+**Ollama** receives the
 [universe summary and character glossary](context-for-the-ai.md) with every
-batch, so they can hold a register and keep a proper noun consistent. They
-are slower and more expensive, and they can invent.
+batch, so it can hold a register and keep a proper noun consistent. It
+is slower and more expensive, and it can invent.
 
 DeepL is the only one that supports a **server-side glossary**: character
 notes written as `Name -> Translation` are uploaded as a real DeepL
 glossary, synchronised lazily on the first batch.
 
-Only the three LLMs can draft the [universe summary](context-for-the-ai.md)
+Only Ollama can draft the [universe summary](context-for-the-ai.md)
 for you.
 
 ## Ollama

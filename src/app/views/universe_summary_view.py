@@ -25,8 +25,6 @@ _META_KEY = "universe_summary"
 
 _LLM_LABELS = {
     "ollama": "Ollama",
-    "claude": "Claude",
-    "mistral": "Mistral",
 }
 
 

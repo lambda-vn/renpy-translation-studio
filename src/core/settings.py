@@ -37,8 +37,6 @@ DEFAULTS: dict[str, str | None] = {
     "ollama_model": None,
     "ollama_batch_size": None,
     "libretranslate_url": None,
-    "claude_model": None,
-    "mistral_model": None,
     "verbose_logging": None,
 }
 
@@ -46,8 +44,6 @@ _KEYRING_KEYS = frozenset(
     {
         "deepl_api_key",
         "libretranslate_api_key",
-        "claude_api_key",
-        "mistral_api_key",
     }
 )
 

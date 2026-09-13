@@ -56,8 +56,6 @@ La documentation complète, écran par écran, est dans
 | [DeepL](https://www.deepl.com) | MT | Cloud | Clé API | Gère un glossaire côté serveur |
 | [LibreTranslate](https://libretranslate.com) | MT | Cloud ou auto-hébergé | URL, clé si l'instance en réclame une | Une requête par unité |
 | [Ollama](https://ollama.com) | LLM | Local, ou modèles cloud d'Ollama | Un modèle téléchargé et un GPU pour être à l'aise ; un modèle `-cloud` demande `ollama signin` à la place | Garde-fous pour petits modèles quantifiés |
-| [Claude](https://www.anthropic.com) | LLM | Cloud | Clé API | Bêta : jamais testé contre l'API réelle |
-| [Mistral](https://mistral.ai) | LLM | Cloud | Clé API | Bêta : jamais testé contre l'API réelle |
 
 Les modèles cloud d'Ollama passent par le même endpoint local, le démon
 signant lui-même la requête : rien ne change ici, hormis le nom du

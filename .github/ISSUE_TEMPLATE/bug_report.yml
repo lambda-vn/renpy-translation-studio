@@ -30,7 +30,7 @@ body:
     attributes:
       label: Provider
       description: Which one, if the problem involves a translation. Never paste an API key.
-      placeholder: DeepL, Ollama (model name), LibreTranslate, Claude, Mistral
+      placeholder: DeepL, Ollama (model name), LibreTranslate
   - type: input
     id: os
     attributes:

@@ -108,8 +108,6 @@ _PROVIDER_LABELS = {
     "deepl": "DeepL",
     "ollama": "Ollama",
     "libretranslate": "LibreTranslate",
-    "claude": "Claude",
-    "mistral": "Mistral",
 }
 
 # ── Mise en page ──────────────────────────────────────────────────────────── #

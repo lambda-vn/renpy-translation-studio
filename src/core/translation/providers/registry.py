@@ -4,22 +4,14 @@ from core.i18n import i18n
 from core.settings import settings
 from core.storage.repositories import Character
 from core.translation.providers.base import TranslationProvider
-from core.translation.providers.claude_provider import (
-    CLAUDE_DEFAULT_MODEL,
-    ClaudeProvider,
-)
 from core.translation.providers.deepl import DeepLProvider
 from core.translation.providers.libretranslate import LibreTranslateProvider
-from core.translation.providers.mistral_provider import (
-    MISTRAL_DEFAULT_MODEL,
-    MistralProvider,
-)
 from core.translation.providers.ollama import OllamaProvider
 
 MIN_OLLAMA_BATCH_SIZE = 1
 MAX_OLLAMA_BATCH_SIZE = 32
 
-LLM_PROVIDER_IDS = frozenset({"ollama", "claude", "mistral"})
+LLM_PROVIDER_IDS = frozenset({"ollama"})
 
 
 def _parse_ollama_batch_size(value: str | None) -> int | None:
@@ -58,8 +50,7 @@ class ProviderRegistry:
         Args:
             provider_id: Identifier of the provider to build (e.g. "deepl").
             universe_summary: Optional context passed to context-aware
-                providers (Ollama, Claude, Mistral). Ignored by providers
-                that don't use it.
+                providers (Ollama). Ignored by providers that don't use it.
             characters: Character glossary passed to context-aware
                 providers and to DeepL (glossary term pairs). Ignored by
                 providers that don't use it.
@@ -96,26 +87,6 @@ class ProviderRegistry:
                 endpoint=url,
                 api_key=settings.get("libretranslate_api_key"),
             )
-        if provider_id == "claude":
-            claude_key = settings.get("claude_api_key")
-            if not claude_key:
-                raise ValueError(i18n.t("providers.claude_not_configured"))
-            return ClaudeProvider(
-                api_key=claude_key,
-                model=settings.get("claude_model") or CLAUDE_DEFAULT_MODEL,
-                universe_summary=universe_summary,
-                characters=characters,
-            )
-        if provider_id == "mistral":
-            mistral_key = settings.get("mistral_api_key")
-            if not mistral_key:
-                raise ValueError(i18n.t("providers.mistral_not_configured"))
-            return MistralProvider(
-                api_key=mistral_key,
-                model=settings.get("mistral_model") or MISTRAL_DEFAULT_MODEL,
-                universe_summary=universe_summary,
-                characters=characters,
-            )
         raise ValueError(f"Unknown provider: {provider_id}")
 
     def available(self) -> list[str]:
@@ -131,10 +102,6 @@ class ProviderRegistry:
             result.append("ollama")
         if settings.get("libretranslate_url"):
             result.append("libretranslate")
-        if settings.get("claude_api_key"):
-            result.append("claude")
-        if settings.get("mistral_api_key"):
-            result.append("mistral")
         return result
 
     def available_llm(self) -> list[str]:

@@ -53,8 +53,6 @@ Full documentation, screen by screen, is in
 | [DeepL](https://www.deepl.com) | MT | Cloud | API key | Supports a server-side glossary |
 | [LibreTranslate](https://libretranslate.com) | MT | Cloud or self-hosted | URL, key if the instance asks for one | One request per unit |
 | [Ollama](https://ollama.com) | LLM | Local, or Ollama's cloud models | A pulled model and a GPU to be comfortable; a `-cloud` model needs `ollama signin` instead | Guardrails for small quantized models |
-| [Claude](https://www.anthropic.com) | LLM | Cloud | API key | Beta: never tested against the real API |
-| [Mistral](https://mistral.ai) | LLM | Cloud | API key | Beta: never tested against the real API |
 
 Ollama's cloud models go through the same local endpoint, the daemon
 signing the request itself, so nothing changes here beyond the model

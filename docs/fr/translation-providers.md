@@ -4,7 +4,7 @@
 
 *[English version](../en/translation-providers.md)*
 
-Cinq fournisseurs, accessibles depuis l'engrenage puis **Configurer un
+Trois fournisseurs, accessibles depuis l'engrenage puis **Configurer un
 fournisseur**.
 
 ![La liste des fournisseurs](../images/10-providers-fr.png)
@@ -14,12 +14,9 @@ fournisseur**.
 | [DeepL](https://www.deepl.com) | Traduction automatique | Cloud | Clé API |
 | [Ollama](https://ollama.com) | LLM | Local, ou les modèles cloud d'Ollama | Un modèle téléchargé |
 | [LibreTranslate](https://libretranslate.com) | Traduction automatique | Cloud ou auto-hébergé | URL, clé si l'instance en demande une |
-| [Claude](https://www.anthropic.com) | LLM | Cloud | Clé API |
-| [Mistral](https://mistral.ai) | LLM | Cloud | Clé API |
 
 Le badge vert **Configuré** signifie qu'une clé ou un point d'accès est
-enregistré. **Bêta** sur Claude et Mistral veut dire exactement ce qui est
-écrit : ces deux-là n'ont jamais été testés contre la véritable API.
+enregistré.
 
 **Aucun fournisseur est une configuration valable.** L'application est
 d'abord un outil de révision ; le [serveur MCP](mcp-server.md) est
@@ -32,16 +29,16 @@ rapides, peu chers et prévisibles, et ils ne savent rien de votre jeu :
 aucun registre de personnage, aucun terme récurrent, aucune idée de qui
 parle.
 
-**Ollama, Claude et Mistral** reçoivent le
+**Ollama** reçoit le
 [résumé d'univers et le glossaire des personnages](context-for-the-ai.md)
-à chaque lot : ils peuvent donc tenir un registre et garder un nom propre
-cohérent. Ils sont plus lents, plus chers, et ils peuvent inventer.
+à chaque lot : il peut donc tenir un registre et garder un nom propre
+cohérent. Il est plus lent, plus cher, et il peut inventer.
 
 DeepL est le seul à gérer un **glossaire côté serveur** : les notes de
 personnage écrites `Nom -> Traduction` sont envoyées comme un vrai
 glossaire DeepL, synchronisé paresseusement au premier lot.
 
-Seuls les trois LLM peuvent rédiger le
+Seul Ollama peut rédiger le
 [résumé d'univers](context-for-the-ai.md) à votre place.
 
 ## Ollama

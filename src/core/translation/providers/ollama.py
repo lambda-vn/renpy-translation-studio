@@ -369,9 +369,9 @@ class OllamaProvider:
         request here and no retry, so an unlucky sample is what the user
         gets.
 
-        Caps the reply for the same reason ClaudeProvider does, at the same
-        value. A length asked for in the prompt is a request a small model
-        need not honour: gemma3:1b answered one 1500-character brief with
+        Caps the reply length: a length asked for in the prompt is a request
+        a small model need not honour. gemma3:1b answered one 1500-character
+        brief with
         10 712 characters. What comes back here is carried into every
         later batch prompt, so an unbounded reply is a cost paid on every
         request of every job that follows.
