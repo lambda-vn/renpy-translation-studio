@@ -14,6 +14,13 @@ d'attention connus ».
 
 Stack : **Python 3.12+ / Flet / uv / SQLite**
 
+Ce fichier documente le code Python de `main` (1.x). La réécriture Rust
+vers la 2.0.0 vit sur la branche `rust`, dans `rust/` — voir
+[`rust/README.md`](https://github.com/lambda-vn/renpy-translation-studio/blob/rust/rust/README.md)
+sur cette branche pour son propre état et ses propres commandes. `main`
+ne sera remplacé qu'à la sortie de la 2.0.0 ; les instructions ci-dessous
+restent celles du code Python tant que ça n'est pas fait.
+
 ---
 
 ## Stack et outils
