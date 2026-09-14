@@ -5,7 +5,10 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use super::base::{TranslateBatchResult, TranslatedUnit, TranslationUnitPayload};
+use super::base::{
+    ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
+    TranslationUnitPayload,
+};
 use crate::core::languages::get_language;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -145,6 +148,22 @@ impl LibreTranslateProvider {
         }
 
         result
+    }
+}
+
+#[async_trait::async_trait]
+impl TranslationProvider for LibreTranslateProvider {
+    fn id(&self) -> &'static str {
+        Self::ID
+    }
+
+    async fn translate_batch(
+        &mut self,
+        units: &[TranslationUnitPayload],
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<TranslateBatchResult, ProviderError> {
+        Ok(LibreTranslateProvider::translate_batch(self, units, source_lang, target_lang).await)
     }
 }
 

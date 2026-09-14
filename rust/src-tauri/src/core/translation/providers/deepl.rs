@@ -9,7 +9,10 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use super::base::{ProviderError, TranslateBatchResult, TranslatedUnit, TranslationUnitPayload};
+use super::base::{
+    ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
+    TranslationUnitPayload,
+};
 use crate::core::languages::get_language;
 use crate::core::storage::repositories::Character;
 
@@ -294,6 +297,22 @@ impl DeepLProvider {
         }
 
         result
+    }
+}
+
+#[async_trait::async_trait]
+impl TranslationProvider for DeepLProvider {
+    fn id(&self) -> &'static str {
+        Self::ID
+    }
+
+    async fn translate_batch(
+        &mut self,
+        units: &[TranslationUnitPayload],
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<TranslateBatchResult, ProviderError> {
+        Ok(self.translate_batch(units, source_lang, target_lang).await)
     }
 }
 

@@ -33,6 +33,15 @@ pub struct QualityIssue {
     pub detail: String,
 }
 
+/// Remove every Ren'Py text tag (`{b}`, `{w=0.5}`, ...) from `text`.
+///
+/// Used by `translation::job::needs_translation()` to tell tag-only
+/// content (a tag-wrapped ellipsis like `"...{w=0.5}"`) from text a
+/// player actually reads.
+pub fn strip_tags(text: &str) -> String {
+    TAG_PATTERN.replace_all(text, "").into_owned()
+}
+
 /// Whether a translation carries a problem that blocks it.
 ///
 /// Everything `check()` reports counts except the length warning, which
@@ -198,5 +207,12 @@ mod tests {
     #[test]
     fn empty_source_never_warns_on_length() {
         assert!(check("", "some long translation appearing from nowhere").is_empty());
+    }
+
+    #[test]
+    fn strip_tags_removes_renpy_markup_only() {
+        assert_eq!(strip_tags("...{w=0.5}"), "...");
+        assert_eq!(strip_tags("{i}Hello{/i} [name]"), "Hello [name]");
+        assert_eq!(strip_tags("no tags here"), "no tags here");
     }
 }

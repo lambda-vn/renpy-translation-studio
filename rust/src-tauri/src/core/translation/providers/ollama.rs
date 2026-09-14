@@ -14,7 +14,10 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use super::base::{ProviderError, TranslateBatchResult, TranslatedUnit, TranslationUnitPayload};
+use super::base::{
+    ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
+    TranslationUnitPayload,
+};
 use crate::core::storage::repositories::Character;
 use crate::core::translation::context_builder::{
     build_batch_prompt, build_system_prompt, split_into_batches, ContextualUnit,
@@ -537,6 +540,22 @@ impl OllamaProvider {
         missing_ids.sort();
 
         (translations, missing_ids)
+    }
+}
+
+#[async_trait::async_trait]
+impl TranslationProvider for OllamaProvider {
+    fn id(&self) -> &'static str {
+        Self::ID
+    }
+
+    async fn translate_batch(
+        &mut self,
+        units: &[TranslationUnitPayload],
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<TranslateBatchResult, ProviderError> {
+        OllamaProvider::translate_batch(self, units, source_lang, target_lang).await
     }
 }
 

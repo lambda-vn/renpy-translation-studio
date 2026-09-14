@@ -2,11 +2,27 @@
 //! `core/translation/providers/base.py`.
 //!
 //! The Python `TranslateBatchRequest` also carries `on_batch_start`,
-//! `is_cancelled` and `on_event` callbacks — progress reporting and
-//! cooperative cancellation around a *sequence* of provider requests.
-//! That belongs to the job engine driving these providers (chunking,
-//! retries, cancellation), which is `2.0.0-alpha.3`, not to the
-//! providers themselves. A provider here just answers one batch.
+//! `is_cancelled` and `on_event` callbacks threaded into each provider's
+//! *own* internal sub-batching (Ollama's context-window splitting,
+//! DeepL's 50-text chunks) — so cancellation takes effect after the
+//! request currently in flight rather than waiting for the whole job
+//! chunk. `translation::job`, added in `2.0.0-alpha.3`, drives
+//! cancellation and progress at its own chunk boundary (`CHUNK_SIZE`)
+//! instead; a provider here still just answers one batch, uninterrupted
+//! once started. Finer-grained mid-provider cancellation is deferred —
+//! see `translation::job`'s module docs.
+
+#[async_trait::async_trait]
+pub trait TranslationProvider: Send {
+    fn id(&self) -> &'static str;
+
+    async fn translate_batch(
+        &mut self,
+        units: &[TranslationUnitPayload],
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<TranslateBatchResult, ProviderError>;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranslationUnitPayload {

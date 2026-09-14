@@ -9,13 +9,14 @@ compatibles avec la 1.0.0 Python, MCP sur
 `main` n'est remplacé qu'à la sortie de la 2.0.0 — cette branche coexiste
 avec le code Python (`../src/`) le temps du chantier.
 
-## État actuel : `2.0.0-alpha.2`
+## État actuel : `2.0.0-alpha.3`
 
-Le noyau et les trois fournisseurs retenus tournent sans interface,
-testés en ligne de commande (`cargo test`), sur le schéma et le contrat
-de données exacts gelés par la politique de compatibilité de
-[`../CLAUDE.md`](../CLAUDE.md#compatibilité-post-100). Tout vit sous
-`src-tauri/src/core/`, module par module en regard de `../src/core/` :
+Le noyau, les trois fournisseurs retenus et le moteur de jobs tournent
+sans interface, testés en ligne de commande (`cargo test`), sur le
+schéma et le contrat de données exacts gelés par la politique de
+compatibilité de [`../CLAUDE.md`](../CLAUDE.md#compatibilité-post-100).
+Tout vit sous `src-tauri/src/core/`, module par module en regard de
+`../src/core/` :
 
 - `core::languages` — la liste des 19 langues et `get_language()`.
 - `core::settings` — `settings.json` + trousseau OS pour les deux clés
@@ -38,17 +39,30 @@ de données exacts gelés par la politique de compatibilité de
   directement (`reqwest`), sans SDK officiel à envelopper côté Rust.
   Les garde-fous d'Ollama (schéma de sortie à longueur fixée,
   récupération de forme lâche, détection du bourrage par duplication)
-  sont copiés du Python, pas simplifiés — CLAUDE.md l'interdit.
+  sont copiés du Python, pas simplifiés — CLAUDE.md l'interdit. Les
+  trois implémentent maintenant `providers::base::TranslationProvider`,
+  le trait partagé délibérément absent avant l'alpha.3, faute d'un
+  moteur de jobs pour s'en servir.
+- `core::translation::job` — `run_job()` : dédoublonnage par texte
+  source (`group_by_source`/`spread_to_followers`), chunks de 50,
+  vérification qualité (une interpolation manquante ou du HTML
+  inattendu rejette la suggestion ; un tag manquant ou une longueur
+  inhabituelle ne fait qu'avertir), relances en chunks de 8 puis 1.
+  `async`, pas de thread de fond : un canal `JobEvent` (Chunk / Progress
+  / Complete / Event) remplace les quatre callbacks Python, à charge de
+  l'appelant de les relayer vers une interface plus tard.
 
-97 tests, `cargo clippy` propre. Rien n'écrit encore sur une vraie base
+110 tests, `cargo clippy` propre. Rien n'écrit encore sur une vraie base
 depuis une interface : `src-tauri/src/db.rs` reste la seule commande
 Tauri, en lecture seule, héritée de l'alpha.1.
 
-Non porté ici, volontairement : le moteur de jobs (chunks, retries,
-annulation, événements de progression — c'était `on_batch_start` /
-`is_cancelled` / `on_event` côté Python), le pipeline d'extraction
-(`renpy/cli.py`, `renpy/engine.py`), l'écriture dans les `.rpy`, et le
-canal de rafraîchissement en direct.
+Non porté, volontairement : `on_batch_start` et l'annulation fine que
+Python propage jusque dans le sous-découpage interne de chaque
+fournisseur (chaque requête HTTP d'Ollama, chaque chunk DeepL) — ici
+l'annulation n'est vérifiée qu'aux limites des chunks du moteur de jobs
+(50, puis 8, puis 1), plus grossier mais borné. Toujours absents : le
+pipeline d'extraction (`renpy/cli.py`, `renpy/engine.py`), l'écriture
+dans les `.rpy`, et le canal de rafraîchissement en direct.
 
 ## Développement
 
@@ -68,9 +82,7 @@ npm run check
 
 ## Prochaine étape
 
-`2.0.0-alpha.3` : le moteur de jobs — `tokio` à la place du thread de
-fond Python, chunks de 50 comme granularité de reprise/annulation,
-retries automatiques en chunks réduits, événements poussés vers
-l'appelant. C'est ce qui donnera enfin un sens à `on_batch_start` /
-`is_cancelled` / `on_event`, volontairement absents des fournisseurs
-ci-dessus.
+`2.0.0-beta.1` : le serveur MCP, sur
+[modelcontextprotocol/rust-sdk](https://github.com/modelcontextprotocol/rust-sdk)
+— une assistante pourra déjà traduire un projet avant qu'aucune fenêtre
+n'existe.

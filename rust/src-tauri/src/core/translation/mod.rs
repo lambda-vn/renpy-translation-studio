@@ -5,5 +5,6 @@
 //! `2.0.0-alpha.3`.
 
 pub mod context_builder;
+pub mod job;
 pub mod providers;
 pub mod quality;
