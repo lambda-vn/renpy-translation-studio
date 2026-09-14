@@ -2,8 +2,7 @@
 //! package. Each submodule's doc comment names its Python source.
 
 pub mod languages;
-pub mod providers;
-pub mod quality;
 pub mod renpy;
 pub mod settings;
 pub mod storage;
+pub mod translation;

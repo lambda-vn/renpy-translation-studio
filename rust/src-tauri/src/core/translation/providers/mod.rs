@@ -9,3 +9,4 @@
 pub mod base;
 pub mod deepl;
 pub mod libretranslate;
+pub mod ollama;
