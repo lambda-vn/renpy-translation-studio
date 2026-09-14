@@ -1,5 +1,6 @@
 mod core;
 mod db;
+pub mod mcp_server;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

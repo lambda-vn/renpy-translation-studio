@@ -1,12 +1,13 @@
 //! Data access layer for translation units, characters and project
 //! metadata. Port of `core/storage/repositories.py`.
 //!
-//! Deliberately partial for `2.0.0-alpha.2`: the read/write operations a
-//! CLI or a future UI needs to browse and edit a project are ported.
-//! Extraction-pipeline methods (`resync_sources`,
-//! `transfer_orphan_translations`, `delete_stale`), bulk search/duplicate
-//! helpers, and `clear_translations` (MCP-flag-gated, destructive) are
-//! not — they belong with the extraction engine and the MCP tool layer
+//! Deliberately partial for `2.0.0-alpha.2`, extended in `2.0.0-beta.1`
+//! with the pagination, neighbour-window, batch-update and bulk-clear
+//! queries the MCP server needs. Still not ported:
+//! extraction-pipeline methods (`resync_sources`,
+//! `transfer_orphan_translations`, `delete_stale`) and the
+//! duplicate/search-count helpers used only by the review UI's side
+//! panel — they belong with the extraction engine and a future UI
 //! respectively, neither built yet.
 //!
 //! Python's repositories take an explicit `threading.Lock` shared across
@@ -130,6 +131,122 @@ pub fn get_many(conn: &Connection, block_ids: &[String]) -> rusqlite::Result<Vec
     rows.collect()
 }
 
+/// Escape `%`, `_` and the escape character itself so a substring search
+/// cannot be read as a LIKE wildcard pattern.
+///
+/// Pairs with a `LIKE ... ESCAPE '\'` clause; used by [`get_page`] and
+/// [`get_neighbours`]'s search filter.
+fn like_pattern(query: &str) -> String {
+    let escaped = query
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    format!("%{escaped}%")
+}
+
+/// One page of a file's units plus the total matching row count, filtered
+/// like the review screen: status, a search substring across source and
+/// translation, a speaker, and the "needs another look" flag.
+#[allow(clippy::too_many_arguments)]
+pub fn get_page(
+    conn: &Connection,
+    source_file: &str,
+    page: i64,
+    page_size: i64,
+    status_filter: Option<&str>,
+    search_query: &str,
+    character: Option<&str>,
+    needs_review: bool,
+) -> rusqlite::Result<(Vec<TranslationUnit>, i64)> {
+    let mut conditions = vec!["source_file = ?".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(source_file.to_string())];
+
+    if let Some(status) = status_filter {
+        conditions.push("status = ?".to_string());
+        params.push(Box::new(status.to_string()));
+    }
+    if let Some(speaker) = character {
+        conditions.push("character_variable = ?".to_string());
+        params.push(Box::new(speaker.to_string()));
+    }
+    if needs_review {
+        conditions.push("needs_review = 1".to_string());
+    }
+    let search_query = search_query.trim();
+    if !search_query.is_empty() {
+        conditions.push(
+            "(source_text LIKE ? ESCAPE '\\' OR translated_text LIKE ? ESCAPE '\\')".to_string(),
+        );
+        let like = like_pattern(search_query);
+        params.push(Box::new(like.clone()));
+        params.push(Box::new(like));
+    }
+    let where_clause = conditions.join(" AND ");
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    let total: i64 = conn.query_row(
+        &format!("SELECT COUNT(*) FROM translation_units WHERE {where_clause}"),
+        bound.as_slice(),
+        |row| row.get(0),
+    )?;
+
+    let mut page_params = bound;
+    let offset = page.max(0) * page_size.max(0);
+    let page_size_box: Box<dyn rusqlite::ToSql> = Box::new(page_size);
+    let offset_box: Box<dyn rusqlite::ToSql> = Box::new(offset);
+    page_params.push(page_size_box.as_ref());
+    page_params.push(offset_box.as_ref());
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLUMNS} FROM translation_units WHERE {where_clause} \
+         ORDER BY source_line LIMIT ? OFFSET ?"
+    ))?;
+    let rows = stmt.query_map(page_params.as_slice(), unit_from_row)?;
+    Ok((rows.collect::<rusqlite::Result<Vec<_>>>()?, total))
+}
+
+/// The window of a file centred on one of its lines: `radius` units on
+/// each side plus the line itself, in file order.
+///
+/// Answers what the paginated, filtered review list hides by
+/// construction: the point is to show the lines around a given one,
+/// whatever page or filter the caller was looking at.
+pub fn get_neighbours(
+    conn: &Connection,
+    source_file: &str,
+    source_line: i64,
+    radius: i64,
+) -> rusqlite::Result<Vec<TranslationUnit>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLUMNS} FROM translation_units \
+         WHERE source_file = ?1 AND source_line < ?2 \
+         ORDER BY source_line DESC LIMIT ?3"
+    ))?;
+    let mut before = stmt
+        .query_map(params![source_file, source_line, radius], unit_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLUMNS} FROM translation_units \
+         WHERE source_file = ?1 AND source_line = ?2 ORDER BY source_line"
+    ))?;
+    let here = stmt
+        .query_map(params![source_file, source_line], unit_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLUMNS} FROM translation_units \
+         WHERE source_file = ?1 AND source_line > ?2 \
+         ORDER BY source_line LIMIT ?3"
+    ))?;
+    let after = stmt
+        .query_map(params![source_file, source_line, radius], unit_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    before.reverse();
+    Ok(before.into_iter().chain(here).chain(after).collect())
+}
+
 /// Update translation and status for a unit.
 ///
 /// A `human_validated` unit is never overwritten by anything else — this
@@ -157,6 +274,34 @@ pub fn update_translation(
         params![translated_text, status, block_id],
     )?;
     Ok(())
+}
+
+/// Apply many translations in a single pass.
+///
+/// Carries the same protection as [`update_translation`]: a
+/// `human_validated` unit is never downgraded, checked in SQL by only
+/// applying the write when the row is not `human_validated` or the
+/// incoming status is `human_validated` too. Exists for the MCP
+/// `submit_translations` tool, which hands back a whole batch rather than
+/// one unit at a time.
+///
+/// Returns the number of units actually updated.
+pub fn update_translations(
+    conn: &Connection,
+    entries: &[(String, String, String)],
+) -> rusqlite::Result<usize> {
+    if entries.is_empty() {
+        return Ok(0);
+    }
+    let mut stmt = conn.prepare(
+        "UPDATE translation_units SET translated_text = ?1, status = ?2 \
+         WHERE block_id = ?3 AND (status != 'human_validated' OR ?2 = 'human_validated')",
+    )?;
+    let mut updated = 0;
+    for (block_id, translated_text, status) in entries {
+        updated += stmt.execute(params![translated_text, status, block_id])?;
+    }
+    Ok(updated)
 }
 
 /// Store a unit's live text as a draft, or reset it when emptied.
@@ -227,6 +372,60 @@ pub fn count_modified_since(conn: &Connection, timestamp: Option<&str>) -> rusql
         params![timestamp],
         |row| row.get(0),
     )
+}
+
+/// Reset translations back to `not_translated`, clearing their text.
+///
+/// Bypasses the `human_validated` protection everything else here
+/// carries: this is the one destructive bulk action in the schema,
+/// gated at the MCP tool layer behind `--allow-clear` rather than here.
+/// Restricting the statuses is what makes it usable after a bad AI job —
+/// the point is then to drop the suggestions without touching reviewed
+/// work.
+///
+/// Returns the number of units actually cleared.
+pub fn clear_translations(
+    conn: &Connection,
+    source_file: Option<&str>,
+    statuses: Option<&[String]>,
+) -> rusqlite::Result<usize> {
+    let mut conditions = vec!["status != 'not_translated'".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    if let Some(source_file) = source_file {
+        conditions.push("source_file = ?".to_string());
+        params.push(Box::new(source_file.to_string()));
+    }
+    if let Some(statuses) = statuses {
+        if statuses.is_empty() {
+            return Ok(0);
+        }
+        let placeholders = vec!["?"; statuses.len()].join(",");
+        conditions.push(format!("status IN ({placeholders})"));
+        for status in statuses {
+            params.push(Box::new(status.clone()));
+        }
+    }
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.execute(
+        &format!(
+            "UPDATE translation_units SET translated_text = '', status = 'not_translated' \
+             WHERE {}",
+            conditions.join(" AND ")
+        ),
+        bound.as_slice(),
+    )
+}
+
+/// Row count per status, e.g. `{"not_translated": 500, "human_validated": 12}`.
+pub fn count_by_status(
+    conn: &Connection,
+) -> rusqlite::Result<std::collections::HashMap<String, i64>> {
+    let mut stmt =
+        conn.prepare("SELECT status, COUNT(*) FROM translation_units GROUP BY status")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    rows.collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -570,5 +769,156 @@ mod tests {
                 .as_deref(),
             Some("A fantasy world.")
         );
+    }
+
+    #[test]
+    fn get_page_filters_and_paginates() {
+        let db = open_temp();
+        seed(db.conn());
+        bulk_insert(
+            db.conn(),
+            &[NewUnit {
+                block_id: "c",
+                source_file: "script.rpy",
+                source_line: 30,
+                character_variable: Some("e"),
+                source_text: "Farewell.",
+            }],
+        )
+        .unwrap();
+
+        let (page, total) = get_page(db.conn(), "script.rpy", 0, 2, None, "", None, false).unwrap();
+        assert_eq!(total, 3);
+        assert_eq!(page.len(), 2);
+        assert_eq!(page[0].block_id, "a");
+
+        let (page, total) = get_page(db.conn(), "script.rpy", 1, 2, None, "", None, false).unwrap();
+        assert_eq!(total, 3);
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].block_id, "c");
+
+        let (page, total) =
+            get_page(db.conn(), "script.rpy", 0, 50, None, "", Some("e"), false).unwrap();
+        assert_eq!(total, 2);
+        assert!(page
+            .iter()
+            .all(|u| u.character_variable.as_deref() == Some("e")));
+
+        let (page, total) = get_page(
+            db.conn(),
+            "script.rpy",
+            0,
+            50,
+            None,
+            "farewell",
+            None,
+            false,
+        )
+        .unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(page[0].block_id, "c");
+    }
+
+    #[test]
+    fn get_page_search_escapes_like_wildcards() {
+        let db = open_temp();
+        bulk_insert(
+            db.conn(),
+            &[NewUnit {
+                block_id: "a",
+                source_file: "script.rpy",
+                source_line: 1,
+                character_variable: None,
+                source_text: "100% done",
+            }],
+        )
+        .unwrap();
+
+        let (page, total) =
+            get_page(db.conn(), "script.rpy", 0, 50, None, "100%", None, false).unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(page.len(), 1);
+    }
+
+    #[test]
+    fn get_neighbours_centres_on_the_line_and_keeps_file_order() {
+        let db = open_temp();
+        seed(db.conn());
+        bulk_insert(
+            db.conn(),
+            &[NewUnit {
+                block_id: "c",
+                source_file: "script.rpy",
+                source_line: 30,
+                character_variable: None,
+                source_text: "Farewell.",
+            }],
+        )
+        .unwrap();
+
+        let window = get_neighbours(db.conn(), "script.rpy", 20, 1).unwrap();
+        let ids: Vec<&str> = window.iter().map(|u| u.block_id.as_str()).collect();
+        assert_eq!(ids, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn update_translations_applies_batch_and_protects_human_validated() {
+        let db = open_temp();
+        seed(db.conn());
+        update_translation(db.conn(), "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+
+        let updated = update_translations(
+            db.conn(),
+            &[
+                (
+                    "a".to_string(),
+                    "wrong AI guess".to_string(),
+                    "ai_suggested".to_string(),
+                ),
+                (
+                    "b".to_string(),
+                    "Au revoir.".to_string(),
+                    "ai_suggested".to_string(),
+                ),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(updated, 1);
+        let units = get_many(db.conn(), &["a".to_string(), "b".to_string()]).unwrap();
+        let a = units.iter().find(|u| u.block_id == "a").unwrap();
+        let b = units.iter().find(|u| u.block_id == "b").unwrap();
+        assert_eq!(a.translated_text, "Bonjour.");
+        assert_eq!(b.translated_text, "Au revoir.");
+    }
+
+    #[test]
+    fn clear_translations_respects_scope_and_statuses() {
+        let db = open_temp();
+        seed(db.conn());
+        update_translation(db.conn(), "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "b", "Au revoir.", "ai_suggested").unwrap();
+
+        let cleared =
+            clear_translations(db.conn(), None, Some(&["ai_suggested".to_string()])).unwrap();
+        assert_eq!(cleared, 1);
+
+        let units = get_many(db.conn(), &["a".to_string(), "b".to_string()]).unwrap();
+        let a = units.iter().find(|u| u.block_id == "a").unwrap();
+        let b = units.iter().find(|u| u.block_id == "b").unwrap();
+        assert_eq!(a.status, STATUS_HUMAN_VALIDATED);
+        assert_eq!(b.status, STATUS_NOT_TRANSLATED);
+        assert_eq!(b.translated_text, "");
+    }
+
+    #[test]
+    fn count_by_status_groups_rows() {
+        let db = open_temp();
+        seed(db.conn());
+        update_translation(db.conn(), "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+
+        let counts = count_by_status(db.conn()).unwrap();
+        assert_eq!(counts.get(STATUS_HUMAN_VALIDATED), Some(&1));
+        assert_eq!(counts.get(STATUS_NOT_TRANSLATED), Some(&1));
     }
 }

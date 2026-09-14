@@ -31,7 +31,13 @@ walkdir = "2.5.0"
 crc32fast = "1.5.2"
 reqwest = { version = "0.13.5", features = ["json"] }
 async-trait = "0.1.92"
-tokio = { version = "1.53.1", features = ["sync", "rt", "macros"] }
+tokio = { version = "1.53.1", features = ["sync", "rt", "rt-multi-thread", "macros", "io-std"] }
+rmcp = { version = "3.3.0", features = ["server", "macros", "transport-io", "schemars"] }
+dunce = "1.0.5"
+
+[[bin]]
+name = "rts-mcp"
+path = "src/bin/rts_mcp.rs"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
