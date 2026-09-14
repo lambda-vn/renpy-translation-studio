@@ -3,5 +3,6 @@
 
 pub mod languages;
 pub mod quality;
+pub mod renpy;
 pub mod settings;
 pub mod storage;

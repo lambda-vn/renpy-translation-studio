@@ -3139,6 +3139,7 @@ dependencies = [
 name = "rust"
 version = "0.1.0"
 dependencies = [
+ "crc32fast",
  "dirs 7.0.0",
  "keyring",
  "regex",
@@ -3149,6 +3150,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-opener",
  "thiserror 2.0.20",
+ "walkdir",
 ]
 
 [[package]]
