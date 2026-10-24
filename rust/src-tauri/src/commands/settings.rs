@@ -30,6 +30,7 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsPayload,
             .get("libretranslate_api_key")
             .is_some_and(|v| !v.is_empty()),
         verbose_logging: settings.get("verbose_logging").as_deref() == Some("true"),
+        sdk_path: settings.get("sdk_path"),
         available_providers: registry::available(&mut settings),
         available_llm_providers: registry::available_llm(&mut settings),
     })

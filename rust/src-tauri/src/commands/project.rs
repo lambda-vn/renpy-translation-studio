@@ -11,7 +11,7 @@ use crate::mcp_server::session::{self, ProjectSession};
 
 use super::dto::{ProjectEntry, ProjectInfo};
 
-fn project_info(session: &ProjectSession) -> Result<ProjectInfo, String> {
+pub(super) fn project_info(session: &ProjectSession) -> Result<ProjectInfo, String> {
     let by_status = repositories::count_by_status(session.conn()).map_err(|e| e.to_string())?;
     Ok(ProjectInfo {
         path: session.path.display().to_string(),

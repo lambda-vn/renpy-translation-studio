@@ -84,6 +84,7 @@ export interface SettingsPayload {
 	libretranslateUrl: string | null;
 	libretranslateApiKeySet: boolean;
 	verboseLogging: boolean;
+	sdkPath: string | null;
 	availableProviders: string[];
 	availableLlmProviders: string[];
 }
@@ -113,10 +114,58 @@ export type JobEventPayload =
 	| { kind: 'chunkPersisted' }
 	| { kind: 'event'; message: string };
 
+export interface LanguageEntry {
+	code: string;
+	label: string;
+}
+
+export interface GameInspection {
+	valid: boolean;
+	gameName: string;
+	needsSdk: boolean;
+	hasExistingTl: boolean;
+	hasDatabase: boolean;
+	existingLanguages: string[];
+}
+
+export type ExtractMode = 'keep' | 'update' | 'reset';
+
+export type ExtractionStage = 'archiving' | 'unpacking' | 'running' | 'parsing' | 'syncing';
+
+export interface ExtractionReport {
+	units: number;
+	moved: number;
+	obsolete: number;
+	discardedSources: string[];
+	repaired: number;
+}
+
+export interface ExtractionOutcome {
+	project: ProjectInfo;
+	report: ExtractionReport;
+}
+
+/** What a failed extraction carries; `code` selects the localized message. */
+export interface ExtractionFailure {
+	code: string;
+	message: string;
+	detail: string | null;
+	params: Record<string, string>;
+}
+
 export const api = {
 	listRecentProjects: () => invoke<ProjectEntry[]>('list_recent_projects'),
 	openProject: (path: string) => invoke<ProjectInfo>('open_project', { path }),
 	currentProject: () => invoke<ProjectInfo | null>('current_project'),
+	listLanguages: () => invoke<LanguageEntry[]>('list_languages'),
+	inspectGame: (path: string, targetLanguage: string) =>
+		invoke<GameInspection>('inspect_game', { path, targetLanguage }),
+	extractProject: (args: {
+		path: string;
+		sourceLanguage: string;
+		targetLanguage: string;
+		mode: ExtractMode;
+	}) => invoke<ExtractionOutcome>('extract_project', args),
 
 	listFiles: () => invoke<FileEntry[]>('list_files'),
 	listUnits: (args: ListUnitsArgs) => invoke<ListUnitsResult>('list_units', { args }),

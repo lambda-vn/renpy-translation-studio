@@ -76,5 +76,10 @@ pub async fn export_project(state: State<'_, AppState>, output_path: String) -> 
         &target_language,
         std::path::Path::new(&output_path),
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+
+    // Best effort: the export is done, and a source the game or an editor
+    // still has open must not turn it into a reported failure.
+    let _ = crate::core::renpy::unpacker::remove_unpacked_sources(&session.path);
+    Ok(())
 }

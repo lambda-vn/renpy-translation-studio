@@ -11,6 +11,7 @@
 //! the free `mcp_server::session::open_project` function instead and
 //! registers the result itself.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
@@ -24,6 +25,9 @@ pub struct AppState {
     pub current: Arc<Mutex<Option<ProjectSession>>>,
     pub settings: Arc<Mutex<Settings>>,
     pub job: Arc<Mutex<Option<CancelToken>>>,
+    /// Set while an extraction runs, so a second one is refused rather
+    /// than racing the first over the same `tl/` folder.
+    pub extracting: Arc<AtomicBool>,
 }
 
 impl Default for AppState {
@@ -32,6 +36,7 @@ impl Default for AppState {
             current: Arc::new(Mutex::new(None)),
             settings: Arc::new(Mutex::new(Settings::load())),
             job: Arc::new(Mutex::new(None)),
+            extracting: Arc::new(AtomicBool::new(false)),
         }
     }
 }

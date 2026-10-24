@@ -11,11 +11,15 @@ use app_state::AppState;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::project::list_recent_projects,
             commands::project::open_project,
             commands::project::current_project,
+            commands::extract::list_languages,
+            commands::extract::inspect_game,
+            commands::extract::extract_project,
             commands::review::list_files,
             commands::review::list_units,
             commands::review::save_draft,

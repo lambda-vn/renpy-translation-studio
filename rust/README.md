@@ -9,7 +9,38 @@ compatibles avec la 1.0.0 Python, MCP sur
 `main` n'est remplacé qu'à la sortie de la 2.0.0 — cette branche coexiste
 avec le code Python (`../src/`) le temps du chantier.
 
-## État actuel : `2.0.0-rc.1`
+## En cours : `2.0.0-rc.2`
+
+La rc.2 est la check-list de parité contre la 1.0.0 : voir
+[`PARITY.md`](PARITY.md), qui dit ligne par ligne ce qui est fait, partiel
+ou absent. Première étape livrée : **l'extraction**.
+
+`core::extraction` lance Ren'Py et met la base à jour ; il s'appuie sur
+`core::renpy::{engine, cli, archive, unpacker}` (moteur du jeu puis SDK,
+sous-processus avec délai, désarchivage des `.rpa` dont l'index est lu
+par un décodeur de pickle volontairement restreint, sources refusées
+écartées) et sur trois opérations de base de données portées pour
+l'occasion (`resync_sources`, `transfer_orphan_translations`,
+`delete_stale`). L'écran de configuration de projet (dossier par
+sélecteur natif, langues, SDK, trois modes si une traduction existe) et
+le mécanisme d'i18n (catalogues de la 1.0.0 repris) sont en place. Le
+nettoyage des sources dépaquetées suit l'export du zip, comme en 1.x.
+
+**Vérifié** : 224 tests ; contre le vrai SDK 8.5.3 sur une copie de The
+Question (qui livre déjà un `tl/french` : 483 unités, 95 traductions
+adoptées en `imported`, 7 lignes sans texte validées d'office, les trois
+modes) ; sur un jeu packagé Ren'Py 7 avec son propre moteur et un
+`scripts.rpa` (3 008 unités, 121 sources désarchivées) dont les
+identifiants sont ceux que lit le parseur Python ; et dans la vraie
+fenêtre Tauri, pilotée via le port de débogage de WebView2, du
+formulaire à l'écran de révision (interface en français).
+**Non vérifié** : le sélecteur natif de dossier (la boîte système n'est
+pas pilotable de cette façon, le chemin a été saisi) ; macOS et Linux ;
+un jeu dont les archives ne contiennent que des `.rpyc` ou dont une
+source est refusée par Ren'Py (couverts par des tests, jamais vus sur un
+vrai jeu).
+
+## Précédemment : `2.0.0-rc.1`
 
 La rc.1 ne change pas l'interface : elle rend l'application
 installable et prouve qu'elle relit les données de la 1.0.0.

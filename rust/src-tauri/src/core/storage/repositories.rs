@@ -3,12 +3,11 @@
 //!
 //! Deliberately partial for `2.0.0-alpha.2`, extended in `2.0.0-beta.1`
 //! with the pagination, neighbour-window, batch-update and bulk-clear
-//! queries the MCP server needs. Still not ported:
-//! extraction-pipeline methods (`resync_sources`,
-//! `transfer_orphan_translations`, `delete_stale`) and the
+//! queries the MCP server needs, and with the three extraction-pipeline
+//! methods (`resync_sources`, `transfer_orphan_translations`,
+//! `delete_stale`) in `2.0.0-rc.2`. Still not ported: the
 //! duplicate/search-count helpers used only by the review UI's side
-//! panel — they belong with the extraction engine and a future UI
-//! respectively, neither built yet.
+//! panel, which belong with the review screen's remaining work.
 //!
 //! Python's repositories take an explicit `threading.Lock` shared across
 //! callers on the same connection, working around `sqlite3.Connection`
@@ -414,6 +413,220 @@ pub fn clear_translations(
         ),
         bound.as_slice(),
     )
+}
+
+/// What [`resync_sources`] changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SourceResync {
+    /// Units whose stored source text was replaced.
+    pub repaired: usize,
+    /// Of those, the suggestions and drafts discarded with the old text.
+    pub dropped: usize,
+    /// Of those, the `human_validated` ones kept despite the new text.
+    pub kept: usize,
+}
+
+/// Replace a stored source text the parser now reads differently.
+///
+/// [`bulk_insert`] ignores a `block_id` it already knows, which is what
+/// keeps a re-extraction from wiping the work. The cost is that a unit
+/// inserted by an older, wronger parse keeps that text forever.
+///
+/// A translation answering the old text answers a question that was
+/// never asked, so it goes with it, except a `human_validated` one: it may
+/// have been typed by someone reading past the noise, and throwing away
+/// reviewed work to fix a display bug is the worse trade. Those are
+/// counted instead, so the caller can say how many lines deserve a
+/// second look.
+///
+/// Must run before [`transfer_orphan_translations`], which pairs orphans
+/// by source text and would otherwise pair them on the text being
+/// corrected here.
+pub fn resync_sources(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<SourceResync> {
+    if units.is_empty() {
+        return Ok(SourceResync::default());
+    }
+    let parsed: std::collections::HashMap<&str, &NewUnit> =
+        units.iter().map(|unit| (unit.block_id, unit)).collect();
+
+    let mut repairs: Vec<(&NewUnit, String)> = Vec::new();
+    let mut drops: Vec<String> = Vec::new();
+    let mut kept = 0;
+    {
+        let mut stmt = conn.prepare(
+            "SELECT block_id, source_text, translated_text, status FROM translation_units",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+        for row in rows {
+            let (block_id, source_text, translated_text, status) = row?;
+            let Some(unit) = parsed.get(block_id.as_str()) else {
+                continue;
+            };
+            if unit.source_text == source_text {
+                continue;
+            }
+            repairs.push((unit, block_id.clone()));
+            if status == STATUS_HUMAN_VALIDATED {
+                kept += 1;
+            } else if !translated_text.is_empty() {
+                drops.push(block_id);
+            }
+        }
+    }
+    if repairs.is_empty() {
+        return Ok(SourceResync::default());
+    }
+
+    let tx = conn.unchecked_transaction()?;
+    for (unit, block_id) in &repairs {
+        tx.execute(
+            "UPDATE translation_units SET source_text = ?1, character_variable = ?2 \
+             WHERE block_id = ?3",
+            params![unit.source_text, unit.character_variable, block_id],
+        )?;
+    }
+    for block_id in &drops {
+        tx.execute(
+            "UPDATE translation_units SET translated_text = '', status = 'not_translated' \
+             WHERE block_id = ?1",
+            params![block_id],
+        )?;
+    }
+    tx.commit()?;
+    Ok(SourceResync {
+        repaired: repairs.len(),
+        dropped: drops.len(),
+        kept,
+    })
+}
+
+/// Move translations off vanished block ids onto the lines that remain.
+///
+/// Ren'Py rebuilds block ids from the script, so an id can disappear while
+/// its line is still in the game under a new one. The source text is what
+/// identifies a line across versions: every unit still awaiting a
+/// translation inherits the text of an orphan sharing its source text. A
+/// line the game really dropped has no such match anywhere, and its
+/// translation simply dies with it.
+///
+/// Only `not_translated` units are filled, so no reviewed work is ever
+/// replaced. Should several orphans share one source text with different
+/// translations, the first in file order wins.
+///
+/// The orphan keeps its status only when a single line inherits from it,
+/// the signature of a line whose id was merely rebuilt. As soon as several
+/// lines share the text the translation is spread by similarity, not
+/// identity: they become `imported`. Propagating `human_validated` there
+/// would mark as reviewed lines nobody ever saw.
+///
+/// Must run before [`delete_stale`], which removes the drained orphans.
+pub fn transfer_orphan_translations(
+    conn: &Connection,
+    current_block_ids: &std::collections::HashSet<String>,
+) -> rusqlite::Result<usize> {
+    let units = get_all(conn, None, None)?;
+    let mut by_text: std::collections::HashMap<&str, &TranslationUnit> =
+        std::collections::HashMap::new();
+    for unit in &units {
+        if !current_block_ids.contains(&unit.block_id) && unit.status != STATUS_NOT_TRANSLATED {
+            by_text.entry(unit.source_text.as_str()).or_insert(unit);
+        }
+    }
+    if by_text.is_empty() {
+        return Ok(0);
+    }
+
+    let mut heirs: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+    for unit in &units {
+        if unit.status == STATUS_NOT_TRANSLATED
+            && current_block_ids.contains(&unit.block_id)
+            && by_text.contains_key(unit.source_text.as_str())
+        {
+            heirs
+                .entry(unit.source_text.as_str())
+                .or_default()
+                .push(unit.block_id.as_str());
+        }
+    }
+
+    let mut entries: Vec<(String, String, String)> = Vec::new();
+    for (source_text, block_ids) in heirs {
+        let orphan = by_text[source_text];
+        let status = if block_ids.len() == 1 {
+            orphan.status.as_str()
+        } else {
+            "imported"
+        };
+        for block_id in block_ids {
+            entries.push((
+                block_id.to_string(),
+                orphan.translated_text.clone(),
+                status.to_string(),
+            ));
+        }
+    }
+    update_translations(conn, &entries)
+}
+
+/// The share of stored units a parse must cover before [`delete_stale`]
+/// trusts it.
+const MIN_PARSE_COVERAGE: f64 = 0.5;
+
+/// Remove every unit whose block id is absent from the latest parse.
+///
+/// A row is keyed by its block id: once no file carries that id, nothing
+/// can ever be written back to it, whatever its status. Validated units are
+/// no exception. What protects the work is [`transfer_orphan_translations`],
+/// which must run first to hand each translation over to the line that
+/// survived it.
+///
+/// Nothing is deleted when the parse covers less than half the stored
+/// units. A truncated `tl/` folder is a real possibility (the engine
+/// hitting its timeout leaves one behind) and it is indistinguishable from
+/// a game that legitimately lost that many lines. Keeping obsolete rows
+/// costs a few unwritable rows until the next full extraction; deleting
+/// live ones destroys reviewed work.
+///
+/// Returns the number of units deleted, zero when the parse was too small
+/// to be trusted.
+pub fn delete_stale(
+    conn: &Connection,
+    current_block_ids: &std::collections::HashSet<String>,
+) -> rusqlite::Result<usize> {
+    let stored: i64 = conn.query_row("SELECT COUNT(*) FROM translation_units", [], |row| {
+        row.get(0)
+    })?;
+    if (current_block_ids.len() as f64) < stored as f64 * MIN_PARSE_COVERAGE {
+        return Ok(0);
+    }
+    let stale: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT block_id FROM translation_units")?;
+        let ids = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        let mut stale = Vec::new();
+        for id in ids {
+            let id = id?;
+            if !current_block_ids.contains(&id) {
+                stale.push(id);
+            }
+        }
+        stale
+    };
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare("DELETE FROM translation_units WHERE block_id = ?1")?;
+        for id in &stale {
+            stmt.execute(params![id])?;
+        }
+    }
+    tx.commit()?;
+    Ok(stale.len())
 }
 
 /// Row count per status, e.g. `{"not_translated": 500, "human_validated": 12}`.
@@ -920,5 +1133,135 @@ mod tests {
         let counts = count_by_status(db.conn()).unwrap();
         assert_eq!(counts.get(STATUS_HUMAN_VALIDATED), Some(&1));
         assert_eq!(counts.get(STATUS_NOT_TRANSLATED), Some(&1));
+    }
+
+    fn unit<'a>(block_id: &'a str, source_text: &'a str) -> NewUnit<'a> {
+        NewUnit {
+            block_id,
+            source_file: "script.rpy",
+            source_line: 1,
+            character_variable: None,
+            source_text,
+        }
+    }
+
+    fn ids(block_ids: &[&str]) -> std::collections::HashSet<String> {
+        block_ids.iter().map(|id| id.to_string()).collect()
+    }
+
+    #[test]
+    fn resync_drops_suggestions_but_keeps_validated_work() {
+        let db = open_temp();
+        bulk_insert(
+            db.conn(),
+            &[unit("a", "old a"), unit("b", "old b"), unit("c", "same")],
+        )
+        .unwrap();
+        update_translation(db.conn(), "a", "vieux a", "ai_suggested").unwrap();
+        update_translation(db.conn(), "b", "vieux b", STATUS_HUMAN_VALIDATED).unwrap();
+
+        let outcome = resync_sources(
+            db.conn(),
+            &[unit("a", "new a"), unit("b", "new b"), unit("c", "same")],
+        )
+        .unwrap();
+
+        assert_eq!(
+            outcome,
+            SourceResync {
+                repaired: 2,
+                dropped: 1,
+                kept: 1
+            }
+        );
+        let a = get_many(db.conn(), &["a".to_string()]).unwrap();
+        assert_eq!(a[0].source_text, "new a");
+        assert_eq!(a[0].status, STATUS_NOT_TRANSLATED);
+        assert_eq!(a[0].translated_text, "");
+        let b = get_many(db.conn(), &["b".to_string()]).unwrap();
+        assert_eq!(b[0].source_text, "new b");
+        assert_eq!(b[0].status, STATUS_HUMAN_VALIDATED);
+        assert_eq!(b[0].translated_text, "vieux b");
+    }
+
+    #[test]
+    fn a_translation_follows_its_line_when_the_block_id_is_rebuilt() {
+        let db = open_temp();
+        bulk_insert(db.conn(), &[unit("old_id", "Hello.")]).unwrap();
+        update_translation(db.conn(), "old_id", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        bulk_insert(db.conn(), &[unit("new_id", "Hello.")]).unwrap();
+
+        let moved = transfer_orphan_translations(db.conn(), &ids(&["new_id"])).unwrap();
+
+        assert_eq!(moved, 1);
+        let heir = get_many(db.conn(), &["new_id".to_string()]).unwrap();
+        assert_eq!(heir[0].translated_text, "Bonjour.");
+        assert_eq!(heir[0].status, STATUS_HUMAN_VALIDATED);
+    }
+
+    #[test]
+    fn a_translation_spread_over_several_lines_becomes_imported() {
+        let db = open_temp();
+        bulk_insert(db.conn(), &[unit("old_id", "Yes.")]).unwrap();
+        update_translation(db.conn(), "old_id", "Oui.", STATUS_HUMAN_VALIDATED).unwrap();
+        bulk_insert(db.conn(), &[unit("n1", "Yes."), unit("n2", "Yes.")]).unwrap();
+
+        let moved = transfer_orphan_translations(db.conn(), &ids(&["n1", "n2"])).unwrap();
+
+        assert_eq!(moved, 2);
+        for heir in get_many(db.conn(), &["n1".to_string(), "n2".to_string()]).unwrap() {
+            assert_eq!(heir.translated_text, "Oui.");
+            assert_eq!(heir.status, "imported");
+        }
+    }
+
+    #[test]
+    fn a_validated_heir_is_never_overwritten_by_a_transfer() {
+        let db = open_temp();
+        bulk_insert(db.conn(), &[unit("old_id", "Hi."), unit("new_id", "Hi.")]).unwrap();
+        update_translation(db.conn(), "old_id", "Salut.", "ai_suggested").unwrap();
+        update_translation(db.conn(), "new_id", "Coucou.", STATUS_HUMAN_VALIDATED).unwrap();
+
+        let moved = transfer_orphan_translations(db.conn(), &ids(&["new_id"])).unwrap();
+
+        assert_eq!(moved, 0);
+        let heir = get_many(db.conn(), &["new_id".to_string()]).unwrap();
+        assert_eq!(heir[0].translated_text, "Coucou.");
+    }
+
+    #[test]
+    fn delete_stale_removes_vanished_units() {
+        let db = open_temp();
+        bulk_insert(db.conn(), &[unit("a", "A"), unit("b", "B"), unit("c", "C")]).unwrap();
+
+        let deleted = delete_stale(db.conn(), &ids(&["a", "b"])).unwrap();
+
+        assert_eq!(deleted, 1);
+        let left: Vec<String> = get_all(db.conn(), None, None)
+            .unwrap()
+            .into_iter()
+            .map(|u| u.block_id)
+            .collect();
+        assert_eq!(left, ["a", "b"]);
+    }
+
+    #[test]
+    fn delete_stale_refuses_to_trust_a_truncated_parse() {
+        let db = open_temp();
+        bulk_insert(
+            db.conn(),
+            &[
+                unit("a", "A"),
+                unit("b", "B"),
+                unit("c", "C"),
+                unit("d", "D"),
+            ],
+        )
+        .unwrap();
+
+        let deleted = delete_stale(db.conn(), &ids(&["a"])).unwrap();
+
+        assert_eq!(deleted, 0);
+        assert_eq!(get_all(db.conn(), None, None).unwrap().len(), 4);
     }
 }

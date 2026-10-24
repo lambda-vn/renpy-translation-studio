@@ -1,7 +1,18 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { api } from '$lib/api';
+	import { locale, t } from '$lib/i18n';
 	import { project } from '$lib/stores';
 
 	let { children } = $props();
+
+	onMount(async () => {
+		try {
+			$locale = (await api.getSettings()).locale ?? 'en';
+		} catch {
+			// English stays: a settings read failing must not blank the interface.
+		}
+	});
 </script>
 
 <div class="app-shell">
@@ -13,12 +24,12 @@
 			</span>
 		{/if}
 		<nav>
-			<a href="/">Setup</a>
-			<a href="/review" class:disabled={!$project}>Review</a>
-			<a href="/characters" class:disabled={!$project}>Characters</a>
-			<a href="/universe" class:disabled={!$project}>Universe</a>
-			<a href="/export" class:disabled={!$project}>Export</a>
-			<a href="/provider-config">Providers</a>
+			<a href="/">{$t('project_setup.step_setup')}</a>
+			<a href="/review" class:disabled={!$project}>{$t('project_setup.step_review')}</a>
+			<a href="/characters" class:disabled={!$project}>{$t('characters.title')}</a>
+			<a href="/universe" class:disabled={!$project}>{$t('universe.title')}</a>
+			<a href="/export" class:disabled={!$project}>{$t('project_setup.step_export')}</a>
+			<a href="/provider-config">{$t('provider_config.title')}</a>
 		</nav>
 	</header>
 	<main>

@@ -1,8 +1,11 @@
-//! Reading and writing Ren'Py's own generated translation files. Port
-//! of `core/renpy/` — parser and writer only; the extraction subprocess
-//! wrapper (`cli.py`, `engine.py`) belongs to a later phase, `beta.2`
-//! scoping the Rust app to projects already extracted elsewhere.
+//! Running Ren'Py and reading and writing its generated translation
+//! files. Port of `core/renpy/`: the engine choice and subprocess wrapper
+//! (`engine`, `cli`, ported in `rc.2`), the parser and the writer.
 
+pub mod archive;
+pub mod cli;
+pub mod engine;
 pub mod parser;
 pub mod say_line;
+pub mod unpacker;
 pub mod writer;

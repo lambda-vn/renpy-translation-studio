@@ -145,6 +145,7 @@ pub struct SettingsPayload {
     pub libretranslate_url: Option<String>,
     pub libretranslate_api_key_set: bool,
     pub verbose_logging: bool,
+    pub sdk_path: Option<String>,
     pub available_providers: Vec<&'static str>,
     pub available_llm_providers: Vec<&'static str>,
 }
