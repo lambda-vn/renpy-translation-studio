@@ -6,11 +6,12 @@
 //! grounds, and it lands in `ai_suggested` because a machine wrote it.
 //! The screen stays where a human validates.
 //!
-//! Not ported yet: the live-refresh notification (`core::live::notify`),
-//! Python's own "bonus, never a dependency". Until it is, every write
-//! below applies to the database and stops there.
+//! Every write below tells a running application which lines it touched
+//! (`core::live`), a bonus the server never waits on and never needs.
 
 use std::path::Path;
+
+use crate::core::live;
 use std::sync::Arc;
 
 use rmcp::handler::server::router::tool::ToolRouter;
@@ -278,6 +279,7 @@ impl RtsServer {
         let known = repositories::get_all(session.conn(), None, None).map_err(|e| e.to_string())?;
 
         let mut accepted: Vec<(String, String, String)> = Vec::new();
+        let mut drafted: Vec<String> = Vec::new();
         let mut rejected = Vec::new();
         for item in args.items {
             let Some(unit) = known.iter().find(|u| u.block_id == item.block_id) else {
@@ -318,6 +320,7 @@ impl RtsServer {
                 }
                 repositories::mark_as_draft(session.conn(), &item.block_id, &item.translation)
                     .map_err(|e| e.to_string())?;
+                drafted.push(item.block_id);
                 continue;
             }
             accepted.push((item.block_id, item.translation, "ai_suggested".to_string()));
@@ -325,6 +328,15 @@ impl RtsServer {
 
         let applied = repositories::update_translations(session.conn(), &accepted)
             .map_err(|e| e.to_string())?;
+        // A line drafted over a validated one changed as much as the others;
+        // the Python server forgot to say so.
+        let changed: Vec<String> = accepted
+            .into_iter()
+            .map(|(block_id, _, _)| block_id)
+            .chain(drafted)
+            .collect();
+        let project = session.path.clone();
+        live::notify(&project, &changed).await;
         Ok(Json(SubmitTranslationsResult { applied, rejected }))
     }
 
@@ -344,7 +356,10 @@ impl RtsServer {
             !args.note.trim().is_empty(),
         )
         .map_err(|e| e.to_string())?;
-        Ok(Json(refetch_unit(session, &args.block_id)?))
+        let unit = refetch_unit(session, &args.block_id)?;
+        let project = session.path.clone();
+        live::notify(&project, std::slice::from_ref(&args.block_id)).await;
+        Ok(Json(unit))
     }
 
     #[tool(description = "Flag a line for a second look, or clear the flag.")]
@@ -357,7 +372,10 @@ impl RtsServer {
         require_unit(session, &args.block_id)?;
         repositories::set_needs_review(session.conn(), &args.block_id, args.needs_review)
             .map_err(|e| e.to_string())?;
-        Ok(Json(refetch_unit(session, &args.block_id)?))
+        let unit = refetch_unit(session, &args.block_id)?;
+        let project = session.path.clone();
+        live::notify(&project, std::slice::from_ref(&args.block_id)).await;
+        Ok(Json(unit))
     }
 
     #[tool(
@@ -376,6 +394,10 @@ impl RtsServer {
             &session.target_language(),
         )
         .map_err(|e| e.to_string())?;
+        if filled > 0 {
+            let project = session.path.clone();
+            live::notify_reload(&project).await;
+        }
         Ok(Json(FillFromMemoryResult { filled }))
     }
 
@@ -481,6 +503,10 @@ impl RtsServer {
             args.statuses.as_deref(),
         )
         .map_err(|e| e.to_string())?;
+        if cleared > 0 {
+            let project = session.path.clone();
+            live::notify_reload(&project).await;
+        }
         Ok(Json(ClearTranslationsResult { cleared }))
     }
 }

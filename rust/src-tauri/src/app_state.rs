@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
+use crate::core::live::LiveServer;
 use crate::core::settings::Settings;
 use crate::core::translation::job::CancelToken;
 use crate::mcp_server::session::ProjectSession;
@@ -28,6 +29,8 @@ pub struct AppState {
     /// Set while an extraction runs, so a second one is refused rather
     /// than racing the first over the same `tl/` folder.
     pub extracting: Arc<AtomicBool>,
+    /// The endpoint other processes notify, while the review screen is up.
+    pub live: Arc<Mutex<Option<LiveServer>>>,
 }
 
 impl Default for AppState {
@@ -37,6 +40,7 @@ impl Default for AppState {
             settings: Arc::new(Mutex::new(Settings::load())),
             job: Arc::new(Mutex::new(None)),
             extracting: Arc::new(AtomicBool::new(false)),
+            live: Arc::new(Mutex::new(None)),
         }
     }
 }

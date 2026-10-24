@@ -46,7 +46,7 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 | M1 | 17 outils | ✅ | Les 17 sont portés ; handshake à 17 outils vérifié sous Windows (la CI des trois systèmes tournera avec le commit). |
 | M2 | Drapeaux destructeurs en ligne de commande seulement | ✅ | Porté tel quel. |
 | M3 | Ne rouvre que les projets du registre | ✅ | Porté. |
-| M4 | Rafraîchissement en direct (`live.json`) | ❌ | `core::live` et le serveur loopback absents : l'écran de révision ne se remplit pas pendant qu'un assistant écrit. |
+| M4 | Rafraîchissement en direct (`live.json`) | ✅ | `core::live` : même `.rts/live.json`, jeton obligatoire comparé à temps constant, tailles bornées, notification jamais bloquante. Les écritures du serveur MCP (soumission, note, drapeau, mémoire, effacement) préviennent l'écran de révision, qui met les lignes visibles à jour sur place. Vérifié dans la vraie fenêtre avec un vrai processus `rts-mcp` (voir le README). |
 | M5 | Lanceur `rts-mcp` à côté de l'application | 🟡 | Sidecar Tauri empaqueté et handshaké **avant** installation ; pas lancé depuis un installateur. |
 
 ## Écrans (docs/en)
@@ -82,11 +82,11 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 
 ## Bilan
 
-- ✅ 14 · 🟡 15 · ❌ 11 sur 40 lignes.
-- Le noyau, les données, l'extraction et l'échange de fichiers sont à
-  parité, ainsi que les 17 outils MCP. Ce qui manque est presque tout de
-  l'**interface** (S4 à S17, F10) et une fonction : le rafraîchissement en
-  direct (M4).
+- ✅ 15 · 🟡 15 · ❌ 10 sur 40 lignes.
+- Le noyau, les données, l'extraction, l'échange de fichiers et le
+  rafraîchissement en direct sont à parité, ainsi que les 17 outils MCP. Ce qui manque est presque tout de
+  l'**interface** (S4 à S17, F10) : plus aucune fonction du noyau n'est
+  absente.
 - L'extraction (F1, S3) est faite : la 2.0.0 peut créer un projet sans la
   1.x, ce qui était le blocage le plus lourd pour remplacer `main`.
 - Rien ici n'a été vu dans la vraie fenêtre Tauri.

@@ -13,8 +13,8 @@ avec le code Python (`../src/`) le temps du chantier.
 
 La rc.2 est la check-list de parité contre la 1.0.0 : voir
 [`PARITY.md`](PARITY.md), qui dit ligne par ligne ce qui est fait, partiel
-ou absent. Étapes livrées : **l'extraction**, puis **l'échange de
-fichiers et les restes du noyau**.
+ou absent. Étapes livrées : **l'extraction**, **l'échange de fichiers et
+les restes du noyau**, puis **le rafraîchissement en direct**.
 
 `core::extraction` lance Ren'Py et met la base à jour ; il s'appuie sur
 `core::renpy::{engine, cli, archive, unpacker}` (moteur du jeu puis SDK,
@@ -26,6 +26,22 @@ l'occasion (`resync_sources`, `transfer_orphan_translations`,
 sélecteur natif, langues, SDK, trois modes si une traduction existe) et
 le mécanisme d'i18n (catalogues de la 1.0.0 repris) sont en place. Le
 nettoyage des sources dépaquetées suit l'export du zip, comme en 1.x.
+
+**Étape 3** : `core::live` porte le canal de notification de la 1.0.0 : le
+serveur MCP publie ce qu'il écrit, l'écran de révision ouvert l'écoute
+(`start_live` / `stop_live`, un seul point d'entrée local, jeton exigé) et
+met les lignes visibles à jour sur place. Une ligne qui a le curseur ou une
+modification en attente n'est jamais écrasée ; une action en masse
+(effacement, mémoire) recharge la page. Une ligne rendue brouillon par
+écrasement d'une validation (`--allow-overwrite-validated`) est désormais
+signalée aussi, ce que le serveur Python oubliait. 271 tests, dont 13 pour le
+canal (jeton, requêtes malformées, corps trop gros). Vérifié dans la vraie
+fenêtre avec un vrai processus `rts-mcp` : une soumission remplit la ligne
+affichée sans rechargement, la ligne qui a le curseur garde sa valeur, une
+ligne non focalisée se met à jour, un effacement en masse recharge.
+**Non vérifié** : macOS et Linux pour ce canal (sockets locales, aucun
+test ne dépend d'un système) et le comportement avec deux fenêtres ouvertes
+sur le même projet (la seconde écrase la publication de la première).
 
 **Étape 2** : `core::interchange` (CSV avec BOM, XLIFF 1.2 lu sans jamais
 expanser une entité, JSON ; aperçu avant écriture, statuts honnêtes,
@@ -262,9 +278,7 @@ seule commande de l'app desktop, héritée de l'alpha.1.
 Non porté, volontairement : `detect_characters` a besoin de
 `core::renpy::character_detector`, pas construit sur cette branche
 (`fill_from_memory` l'est depuis la rc.1). Le canal de rafraîchissement en direct (`core::live`)
-reste absent aussi — Python le documente déjà comme « un bonus, jamais
-une dépendance », et rien ici ne fait encore tourner l'écran de révision
-pour l'écouter. `on_batch_start` et l'annulation fine que Python propage
+est porté depuis la rc.2. `on_batch_start` et l'annulation fine que Python propage
 jusque dans le sous-découpage interne de chaque fournisseur restent
 également hors périmètre, comme décrit pour l'alpha.3. Toujours absents
 aussi : le pipeline d'extraction (`renpy/cli.py`, `renpy/engine.py`) et

@@ -61,6 +61,23 @@ pub async fn list_units(
     })
 }
 
+/// The units carrying these identifiers, as the review screen shows them.
+/// Unknown ids are skipped. Answers the live-refresh channel, which says
+/// which lines another process just wrote and nothing about their content.
+#[tauri::command]
+pub async fn get_units(
+    state: State<'_, AppState>,
+    block_ids: Vec<String>,
+) -> Result<Vec<UnitPayload>, String> {
+    let guard = state.current.lock().await;
+    let session = require_session(&guard)?;
+    let units = repositories::get_many(session.conn(), &block_ids).map_err(|e| e.to_string())?;
+    Ok(units
+        .iter()
+        .map(|unit| UnitPayload::from_unit(session, unit))
+        .collect())
+}
+
 /// Store a unit's live text as a draft while the user is still typing.
 ///
 /// Unlike [`validate_unit`], this applies unconditionally, un-validating

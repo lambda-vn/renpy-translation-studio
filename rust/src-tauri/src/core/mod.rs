@@ -5,6 +5,7 @@ pub mod exporter;
 pub mod extraction;
 pub mod interchange;
 pub mod languages;
+pub mod live;
 pub mod project_actions;
 pub mod renpy;
 pub mod settings;

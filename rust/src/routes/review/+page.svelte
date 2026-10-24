@@ -47,17 +47,22 @@
 
 	let searchInput = $state<HTMLInputElement | undefined>();
 	let unlistenJob: UnlistenFn | undefined;
+	let unlistenLive: UnlistenFn | undefined;
 	let lastRefresh = 0;
 
 	onMount(async () => {
 		if (!$project) return;
 		await Promise.all([loadFiles(), loadProviders(), api.isTranslationJobRunning().then((r) => (jobRunning = r))]);
 		unlistenJob = await listen<JobEventPayload>('translation-job', handleJobEvent);
+		unlistenLive = await listen<{ blockIds: string[] | null }>('live-changed', handleLiveChange);
+		api.startLive().catch(() => {});
 		window.addEventListener('keydown', onGlobalKeydown);
 	});
 
 	onDestroy(() => {
 		unlistenJob?.();
+		unlistenLive?.();
+		api.stopLive().catch(() => {});
 		window.removeEventListener('keydown', onGlobalKeydown);
 		for (const t of Object.values(editTimers)) clearTimeout(t);
 	});
@@ -240,6 +245,51 @@
 		}
 	}
 
+	/** The row whose field holds the caret, if any: nobody writes under it. */
+	function editedBlockId(): string | undefined {
+		const active = document.activeElement;
+		return active instanceof HTMLElement ? active.dataset.blockId : undefined;
+	}
+
+	/**
+	 * Refresh the lines another process just wrote, in place.
+	 *
+	 * Only the rows already on screen are touched, and the list is never
+	 * rebuilt: under a "not translated" filter a reload would make the lines
+	 * disappear instead of filling in. The row being edited is skipped
+	 * whatever it holds, and so is one with a pending edit: the last word
+	 * wins is not a rule anyone would accept from a machine writing
+	 * underneath them.
+	 *
+	 * `null` means a bulk action rewrote more than it can name, so the page
+	 * is reloaded, unless a field holds the caret; the counters move either
+	 * way.
+	 */
+	async function handleLiveChange(event: { payload: { blockIds: string[] | null } }) {
+		const ids = event.payload.blockIds;
+		const editing = editedBlockId();
+		try {
+			if (ids === null) {
+				if (editing === undefined) await loadUnits();
+			} else {
+				const shown = new Set(units.map((u) => u.blockId));
+				const wanted = ids.filter((id) => shown.has(id) && id !== editing && !editTimers[id]);
+				if (wanted.length > 0) {
+					for (const fresh of await api.getUnits(wanted)) {
+						const index = units.findIndex((u) => u.blockId === fresh.blockId);
+						if (index >= 0) {
+							units[index] = fresh;
+							drafts[fresh.blockId] = fresh.translatedText;
+						}
+					}
+				}
+			}
+			files = await api.listFiles();
+		} catch (e) {
+			error = String(e);
+		}
+	}
+
 	function throttledRefresh() {
 		const now = Date.now();
 		if (now - lastRefresh < REFRESH_THROTTLE_MS) return;
@@ -393,6 +443,7 @@
 						</div>
 						<textarea
 							rows="1"
+							data-block-id={unit.blockId}
 							value={drafts[unit.blockId] ?? ''}
 							oninput={(e) => onEdit(unit.blockId, (e.target as HTMLTextAreaElement).value)}
 							onblur={() => flushDraft(unit.blockId)}

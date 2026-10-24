@@ -181,6 +181,9 @@ export const api = {
 		mode: ExtractMode;
 	}) => invoke<ExtractionOutcome>('extract_project', args),
 
+	startLive: () => invoke<void>('start_live'),
+	stopLive: () => invoke<void>('stop_live'),
+	getUnits: (blockIds: string[]) => invoke<UnitPayload[]>('get_units', { blockIds }),
 	listFiles: () => invoke<FileEntry[]>('list_files'),
 	listUnits: (args: ListUnitsArgs) => invoke<ListUnitsResult>('list_units', { args }),
 	saveDraft: (blockId: string, translatedText: string) =>
