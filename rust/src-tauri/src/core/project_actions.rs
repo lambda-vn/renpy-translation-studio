@@ -1,12 +1,12 @@
 //! Project-wide actions orchestrating a repository and another core
-//! module. Port of `core/project_actions.py`'s `fill_from_memory` —
-//! `detect_and_store_characters` needs `character_detector`, still not
-//! ported.
+//! module. Port of `core/project_actions.py`: `fill_from_memory` and
+//! `detect_and_store_characters`.
 
 use std::path::Path;
 
 use rusqlite::Connection;
 
+use crate::core::renpy::character_detector;
 use crate::core::storage::{repositories, translation_memory};
 
 /// Fill untranslated lines with what the translation memory holds.
@@ -42,6 +42,22 @@ pub fn fill_from_memory(
         })
         .collect();
     repositories::update_translations(conn, &entries)
+}
+
+/// Scan the project for `Character()` definitions and save them.
+///
+/// The scan is heuristic and the write is an upsert that overwrites the
+/// display name, so one edited by hand goes back to whatever the scan reads
+/// in the source. Notes survive, being the part no scan produces.
+///
+/// Returns the number of characters the scan found, whether or not each
+/// was already stored.
+pub fn detect_and_store_characters(conn: &Connection, project: &Path) -> rusqlite::Result<usize> {
+    let detected = character_detector::detect(project);
+    for character in &detected {
+        repositories::upsert_character(conn, &character.variable, &character.display_name)?;
+    }
+    Ok(detected.len())
 }
 
 #[cfg(test)]

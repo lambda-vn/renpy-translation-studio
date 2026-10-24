@@ -13,7 +13,8 @@ avec le code Python (`../src/`) le temps du chantier.
 
 La rc.2 est la check-list de parité contre la 1.0.0 : voir
 [`PARITY.md`](PARITY.md), qui dit ligne par ligne ce qui est fait, partiel
-ou absent. Première étape livrée : **l'extraction**.
+ou absent. Étapes livrées : **l'extraction**, puis **l'échange de
+fichiers et les restes du noyau**.
 
 `core::extraction` lance Ren'Py et met la base à jour ; il s'appuie sur
 `core::renpy::{engine, cli, archive, unpacker}` (moteur du jeu puis SDK,
@@ -26,7 +27,21 @@ sélecteur natif, langues, SDK, trois modes si une traduction existe) et
 le mécanisme d'i18n (catalogues de la 1.0.0 repris) sont en place. Le
 nettoyage des sources dépaquetées suit l'export du zip, comme en 1.x.
 
-**Vérifié** : 224 tests ; contre le vrai SDK 8.5.3 sur une copie de The
+**Étape 2** : `core::interchange` (CSV avec BOM, XLIFF 1.2 lu sans jamais
+expanser une entité, JSON ; aperçu avant écriture, statuts honnêtes,
+lignes validées protégées, texte réécrit refusé par le contrôle qualité
+écrit en brouillon), `core::renpy::character_detector` (donc le 17ᵉ outil
+MCP, `detect_characters`) et `core::translation::universe_generator`.
+L'écran de révision gagne le bouton « Mémoire » et la boîte « Import /
+export » ; l'écran des personnages, la détection ; celui de l'univers, la
+génération avec confirmation à chaque envoi. 258 tests. Dans la vraie
+fenêtre : mémoire (51 lignes remplies), export des trois formats, import
+d'un fichier relu (une ligne validée, une suggestion réécrite devenue
+`imported`), détection (2 personnages) et chemin d'échec de la
+génération. **Non vérifié** : les boîtes natives d'enregistrement et
+d'ouverture de fichier, et la génération contre un vrai modèle.
+
+**Vérifié à l'étape 1** : 224 tests ; contre le vrai SDK 8.5.3 sur une copie de The
 Question (qui livre déjà un `tl/french` : 483 unités, 95 traductions
 adoptées en `imported`, 7 lignes sans texte validées d'office, les trois
 modes) ; sur un jeu packagé Ren'Py 7 avec son propre moteur et un

@@ -153,6 +153,20 @@ export interface ExtractionFailure {
 	params: Record<string, string>;
 }
 
+export interface ImportPreview {
+	applicable: number;
+	unknown: number;
+	stale: number;
+	empty: number;
+	protected: number;
+	flagged: number;
+}
+
+export interface ImportOutcome {
+	applied: number;
+	plan: ImportPreview;
+}
+
 export const api = {
 	listRecentProjects: () => invoke<ProjectEntry[]>('list_recent_projects'),
 	openProject: (path: string) => invoke<ProjectInfo>('open_project', { path }),
@@ -193,11 +207,21 @@ export const api = {
 	listCharacters: () => invoke<CharacterEntry[]>('list_characters'),
 	upsertCharacter: (variable: string, displayName: string, notes: string | null) =>
 		invoke<CharacterEntry[]>('upsert_character', { variable, displayName, notes }),
+	detectCharacters: () => invoke<CharacterEntry[]>('detect_characters'),
 	deleteCharacter: (variable: string) =>
 		invoke<CharacterEntry[]>('delete_character', { variable }),
 
 	getUniverseSummary: () => invoke<string | null>('get_universe_summary'),
 	setUniverseSummary: (summary: string) => invoke<void>('set_universe_summary', { summary }),
+	generateUniverseSummary: () => invoke<string>('generate_universe_summary'),
+
+	exportInterchange: (path: string, sourceFile: string | null) =>
+		invoke<number>('export_interchange', { path, sourceFile }),
+	planInterchangeImport: (path: string) =>
+		invoke<ImportPreview>('plan_interchange_import', { path }),
+	applyInterchangeImport: (path: string) =>
+		invoke<ImportOutcome>('apply_interchange_import', { path }),
+	fillFromMemory: () => invoke<number>('fill_from_memory'),
 
 	saveProject: () => invoke<void>('save_project'),
 	exportProject: (outputPath: string) => invoke<void>('export_project', { outputPath })

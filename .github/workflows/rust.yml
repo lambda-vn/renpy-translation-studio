@@ -107,6 +107,16 @@ jobs:
 
       - run: npm ci
 
+      # The bundler refuses an npm package and a crate that disagree on the
+      # minor version, and says so only once the release build is over,
+      # ten minutes in. `tauri info` says the same in seconds, in its output
+      # rather than always in its exit code, so the output is what is read.
+      - name: Check the Tauri packages agree
+        shell: bash
+        run: |
+          npx tauri info 2>&1 | tee tauri-info.txt
+          ! grep -qi "mismatched" tauri-info.txt
+
       - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
 
       # No -D warnings. The extraction pipeline is not ported yet, so its

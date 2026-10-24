@@ -8,6 +8,8 @@
 		type JobEventPayload,
 		type QualityIssuePayload
 	} from '$lib/api';
+	import InterchangeDialog from '$lib/InterchangeDialog.svelte';
+	import { t } from '$lib/i18n';
 	import { project } from '$lib/stores';
 
 	const PAGE_SIZE = 50;
@@ -15,6 +17,8 @@
 	const REFRESH_THROTTLE_MS = 1000;
 
 	let error = $state('');
+	let notice = $state('');
+	let interchangeOpen = $state(false);
 
 	let files = $state<FileEntry[]>([]);
 	let selectedFile = $state('');
@@ -104,6 +108,23 @@
 		} catch (e) {
 			error = String(e);
 		}
+	}
+
+	async function fillMemory() {
+		error = '';
+		try {
+			const filled = await api.fillFromMemory();
+			notice = filled > 0 ? $t('review.memory_filled', { n: filled }) : $t('review.memory_none');
+			await Promise.all([loadFiles(), loadUnits()]);
+		} catch (e) {
+			error = String(e);
+		}
+	}
+
+	async function interchangeDone(message: string) {
+		interchangeOpen = false;
+		notice = message;
+		await Promise.all([loadFiles(), loadUnits()]);
 	}
 
 	function selectFile(f: string) {
@@ -288,6 +309,7 @@
 
 		<section class="main">
 			{#if error}<p class="error">{error}</p>{/if}
+			{#if notice}<p class="notice">{notice}</p>{/if}
 
 			<div class="toolbar">
 				<select bind:value={statusFilter} onchange={applyFilters}>
@@ -307,6 +329,12 @@
 					oninput={applyFilters}
 				/>
 				<button onclick={saveProject}>Save (Ctrl+S)</button>
+				<button title={$t('review.memory_tooltip')} onclick={fillMemory}>
+					{$t('review.memory_label')}
+				</button>
+				<button title={$t('interchange.tooltip')} onclick={() => (interchangeOpen = true)}>
+					{$t('interchange.label')}
+				</button>
 			</div>
 
 			<div class="job-bar">
@@ -401,7 +429,19 @@
 	</div>
 {/if}
 
+{#if interchangeOpen}
+	<InterchangeDialog
+		{selectedFile}
+		ondone={interchangeDone}
+		onclose={() => (interchangeOpen = false)}
+	/>
+{/if}
+
 <style>
+	.notice {
+		color: #276749;
+	}
+
 	.error {
 		color: #b00020;
 	}

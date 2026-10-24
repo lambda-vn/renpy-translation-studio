@@ -183,6 +183,13 @@ pub struct CharactersResult {
     pub characters: Vec<CharacterEntry>,
 }
 
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+pub struct DetectCharactersResult {
+    /// How many definitions the scan found.
+    pub found: usize,
+    pub characters: Vec<CharacterEntry>,
+}
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct UpsertCharacterArgs {
     /// The Ren'Py variable the character is defined as.

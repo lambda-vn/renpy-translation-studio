@@ -1,7 +1,6 @@
 //! The character glossary screen. Port of the CRUD slice of
-//! `app/views/character_glossary_view.py` — `Character()` source
-//! scanning (`detect_and_store_characters`) is not ported (see
-//! `rust/README.md`); characters are added and edited by hand.
+//! `app/views/character_glossary_view.py`: the glossary is edited by hand
+//! or filled by scanning the game's sources (`detect_characters`).
 
 use tauri::State;
 
@@ -24,6 +23,17 @@ fn characters(
 pub async fn list_characters(state: State<'_, AppState>) -> Result<Vec<CharacterEntry>, String> {
     let guard = state.current.lock().await;
     characters(super::require_session(&guard)?)
+}
+
+/// Scan the game's sources for `Character()` definitions and store them.
+/// Returns the glossary as it now stands.
+#[tauri::command]
+pub async fn detect_characters(state: State<'_, AppState>) -> Result<Vec<CharacterEntry>, String> {
+    let guard = state.current.lock().await;
+    let session = super::require_session(&guard)?;
+    crate::core::project_actions::detect_and_store_characters(session.conn(), &session.path)
+        .map_err(|e| e.to_string())?;
+    characters(session)
 }
 
 #[tauri::command]

@@ -3,6 +3,7 @@
 //! (`engine`, `cli`, ported in `rc.2`), the parser and the writer.
 
 pub mod archive;
+pub mod character_detector;
 pub mod cli;
 pub mod engine;
 pub mod parser;

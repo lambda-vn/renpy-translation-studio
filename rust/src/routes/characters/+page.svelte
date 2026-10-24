@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api, type CharacterEntry } from '$lib/api';
+	import { t } from '$lib/i18n';
 	import { project } from '$lib/stores';
 
 	let characters = $state<CharacterEntry[]>([]);
 	let error = $state('');
 	let newVariable = $state('');
 	let newDisplayName = $state('');
+	let notice = $state('');
 
 	onMount(refresh);
 
@@ -25,6 +27,17 @@
 			characters = await api.upsertCharacter(newVariable.trim(), newDisplayName.trim(), null);
 			newVariable = '';
 			newDisplayName = '';
+		} catch (e) {
+			error = String(e);
+		}
+	}
+
+	async function detect() {
+		error = '';
+		try {
+			const before = characters.length;
+			characters = await api.detectCharacters();
+			notice = $t('characters.detected_count', { n: Math.max(characters.length - before, 0) || characters.length });
 		} catch (e) {
 			error = String(e);
 		}
@@ -58,6 +71,8 @@
 	<p class="error">Open a project first.</p>
 {:else}
 	{#if error}<p class="error">{error}</p>{/if}
+	{#if notice}<p class="hint">{notice}</p>{/if}
+	<p><button onclick={detect}>{$t('characters.detect')}</button></p>
 
 	<section class="add-row">
 		<input type="text" placeholder="Ren'Py variable (e.g. e)" bind:value={newVariable} />

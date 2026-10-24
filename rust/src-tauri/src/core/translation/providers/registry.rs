@@ -34,6 +34,27 @@ fn parse_ollama_batch_size(value: Option<String>) -> Option<usize> {
 }
 
 /// Build a configured provider instance for `provider_id`.
+/// The Ollama provider as the settings describe it. Kept apart from [`get`]
+/// for the callers that need what only an LLM does: `complete()`.
+pub fn ollama(
+    settings: &mut Settings,
+    universe_summary: Option<String>,
+    characters: Vec<Character>,
+) -> Result<OllamaProvider, String> {
+    let model = non_empty(settings.get("ollama_model"))
+        .ok_or_else(|| "Ollama is not configured.".to_string())?;
+    let endpoint = non_empty(settings.get("ollama_endpoint"))
+        .unwrap_or_else(|| "http://localhost:11434".to_string());
+    let batch_size = parse_ollama_batch_size(settings.get("ollama_batch_size"));
+    Ok(OllamaProvider::new(
+        &endpoint,
+        model,
+        universe_summary,
+        characters,
+        batch_size,
+    ))
+}
+
 pub fn get(
     settings: &mut Settings,
     provider_id: &str,
@@ -46,20 +67,7 @@ pub fn get(
                 .ok_or_else(|| "DeepL is not configured.".to_string())?;
             Ok(Box::new(DeepLProvider::new(api_key, &characters)))
         }
-        OllamaProvider::ID => {
-            let model = non_empty(settings.get("ollama_model"))
-                .ok_or_else(|| "Ollama is not configured.".to_string())?;
-            let endpoint = non_empty(settings.get("ollama_endpoint"))
-                .unwrap_or_else(|| "http://localhost:11434".to_string());
-            let batch_size = parse_ollama_batch_size(settings.get("ollama_batch_size"));
-            Ok(Box::new(OllamaProvider::new(
-                &endpoint,
-                model,
-                universe_summary,
-                characters,
-                batch_size,
-            )))
-        }
+        OllamaProvider::ID => Ok(Box::new(ollama(settings, universe_summary, characters)?)),
         LibreTranslateProvider::ID => {
             let url = non_empty(settings.get("libretranslate_url"))
                 .ok_or_else(|| "LibreTranslate is not configured.".to_string())?;

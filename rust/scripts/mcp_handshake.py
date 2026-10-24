@@ -30,6 +30,7 @@ EXPECTED_TOOLS = frozenset(
     {
         "clear_translations",
         "delete_character",
+        "detect_characters",
         "fill_from_memory",
         "get_unit_context",
         "get_universe_summary",

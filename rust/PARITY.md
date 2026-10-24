@@ -24,10 +24,10 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 | F3 | Drapeau « à revoir » et note par ligne | 🟡 | Commandes `set_needs_review` / `set_note` et saisie de note dans la ligne. L'écriture d'une note ne lève pas le drapeau côté UI (à vérifier). |
 | F4 | Job de fond, contrôles qualité, relances | ✅ | `job.rs` testé (relances 8 puis 1, interpolation refusée). |
 | F5 | Progression en bandeau, révision utilisable | 🟡 | Barre de progression et annulation présentes ; jamais vu dans la vraie fenêtre. |
-| F6 | Glossaire des personnages | 🟡 | Écran CRUD. Pas de détection automatique (`character_detector`). |
-| F7 | Résumé d'univers | 🟡 | Édition et sauvegarde. Pas de génération IA, donc pas non plus la confirmation d'envoi à un tiers. |
-| F8 | Import / export CSV, XLIFF 1.2, JSON | ❌ | `interchange` non porté. |
-| F9 | Mémoire de traduction partagée | 🟡 | Moteur porté et compatible (`memory.db`), outil MCP `fill_from_memory`. **Pas de bouton dans l'interface**, et son volume n'est pas affiché dans les paramètres. |
+| F6 | Glossaire des personnages | ✅ | Écran CRUD et détection automatique (`core::renpy::character_detector`, aussi exposée au MCP). L'écran reste en anglais (voir S16). |
+| F7 | Résumé d'univers | 🟡 | Édition, sauvegarde et génération IA (`core::translation::universe_generator`, prompt repris à l'identique, confirmation d'envoi à chaque fois). Le chemin d'échec est vu dans la vraie fenêtre ; **jamais exécuté contre un vrai modèle** (Ollama éteint). |
+| F8 | Import / export CSV, XLIFF 1.2, JSON | ✅ | `core::interchange` (21 tests portés de la suite Python), commandes et boîte de dialogue dans la barre de révision. Export, aperçu et application exercés dans la vraie fenêtre sur les trois formats ; **les boîtes natives d'enregistrement et d'ouverture n'ont pas été pilotées** (chemins passés directement aux commandes). Un export écrit des chemins relatifs au jeu, là où la 1.x écrivait les absolus. |
+| F9 | Mémoire de traduction partagée | ✅ | Moteur compatible (`memory.db`), outil MCP et bouton « Mémoire » (51 lignes remplies sur la démo, puis aucune au second appel). Son volume n'est pas encore affiché dans les paramètres (S14). |
 | F10 | Tout au clavier, F1, statuts en glyphe + libellé lecteur d'écran | ❌ | Seuls Ctrl+S, Ctrl+F et Ctrl+Entrée existent. Aucune aide F1, aucun `aria-*` dans `src/`, statuts sans glyphe. |
 | F11 | Export zip `<jeu>/game/tl/<langue>/` | ✅ | `exporter.rs` testé (exclusion `.rpyc`, refus de `../`, nom du jeu). Écran d'export : saisie à la main du chemin. |
 
@@ -43,7 +43,7 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 
 | # | 1.0.0 | État | Détail |
 |---|---|---|---|
-| M1 | 17 outils | 🟡 | 16 portés (handshake vérifié sur Windows, macOS, Linux en CI). Manque `detect_characters`. |
+| M1 | 17 outils | ✅ | Les 17 sont portés ; handshake à 17 outils vérifié sous Windows (la CI des trois systèmes tournera avec le commit). |
 | M2 | Drapeaux destructeurs en ligne de commande seulement | ✅ | Porté tel quel. |
 | M3 | Ne rouvre que les projets du registre | ✅ | Porté. |
 | M4 | Rafraîchissement en direct (`live.json`) | ❌ | `core::live` et le serveur loopback absents : l'écran de révision ne se remplit pas pendant qu'un assistant écrit. |
@@ -82,10 +82,11 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 
 ## Bilan
 
-- ✅ 10 · 🟡 18 · ❌ 12 sur 40 lignes.
-- Le noyau, les données et l'extraction sont à parité. Ce qui manque est
-  presque tout de l'**interface** (S4 à S17, F10) et de deux fonctions :
-  échange CSV/XLIFF/JSON (F8) et rafraîchissement en direct (M4).
+- ✅ 14 · 🟡 15 · ❌ 11 sur 40 lignes.
+- Le noyau, les données, l'extraction et l'échange de fichiers sont à
+  parité, ainsi que les 17 outils MCP. Ce qui manque est presque tout de
+  l'**interface** (S4 à S17, F10) et une fonction : le rafraîchissement en
+  direct (M4).
 - L'extraction (F1, S3) est faite : la 2.0.0 peut créer un projet sans la
   1.x, ce qui était le blocage le plus lourd pour remplacer `main`.
 - Rien ici n'a été vu dans la vraie fenêtre Tauri.

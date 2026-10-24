@@ -39,6 +39,8 @@ rmcp = { version = "3.3.0", features = ["server", "macros", "transport-io", "sch
 dunce = "1.0.5"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 flate2 = "1.1.10"
+csv = "1.4.0"
+quick-xml = "0.42.0"
 
 [[bin]]
 name = "renpy-translation-studio"

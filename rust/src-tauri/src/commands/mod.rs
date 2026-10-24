@@ -7,6 +7,7 @@ pub mod characters;
 pub mod dto;
 pub mod export;
 pub mod extract;
+pub mod interchange;
 pub mod project;
 pub mod review;
 pub mod settings;

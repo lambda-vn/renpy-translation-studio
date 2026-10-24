@@ -6,12 +6,9 @@
 //! grounds, and it lands in `ai_suggested` because a machine wrote it.
 //! The screen stays where a human validates.
 //!
-//! Not ported, deliberately: `detect_characters` needs
-//! `core::renpy::character_detector`, not built yet on this branch (see
-//! `rust/README.md`). The live-refresh notification
-//! (`core::live::notify`) is Python's own "bonus, never a dependency" —
-//! nothing on this branch runs the review UI yet to listen for it, so
-//! every write below applies to the database and stops there.
+//! Not ported yet: the live-refresh notification (`core::live::notify`),
+//! Python's own "bonus, never a dependency". Until it is, every write
+//! below applies to the database and stops there.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -380,6 +377,23 @@ impl RtsServer {
         )
         .map_err(|e| e.to_string())?;
         Ok(Json(FillFromMemoryResult { filled }))
+    }
+
+    #[tool(
+        description = "Scan the game's sources for Character() definitions and store them.                         Returns how many the scan found, and the glossary as it now stands."
+    )]
+    async fn detect_characters(&self) -> Result<Json<DetectCharactersResult>, String> {
+        let state = self.state.lock().await;
+        let session = state.require().map_err(|e| e.to_string())?;
+        let found = crate::core::project_actions::detect_and_store_characters(
+            session.conn(),
+            &session.path,
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(Json(DetectCharactersResult {
+            found,
+            characters: characters_payload(session)?,
+        }))
     }
 
     #[tool(description = "List the character glossary.")]
