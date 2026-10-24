@@ -57,7 +57,12 @@ jobs:
           fi
           exit "$status"
 
+  # Not on a tag: tagging a commit that was pushed to the branch first is
+  # how every release goes, and that push already built it. The tag run
+  # would repeat the three builds on the same code and add nothing but the
+  # version check above.
   build:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     strategy:
