@@ -9,7 +9,98 @@ compatibles avec la 1.0.0 Python, MCP sur
 `main` n'est remplacé qu'à la sortie de la 2.0.0 — cette branche coexiste
 avec le code Python (`../src/`) le temps du chantier.
 
-## État actuel : `2.0.0-beta.2`
+## État actuel : `2.0.0-rc.1`
+
+La rc.1 ne change pas l'interface : elle rend l'application
+installable et prouve qu'elle relit les données de la 1.0.0.
+
+**Mémoire de traduction portée** : `core::storage::translation_memory`
+ouvre le même `memory.db` que Python (clé normalisée identique, colonne
+`normalized_text` migrée à l'ouverture) et `core::project_actions`
+porte `fill_from_memory`. Valider une ligne dans l'interface la
+mémorise (sans jamais faire échouer la validation) et rogne désormais
+le texte / refuse le vide, comme Python. Le serveur MCP gagne l'outil
+`fill_from_memory` : **16 des 17 outils**, il ne manque que
+`detect_characters`.
+
+**Tests de compatibilité** (`src-tauri/src/compat_tests.rs`) : les
+fixtures de `src-tauri/tests/fixtures/compat/` ne sont pas écrites à la
+main, elles sont produites par le code du tag `v1.0.0` lui-même
+(`scripts/make_compat_fixtures.py`, commande en tête du script). Huit
+tests les rouvrent avec le code Rust : base de projet, `settings.json`,
+mémoire de traduction, registre des projets récents. Un neuvième,
+`#[ignore]`, lit les vraies données de la machine après les avoir
+copiées (`cargo test --lib real_machine -- --ignored --nocapture`) :
+mémoire de 171 entrées, `settings.json`, base de 36 981 lignes.
+
+**Empaquetage** : `npm run bundle` compile `rts-mcp` en release, le pose
+en sidecar Tauri (`src-tauri/binaries/rts-mcp-<triple>`) et lance
+`tauri build` avec `tauri.bundle.conf.json` — le sidecar n'est pas
+déclaré dans `tauri.conf.json`, sinon `tauri dev` ne compile plus.
+Formats : NSIS sous Windows (**pas de MSI** : WiX n'accepte qu'un
+identifiant de pré-version numérique, `rc.1` n'en est pas un), `.app` +
+`.dmg` sous macOS, `.deb` + AppImage sous Linux. Le binaire principal
+s'appelle `renpy-translation-studio` ; `rust.yml` construit les trois
+systèmes, rejoue `fmt`/`clippy`/`test`/`npm run check` et refuse un tag
+`v2.*` qui ne correspond pas à la version de `Cargo.toml`,
+`tauri.conf.json` et `package.json`. `build.yml` (Python) ignore
+désormais les tags `v2.*`.
+
+**Barrière de handshake** : `scripts/mcp_handshake.py <exécutable>`
+tient une vraie conversation (`initialize`, `tools/list`, appel de
+`list_projects`) et échoue si la liste n'est pas exactement celle des
+16 outils attendus. Vérifiée dans les deux sens : 0 contre `rts-mcp`,
+1 contre un processus qui ne parle pas.
+
+**Vérifié** : `cargo fmt --check`, `cargo clippy --all-targets` (rien
+que du code mort, voir ci-dessous), `cargo test` (164 passent, 1
+ignoré), `npm run check` (0 erreur), la syntaxe YAML des workflows et la
+logique de comparaison des versions. Sous Windows, `npm run bundle`
+produit l'installateur NSIS (4,61 Mio), le handshake passe contre le
+sidecar release, et l'exécutable release se lance, garde sa fenêtre
+(titre « Ren'Py Translation Studio ») et WebView2 tourne.
+
+**Piège de nom** : `productName` ne doit pas contenir d'apostrophe. Le
+gabarit NSIS de Tauri met le chemin du raccourci entre apostrophes dans
+un appel `System::Call` ; avec « Ren'Py Translation Studio », `makensis`
+échoue sur `NSISCOMCALL requires 4 parameter(s), passed 8`, quelle que
+soit la version de NSIS (3.11 et 3.13 essayées). Le produit s'appelle
+donc « Renpy Translation Studio » pour l'installateur, les raccourcis
+et le dossier d'installation ; seul le titre de la fenêtre garde
+l'apostrophe. La CLI Tauri est passée de 2.11.4 à 2.12.4 pendant
+l'enquête et le lockfile le reflète ; la 2.11.4 n'a pas été réessayée
+avec le nouveau nom.
+
+**Non vérifié** :
+
+- `rust.yml` n'a jamais tourné : aucune exécution sur un runner GitHub.
+  Les paquets Linux (`libayatana-appindicator3-dev`, `libdbus-1-dev`),
+  `NO_STRIP` pour l'AppImage et les chemins d'artefacts sont écrits
+  d'après la documentation de Tauri, pas d'après un run.
+- L'installateur n'a pas été exécuté (ni installation, ni désinstallation) ;
+  seul l'exécutable qu'il embarque a été lancé, depuis `target/release`.
+- macOS et Linux n'ont jamais compilé cette branche.
+- Le sidecar tel qu'installé (à côté de l'exécutable principal) n'a
+  pas été lancé ; le handshake porte sur le fichier avant empaquetage.
+- Toujours aucun clic dans la vraie fenêtre Tauri.
+
+**Avertissements restants** : `cargo clippy` signale du code porté mais
+pas encore appelé (le parseur, quelques accesseurs) — attendu tant que
+l'extraction n'est pas portée, c'est pourquoi la CI ne refuse pas les
+avertissements. `writer.rs` a un `replace` consécutif signalé par
+clippy, antérieur à la rc.1.
+
+**Signature des binaires — décision en attente.** Les installateurs ne
+sont pas signés : SmartScreen (Windows) et Gatekeeper (macOS)
+avertiront, ce que `build.yml` accepte déjà pour la 1.x. Signer
+demande des identifiants qu'aucun fichier de ce dépôt ne peut fournir :
+un certificat Authenticode (ou un service de signature) pour Windows,
+un compte Apple Developer et la notarisation pour macOS, rien d'utile
+sous Linux au-delà de sommes de contrôle signées. Tauri sait lire ces
+secrets depuis l'environnement du runner ; rien n'est branché tant que
+la question n'est pas tranchée.
+
+### Rappel beta.2
 
 L'application a maintenant une interface : SvelteKit (`src/routes/`)
 au-dessus de commandes Tauri (`src-tauri/src/commands/`) qui ne font que
@@ -51,7 +142,8 @@ poste n'offre pas de moyen de piloter une fenêtre native.
 
 Cette vérification a aussi révélé un défaut de la beta.1 : le second
 binaire `rts-mcp` rendait `cargo run` ambigu, donc `tauri dev` ne
-lançait plus rien. `default-run = "rust"` dans `Cargo.toml` le corrige.
+lançait plus rien. `default-run = "renpy-translation-studio"` dans
+`Cargo.toml` le corrige.
 
 ### Rappel beta.1
 
@@ -121,10 +213,9 @@ unitaires comparant des `Path` plutôt que la chaîne SQL exacte.
 Toujours en lecture seule côté Tauri : `src-tauri/src/db.rs` reste la
 seule commande de l'app desktop, héritée de l'alpha.1.
 
-Non porté, volontairement : `fill_from_memory` et `detect_characters`
-ont besoin de `core::storage::translation_memory` et
-`core::renpy::character_detector`, ni l'un ni l'autre construits sur
-cette branche. Le canal de rafraîchissement en direct (`core::live`)
+Non porté, volontairement : `detect_characters` a besoin de
+`core::renpy::character_detector`, pas construit sur cette branche
+(`fill_from_memory` l'est depuis la rc.1). Le canal de rafraîchissement en direct (`core::live`)
 reste absent aussi — Python le documente déjà comme « un bonus, jamais
 une dépendance », et rien ici ne fait encore tourner l'écran de révision
 pour l'écouter. `on_batch_start` et l'annulation fine que Python propage
@@ -155,8 +246,16 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npm run check
 ```
 
+Installateur (long : build release avec LTO) et barrière MCP :
+
+```bash
+npm run bundle
+python scripts/mcp_handshake.py src-tauri/binaries/rts-mcp-<triple>
+```
+
 ## Prochaine étape
 
-À décider avec la feuille de route : ce que la beta.2 a différé
-(extraction, interchange, i18n, génération du résumé d'univers,
-sélecteurs natifs) avant de passer aux versions suivantes.
+La rc.2 : une check-list de parité contre le tableau de fonctionnalités
+du README 1.0.0, qui dira ce que la beta.2 a différé (extraction,
+interchange, i18n, génération du résumé d'univers, sélecteurs natifs,
+`detect_characters`) et doit encore être porté avant la 2.0.0.

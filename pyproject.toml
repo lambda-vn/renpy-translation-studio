@@ -65,6 +65,7 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "S"]
 # S603: the command tested is the one the workflow just built, named on
 # the command line of a build step, never anything a user or a game supplies
 "scripts/mcp_handshake.py" = ["S603"]
+"rust/scripts/mcp_handshake.py" = ["S603"]
 # S608: false positive, query fragments are fixed literals, values are always bound via placeholders
 "src/core/storage/repositories.py" = ["S608"]
 "src/core/storage/translation_memory.py" = ["S608"]

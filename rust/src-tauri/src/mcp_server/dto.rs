@@ -222,6 +222,11 @@ pub struct ClearTranslationsArgs {
 }
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
+pub struct FillFromMemoryResult {
+    pub filled: usize,
+}
+
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ClearTranslationsResult {
     pub cleared: usize,
 }

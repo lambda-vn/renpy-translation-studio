@@ -114,6 +114,7 @@ pub struct ServerState {
     pub pinned: Option<PathBuf>,
     pub current: Option<ProjectSession>,
     pub registry: PathBuf,
+    pub memory_path: PathBuf,
 }
 
 impl Default for ServerState {
@@ -132,6 +133,7 @@ impl ServerState {
             pinned: None,
             current: None,
             registry: recent_projects::default_path(),
+            memory_path: crate::core::storage::translation_memory::default_path(),
         }
     }
 

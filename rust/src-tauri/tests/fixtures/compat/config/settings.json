@@ -1,0 +1,11 @@
+{
+  "locale": "fr",
+  "theme": "dark",
+  "sdk_path": null,
+  "default_provider": "ollama",
+  "ollama_endpoint": "http://localhost:11434",
+  "ollama_model": "llama3.1",
+  "ollama_batch_size": "8",
+  "libretranslate_url": "http://localhost:5000",
+  "verbose_logging": "true"
+}

@@ -1,5 +1,7 @@
 mod app_state;
 mod commands;
+#[cfg(test)]
+mod compat_tests;
 mod core;
 pub mod mcp_server;
 

@@ -7,10 +7,13 @@ name: Build
 # Never on push: a build pulls the Flutter SDK and takes minutes, where
 # the CI workflow answers in seconds and is what every commit needs.
 # Start it by hand, or tag a version.
+#
+# Not the 2.x tags: those belong to the Rust rewrite and its own workflow,
+# and would otherwise draft a release of a flet build of the old code.
 on:
   workflow_dispatch:
   push:
-    tags: ["v*"]
+    tags: ["v*", "!v2.*"]
 
 # Reading the code and uploading an artifact is all this does. Stated
 # rather than inherited, so a token that grows by default does not grow

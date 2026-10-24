@@ -6,10 +6,9 @@
 //! grounds, and it lands in `ai_suggested` because a machine wrote it.
 //! The screen stays where a human validates.
 //!
-//! Not ported, deliberately: `fill_from_memory` and `detect_characters`
-//! need `core::storage::translation_memory` and
-//! `core::renpy::character_detector`, neither built yet on this branch
-//! (see `rust/README.md`). The live-refresh notification
+//! Not ported, deliberately: `detect_characters` needs
+//! `core::renpy::character_detector`, not built yet on this branch (see
+//! `rust/README.md`). The live-refresh notification
 //! (`core::live::notify`) is Python's own "bonus, never a dependency" —
 //! nothing on this branch runs the review UI yet to listen for it, so
 //! every write below applies to the database and stops there.
@@ -362,6 +361,25 @@ impl RtsServer {
         repositories::set_needs_review(session.conn(), &args.block_id, args.needs_review)
             .map_err(|e| e.to_string())?;
         Ok(Json(refetch_unit(session, &args.block_id)?))
+    }
+
+    #[tool(
+        description = "Fill untranslated lines the shared memory already answers for. Taken \
+                        from the translations validated by hand in other projects, matched on \
+                        the source text or on one differing only in case, spacing or trailing \
+                        punctuation. Nothing already translated is touched."
+    )]
+    async fn fill_from_memory(&self) -> Result<Json<FillFromMemoryResult>, String> {
+        let state = self.state.lock().await;
+        let session = state.require().map_err(|e| e.to_string())?;
+        let filled = crate::core::project_actions::fill_from_memory(
+            session.conn(),
+            &state.memory_path,
+            &session.source_language(),
+            &session.target_language(),
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(Json(FillFromMemoryResult { filled }))
     }
 
     #[tool(description = "List the character glossary.")]

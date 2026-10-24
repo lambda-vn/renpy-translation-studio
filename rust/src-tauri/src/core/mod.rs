@@ -3,6 +3,7 @@
 
 pub mod exporter;
 pub mod languages;
+pub mod project_actions;
 pub mod renpy;
 pub mod settings;
 pub mod storage;

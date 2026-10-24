@@ -5,7 +5,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::core::storage::repositories;
+use crate::core::storage::{repositories, translation_memory};
 use crate::core::translation::quality;
 
 use super::dto::{
@@ -93,6 +93,11 @@ pub async fn validate_unit(
     let session = require_session(&guard)?;
     let unit = super::require_unit(session, &block_id)?;
 
+    let translated_text = translated_text.trim().to_string();
+    if translated_text.is_empty() {
+        return Err("Empty translation.".to_string());
+    }
+
     let issues = quality::check(&unit.source_text, &translated_text);
     let (blocking, warnings): (Vec<_>, Vec<_>) = issues
         .into_iter()
@@ -122,6 +127,17 @@ pub async fn validate_unit(
         repositories::STATUS_HUMAN_VALIDATED,
     )
     .map_err(|e| e.to_string())?;
+
+    // The shared memory is a convenience, never a reason to refuse a
+    // validation: a machine where it cannot be written still translates.
+    let _ = translation_memory::open(&translation_memory::default_path()).and_then(|memory| {
+        translation_memory::remember(
+            &memory,
+            &[(unit.source_text.clone(), translated_text.clone())],
+            &session.source_language(),
+            &session.target_language(),
+        )
+    });
 
     Ok(ValidateResult {
         unit: Some(refetch(session, &block_id)?),

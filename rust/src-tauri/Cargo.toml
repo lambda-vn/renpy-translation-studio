@@ -1,10 +1,11 @@
 [package]
 name = "rust"
-version = "0.1.0"
-description = "Ren'Py Translation Studio (2.0.0 spike)"
+version = "2.0.0-rc.1"
+description = "Ren'Py Translation Studio"
+license = "CECILL-2.1"
 authors = ["lambda-vn"]
 edition = "2021"
-default-run = "rust"
+default-run = "renpy-translation-studio"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -36,6 +37,10 @@ tokio = { version = "1.53.1", features = ["sync", "rt", "rt-multi-thread", "macr
 rmcp = { version = "3.3.0", features = ["server", "macros", "transport-io", "schemars"] }
 dunce = "1.0.5"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+
+[[bin]]
+name = "renpy-translation-studio"
+path = "src/main.rs"
 
 [[bin]]
 name = "rts-mcp"

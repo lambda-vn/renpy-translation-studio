@@ -4,5 +4,6 @@
 pub mod database;
 pub mod recent_projects;
 pub mod repositories;
+pub mod translation_memory;
 
 pub use database::Database;
