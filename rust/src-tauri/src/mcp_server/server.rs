@@ -20,7 +20,7 @@ use std::sync::Arc;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
-use rmcp::{schemars, tool, tool_handler, tool_router, ServerHandler};
+use rmcp::{tool, tool_handler, tool_router, ServerHandler};
 use tokio::sync::Mutex;
 
 use crate::core::storage::{repositories, Database};

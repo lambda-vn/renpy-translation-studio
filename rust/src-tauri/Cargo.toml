@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Ren'Py Translation Studio (2.0.0 spike)"
 authors = ["lambda-vn"]
 edition = "2021"
+default-run = "rust"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -34,6 +35,7 @@ async-trait = "0.1.92"
 tokio = { version = "1.53.1", features = ["sync", "rt", "rt-multi-thread", "macros", "io-std"] }
 rmcp = { version = "3.3.0", features = ["server", "macros", "transport-io", "schemars"] }
 dunce = "1.0.5"
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [[bin]]
 name = "rts-mcp"

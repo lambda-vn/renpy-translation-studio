@@ -1,6 +1,7 @@
 //! Domain logic, ported module-by-module from the Python `src/core/`
 //! package. Each submodule's doc comment names its Python source.
 
+pub mod exporter;
 pub mod languages;
 pub mod renpy;
 pub mod settings;

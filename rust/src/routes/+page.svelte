@@ -1,172 +1,147 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { api, type ProjectEntry } from '$lib/api';
+	import { project } from '$lib/stores';
 
-  type TranslationUnit = {
-    block_id: string;
-    source_file: string;
-    source_line: number;
-    source_text: string;
-    translated_text: string;
-    status: string;
-  };
+	let recent = $state<ProjectEntry[]>([]);
+	let pathInput = $state('');
+	let error = $state('');
+	let opening = $state(false);
 
-  type ProjectSummary = {
-    total: number;
-    human_validated: number;
-    units: TranslationUnit[];
-  };
+	onMount(refresh);
 
-  let dbPath = $state("");
-  let summary = $state<ProjectSummary | null>(null);
-  let error = $state("");
+	async function refresh() {
+		try {
+			recent = await api.listRecentProjects();
+		} catch (e) {
+			error = String(e);
+		}
+	}
 
-  async function openProject(event: Event) {
-    event.preventDefault();
-    error = "";
-    summary = null;
-    try {
-      summary = await invoke<ProjectSummary>("open_project", {
-        dbPath,
-        limit: 50,
-      });
-    } catch (e) {
-      error = String(e);
-    }
-  }
+	async function open(path: string) {
+		if (!path.trim()) return;
+		opening = true;
+		error = '';
+		try {
+			const info = await api.openProject(path.trim());
+			$project = info;
+			await goto('/review');
+		} catch (e) {
+			error = String(e);
+		} finally {
+			opening = false;
+		}
+	}
 </script>
 
-<main class="container">
-  <h1>Cap sur Rust — spike alpha.1</h1>
-  <p class="hint">
-    Colle le chemin d'un <code>translations.db</code> produit par la 1.0.0
-    Python (dans <code>&lt;jeu&gt;/.rts/translations.db</code>).
-  </p>
+<h1>Open a project</h1>
+<p class="hint">
+	This build opens a project already extracted by Ren'Py — by this application, a 1.x install, or
+	the MCP server. In-app extraction is not built yet.
+</p>
 
-  <form class="row" onsubmit={openProject}>
-    <input
-      placeholder="D:\VN\Games\the_question-rts\.rts\translations.db"
-      bind:value={dbPath}
-    />
-    <button type="submit">Ouvrir</button>
-  </form>
+<section class="open-form">
+	<input
+		type="text"
+		placeholder="Project folder (holding game/ and .rts/translations.db)"
+		bind:value={pathInput}
+		onkeydown={(e) => e.key === 'Enter' && open(pathInput)}
+	/>
+	<button disabled={opening || !pathInput.trim()} onclick={() => open(pathInput)}>
+		{opening ? 'Opening…' : 'Open'}
+	</button>
+</section>
 
-  {#if error}
-    <p class="error">{error}</p>
-  {/if}
+{#if error}
+	<p class="error">{error}</p>
+{/if}
 
-  {#if summary}
-    <p class="summary">
-      {summary.total} unités, {summary.human_validated} validées
-    </p>
-    <table>
-      <thead>
-        <tr>
-          <th>Fichier</th>
-          <th>Ligne</th>
-          <th>Statut</th>
-          <th>Source</th>
-          <th>Traduction</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each summary.units as unit (unit.block_id)}
-          <tr>
-            <td>{unit.source_file}</td>
-            <td>{unit.source_line}</td>
-            <td>{unit.status}</td>
-            <td>{unit.source_text}</td>
-            <td>{unit.translated_text}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  {/if}
-</main>
+<h2>Recent projects</h2>
+{#if recent.length === 0}
+	<p class="hint">Nothing here yet — open a project above.</p>
+{:else}
+	<ul class="recent-list">
+		{#each recent as entry (entry.path)}
+			<li>
+				<button class="recent-entry" disabled={!entry.ready || opening} onclick={() => open(entry.path)}>
+					<span class="name">{entry.name}</span>
+					<span class="path">{entry.path}</span>
+					{#if !entry.ready}
+						<span class="not-ready">no database — extract it first</span>
+					{/if}
+				</button>
+			</li>
+		{/each}
+	</ul>
+{/if}
 
 <style>
-  :root {
-    font-family:
-      Inter,
-      Avenir,
-      Helvetica,
-      Arial,
-      sans-serif;
-    color: #0f0f0f;
-    background-color: #f6f6f6;
-  }
+	.hint {
+		color: #666;
+		font-size: 0.9rem;
+	}
 
-  .container {
-    margin: 0 auto;
-    max-width: 1000px;
-    padding: 2rem 1.5rem;
-  }
+	.open-form {
+		display: flex;
+		gap: 0.5rem;
+		max-width: 640px;
+		margin: 1rem 0;
+	}
 
-  .hint {
-    color: #555;
-  }
+	.open-form input {
+		flex: 1;
+		padding: 0.5rem;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+	}
 
-  .row {
-    display: flex;
-    gap: 0.5rem;
-  }
+	.open-form button {
+		padding: 0.5rem 1rem;
+		border: none;
+		border-radius: 4px;
+		background: #2b6cb0;
+		color: white;
+	}
 
-  input {
-    flex: 1;
-    padding: 0.5em 0.8em;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-  }
+	.error {
+		color: #b00020;
+	}
 
-  button {
-    padding: 0.5em 1.2em;
-    border-radius: 6px;
-    border: 1px solid transparent;
-    background-color: #396cd8;
-    color: white;
-    cursor: pointer;
-  }
+	.recent-list {
+		list-style: none;
+		padding: 0;
+		max-width: 640px;
+	}
 
-  .error {
-    color: #c0392b;
-  }
+	.recent-entry {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		width: 100%;
+		text-align: left;
+		padding: 0.6rem 0.8rem;
+		margin-bottom: 0.4rem;
+		border: 1px solid #ddd;
+		border-radius: 4px;
+		background: white;
+	}
 
-  .summary {
-    font-weight: 600;
-  }
+	.recent-entry:hover:not(:disabled) {
+		background: #f0f4fa;
+	}
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 1rem;
-    font-size: 0.9rem;
-  }
+	.name {
+		font-weight: 600;
+	}
 
-  th,
-  td {
-    text-align: left;
-    padding: 0.4em 0.6em;
-    border-bottom: 1px solid #ddd;
-  }
+	.path {
+		font-size: 0.8rem;
+		color: #777;
+	}
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color: #f6f6f6;
-      background-color: #2f2f2f;
-    }
-
-    .hint {
-      color: #bbb;
-    }
-
-    input {
-      background-color: #1c1c1c;
-      color: #f6f6f6;
-      border-color: #444;
-    }
-
-    th,
-    td {
-      border-color: #444;
-    }
-  }
+	.not-ready {
+		font-size: 0.8rem;
+		color: #b00020;
+	}
 </style>

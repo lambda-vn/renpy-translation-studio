@@ -9,14 +9,54 @@ compatibles avec la 1.0.0 Python, MCP sur
 `main` n'est remplacé qu'à la sortie de la 2.0.0 — cette branche coexiste
 avec le code Python (`../src/`) le temps du chantier.
 
-## État actuel : `2.0.0-beta.1`
+## État actuel : `2.0.0-beta.2`
 
-Le noyau, les trois fournisseurs retenus et le moteur de jobs tournent
-sans interface, testés en ligne de commande (`cargo test`), sur le
-schéma et le contrat de données exacts gelés par la politique de
-compatibilité de [`../CLAUDE.md`](../CLAUDE.md#compatibilité-post-100).
+L'application a maintenant une interface : SvelteKit (`src/routes/`)
+au-dessus de commandes Tauri (`src-tauri/src/commands/`) qui ne font que
+déléguer au noyau. Écrans : ouverture d'un projet déjà extrait
+(`/`), révision (`/review` : fichiers, filtres, recherche, pagination,
+édition avec brouillon automatique, validation refusée sur une erreur
+bloquante, job de traduction avec progression et annulation, Ctrl+S /
+Ctrl+F / Ctrl+Entrée), fournisseurs (`/provider-config`, test de
+connexion pour les trois), personnages (`/characters`), résumé d'univers
+(`/universe`) et export (`/export` : sauvegarde dans `tl/` puis zip).
+
+Pour que Save et Export écrivent réellement, `core::renpy::writer`
+(réécriture des `.rpy`, échappement des guillemets et retours à la ligne,
+sauvegarde avant modification) et `core::exporter` (zip, nom du jeu) sont
+portés, ainsi que `providers::registry`. Les tests passent à 144.
+
+Non porté pour cette version, par choix : l'**extraction** (lancer le
+SDK ou le moteur du jeu) — l'application n'ouvre que des projets déjà
+extraits ; la **propagation aux doublons**, l'**interchange**
+CSV/XLIFF/JSON, la **traduction ligne par ligne** et le **menu
+contextuel** des fichiers dans l'écran de révision ; la **génération IA**
+du résumé d'univers et la **détection** des personnages ; l'**i18n**
+(l'interface est en anglais seulement) ; les **sélecteurs natifs** de
+dossier/fichier (chemins saisis à la main) ; l'avertissement de
+synchronisation avant export. Le job ne traduit que les lignes
+`not_translated`, portée « ce fichier » ou « tout le projet » ; ses
+résultats arrivent en `ai_suggested`, y compris les lignes sans rien à
+traduire que Python passe directement en `human_validated`. Le panneau de
+fichiers est une liste plate, pas un arbre.
+
+**Vérifié** : `npm run check` (0 erreur), `npm run build`, `cargo test`,
+`cargo clippy` et l'application qui démarre vraiment (`npm run tauri
+dev`). L'écran de révision a aussi été exercé dans un navigateur avec un
+faux pont `invoke` : ouverture → fichiers → lignes, trois frappes rapides
+→ une seule sauvegarde de brouillon, validation refusée avec
+« Missing [name] » puis acceptée. **Non vérifié** : aucun clic dans la
+vraie fenêtre Tauri ni sur un vrai projet depuis l'interface — ce
+poste n'offre pas de moyen de piloter une fenêtre native.
+
+Cette vérification a aussi révélé un défaut de la beta.1 : le second
+binaire `rts-mcp` rendait `cargo run` ambigu, donc `tauri dev` ne
+lançait plus rien. `default-run = "rust"` dans `Cargo.toml` le corrige.
+
+### Rappel beta.1
+
 Une assistante peut déjà traduire un projet avant qu'aucune fenêtre
-n'existe : `src-tauri/src/bin/rts_mcp.rs` sert désormais 15 des 17
+n'existe : `src-tauri/src/bin/rts_mcp.rs` sert 15 des 17
 outils du serveur MCP Python, sur
 [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk) (le SDK Rust
 officiel), en stdio comme `rts-mcp` en 1.x. Tout vit sous
@@ -117,6 +157,6 @@ npm run check
 
 ## Prochaine étape
 
-`2.0.0-beta.2` : l'interface complète, Svelte au-dessus de tout ce qui
-précède — l'écran de révision, la configuration des fournisseurs, le
-glossaire de personnages, l'export.
+À décider avec la feuille de route : ce que la beta.2 a différé
+(extraction, interchange, i18n, génération du résumé d'univers,
+sélecteurs natifs) avant de passer aux versions suivantes.
