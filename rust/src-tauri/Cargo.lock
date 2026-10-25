@@ -3569,7 +3569,7 @@ dependencies = [
 
 [[package]]
 name = "rust"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "async-trait",
  "crc32fast",
