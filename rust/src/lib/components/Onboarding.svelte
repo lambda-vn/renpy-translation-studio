@@ -68,10 +68,6 @@
 <main class="wrap">
 	<form class="card" onsubmit={finish}>
 		<div class="intro">
-			<svg width="32" height="32" viewBox="0 0 20 20" aria-hidden="true">
-				<rect x="1" y="1" width="18" height="18" rx="6" fill="var(--acc)" />
-				<path d="M5.5 7.5h9M5.5 11.5h5.5" stroke="var(--accInk)" stroke-width="1.7" stroke-linecap="round" />
-			</svg>
 			<h1>{$t('onboarding.title')}</h1>
 			<p>{$t('onboarding.subtitle')}</p>
 		</div>

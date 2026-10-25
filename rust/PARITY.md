@@ -53,14 +53,14 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 
 | # | 1.0.0 | État | Détail |
 |---|---|---|---|
-| S1 | Onboarding (langue de l'UI, SDK facultatif) | 🟡 | Écran porté (`Onboarding.svelte`, `isFirstLaunch`), **jamais affiché dans la vraie fenêtre** (la config réelle existe déjà). |
+| S1 | Onboarding (langue de l'UI, SDK facultatif) | ✅ | Affiché dans la vraie fenêtre sans `settings.json` : passage au français, SDK refusé puis accepté, Entrée écrit `locale` et `sdk_path` et ouvre l'écran des projets. |
 | S2 | Liste des projets récents, reprise (fichier, page, filtre, recherche) | ✅ | Cartes avec avancement, ouverture directe en révision, × qui supprime `.rts/` après confirmation (comportement du code 1.0.0, sa doc disait le contraire). État de navigation gardé en mémoire comme en 1.0.0. |
 | S3 | Nouveau projet : dossier, langues, SDK, bouton Extraire | ✅ | Sélecteur natif (ou chemin collé), langues source et cible, SDK demandé seulement si le jeu n'embarque pas de moteur utilisable, avis d'exécution de code tiers, dialogue des trois modes, liste des sources écartées. Exercé dans la vraie fenêtre. Visuellement provisoire (refonte prévue). |
 | S4 | Panneau de fichiers : compteurs par statut, barre globale | ✅ | Barre projet, compteurs validés/total + brouillons/IA/importés, fichiers grisés selon le filtre. |
 | S5 | Menu contextuel d'un fichier (ouvrir, copier le chemin, montrer, traduire, exporter, effacer) | ✅ | Clic droit, touche Menu, Maj+F10 ; vérifié dans la vraie fenêtre. |
 | S6 | Filtres : statut, *Flagged*, *In error*, locuteur, recherche `%`/`_` littéraux | ✅ | Puces de statut + Signalées + En erreur, menu des locuteurs (vérifié : 18 lignes de `s`), recherche. La puce *En erreur* n'a pas de compteur. |
 | S7 | Actions de ligne : traduire, copier la source (Ctrl+D), effacer, drapeau (Ctrl+M), valider | ✅ | Les cinq, au survol / focus / ligne active. |
-| S8 | Ctrl+Maj+Entrée : valider et propager aux doublons | 🟡 | Porté (`validate_and_propagate`, testé), toast après une validation simple ; pas exercé dans la vraie fenêtre. |
+| S8 | Ctrl+Maj+Entrée : valider et propager aux doublons | ✅ | Exercé dans la vraie fenêtre : trois « Sure! » (deux locuteurs), Ctrl+Maj+Entrée sur le premier, les trois en `human_validated`, toast du compte. |
 | S9 | Navigation clavier entre lignes, fichiers, pages | ✅ | Alt+↑/↓, Maj+Alt+↑/↓, Alt+←/→ ; Alt+↓ vérifié dans la vraie fenêtre. |
 | S10 | Avertissements qualité consultatifs sous la ligne | ✅ | Erreurs bloquantes (`role=alert`) et avertissements sous le champ. |
 | S11 | Compteur « N lignes non écrites dans les .rpy » | ✅ | `unwritten_count` ; `save_project` enregistre désormais la date d'écriture (`tl_saved_at`), le compteur revient à zéro après Ctrl+S (vérifié). |
@@ -82,10 +82,9 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 
 ## Bilan
 
-- ✅ 37 · 🟡 3 · ❌ 0 sur 40 lignes (rc.3, étape 4 : l'interface refaite dans
+- ✅ 39 · 🟡 1 · ❌ 0 sur 40 lignes (rc.3, étape 4 : l'interface refaite dans
   le nouveau design).
-- Plus aucune ligne absente. Les 🟡 restants : le lanceur `rts-mcp` installé (M5), l'onboarding jamais affiché (S1)
-  et Ctrl+Maj+Entrée dans la vraie fenêtre (S8).
+- Plus aucune ligne absente. Le seul 🟡 restant : le lanceur `rts-mcp` installé (M5).
 - L'étape 4 a été exercée dans la vraie fenêtre Tauri sous Windows, sur une
   copie de *The Question* : extraction, révision au clavier, menus, job Ollama
   réel, rafraîchissement par un vrai `rts-mcp`, personnages, univers,
