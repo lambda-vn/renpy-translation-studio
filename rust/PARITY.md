@@ -47,7 +47,7 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 | M2 | Drapeaux destructeurs en ligne de commande seulement | ✅ | Porté tel quel. |
 | M3 | Ne rouvre que les projets du registre | ✅ | Porté. |
 | M4 | Rafraîchissement en direct (`live.json`) | ✅ | `core::live` : même `.rts/live.json`, jeton obligatoire comparé à temps constant, tailles bornées, notification jamais bloquante. Les écritures du serveur MCP (soumission, note, drapeau, mémoire, effacement) préviennent l'écran de révision, qui met les lignes visibles à jour sur place. Vérifié dans la vraie fenêtre avec un vrai processus `rts-mcp` (voir le README). |
-| M5 | Lanceur `rts-mcp` à côté de l'application | 🟡 | Sidecar Tauri empaqueté et handshaké **avant** installation ; pas lancé depuis un installateur. |
+| M5 | Lanceur `rts-mcp` à côté de l'application | ✅ | Installateur NSIS rc.3 installé : `rts-mcp.exe` posé à côté de l'application, handshake (17 outils) et `list_projects` sur le binaire installé, qui lit le vrai registre. |
 
 ## Écrans (docs/en)
 
@@ -82,9 +82,9 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 
 ## Bilan
 
-- ✅ 39 · 🟡 1 · ❌ 0 sur 40 lignes (rc.3, étape 4 : l'interface refaite dans
+- ✅ 40 · 🟡 0 · ❌ 0 sur 40 lignes (rc.3, étape 4 : l'interface refaite dans
   le nouveau design).
-- Plus aucune ligne absente. Le seul 🟡 restant : le lanceur `rts-mcp` installé (M5).
+- Plus aucune ligne absente ni partielle.
 - L'étape 4 a été exercée dans la vraie fenêtre Tauri sous Windows, sur une
   copie de *The Question* : extraction, révision au clavier, menus, job Ollama
   réel, rafraîchissement par un vrai `rts-mcp`, personnages, univers,
