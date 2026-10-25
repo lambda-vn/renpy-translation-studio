@@ -7,6 +7,7 @@ pub mod extraction;
 pub mod interchange;
 pub mod languages;
 pub mod live;
+pub mod logging;
 pub mod project_actions;
 pub mod renpy;
 pub mod review_actions;

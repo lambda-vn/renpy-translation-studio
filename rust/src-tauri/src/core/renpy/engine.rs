@@ -181,11 +181,16 @@ pub fn resolve_engine_for(
     let platforms = game_platforms(project);
     if let Some(launcher) = &launcher {
         if platform.is_some_and(|p| platforms.contains(&p)) {
+            log::info!(
+                "Using the engine bundled with the game: {}",
+                launcher.display()
+            );
             return Ok(launcher.clone());
         }
     }
     if let Some(sdk) = sdk_path {
         if sdk.is_file() {
+            log::info!("Using the configured Ren'Py SDK: {}", sdk.display());
             return Ok(sdk.to_path_buf());
         }
     }

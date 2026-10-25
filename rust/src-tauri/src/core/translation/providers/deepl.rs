@@ -214,8 +214,14 @@ impl DeepLProvider {
             .sync_glossary(&term_pairs, source_lang, target_lang)
             .await
         {
-            Ok(id) => self.glossary_id = Some(id),
-            Err(_) => self.glossary_id = None,
+            Ok(id) => {
+                log::info!("Synced the DeepL glossary ({} term(s))", term_pairs.len());
+                self.glossary_id = Some(id);
+            }
+            Err(error) => {
+                log::warn!("DeepL glossary sync failed, translating without it: {error}");
+                self.glossary_id = None;
+            }
         }
     }
 
@@ -259,6 +265,15 @@ impl DeepLProvider {
         let source = resolve_deepl_lang(source_lang);
         let target = resolve_deepl_lang(target_lang);
         let mut result = TranslateBatchResult::default();
+        log::info!(
+            "translate_batch: {} unit(s) {source}->{target}, glossary {}",
+            units.len(),
+            if self.glossary_id.is_some() {
+                "on"
+            } else {
+                "off"
+            }
+        );
 
         for chunk in units.chunks(DEEPL_BATCH_SIZE) {
             let texts: Vec<&str> = chunk.iter().map(|u| u.source_text.as_str()).collect();
@@ -286,13 +301,29 @@ impl DeepLProvider {
                             });
                         }
                     }
-                    _ => result
-                        .failed_ids
-                        .extend(chunk.iter().map(|u| u.block_id.clone())),
+                    Ok(parsed) => {
+                        log::warn!(
+                            "DeepL answered {} text(s) for {} sent",
+                            parsed.translations.len(),
+                            chunk.len()
+                        );
+                        result
+                            .failed_ids
+                            .extend(chunk.iter().map(|u| u.block_id.clone()));
+                    }
+                    Err(error) => {
+                        log::warn!("Unreadable DeepL response: {error}");
+                        result
+                            .failed_ids
+                            .extend(chunk.iter().map(|u| u.block_id.clone()));
+                    }
                 },
-                Err(_) => result
-                    .failed_ids
-                    .extend(chunk.iter().map(|u| u.block_id.clone())),
+                Err(error) => {
+                    log::warn!("DeepL chunk of {} unit(s) failed: {error}", chunk.len());
+                    result
+                        .failed_ids
+                        .extend(chunk.iter().map(|u| u.block_id.clone()));
+                }
             }
         }
 

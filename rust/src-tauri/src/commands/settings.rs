@@ -11,7 +11,8 @@ use std::sync::atomic::Ordering;
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::core::settings::finish_onboarding;
+use crate::core::logging;
+use crate::core::settings::{config_dir, finish_onboarding};
 use crate::core::storage::translation_memory;
 use crate::core::translation::providers::base::ProviderError;
 use crate::core::translation::providers::deepl::DeepLProvider;
@@ -58,7 +59,20 @@ pub async fn set_setting(
         .lock()
         .await
         .set(&key, value.as_deref())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    if key == "verbose_logging" {
+        logging::set_verbose(value.is_some_and(|v| !v.is_empty()));
+    }
+    Ok(())
+}
+
+/// Show the log file in the system file manager, or its folder while
+/// nothing has been logged yet.
+#[tauri::command]
+pub async fn reveal_log() -> Result<(), String> {
+    let path = logging::log_path();
+    let target = if path.exists() { path } else { config_dir() };
+    tauri_plugin_opener::reveal_item_in_dir(&target).map_err(|e| e.to_string())
 }
 
 /// Whether this is the first launch (no settings file existed at startup

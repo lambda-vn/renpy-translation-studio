@@ -114,6 +114,11 @@ impl LibreTranslateProvider {
         let source = resolve_libretranslate_lang(source_lang);
         let target = resolve_libretranslate_lang(target_lang);
         let mut result = TranslateBatchResult::default();
+        log::info!(
+            "translate_batch: {} unit(s) via {}",
+            units.len(),
+            self.endpoint
+        );
 
         for unit in units {
             let payload = TranslatePayload {
@@ -136,14 +141,24 @@ impl LibreTranslateProvider {
                     Ok(parsed) => {
                         let translated =
                             strip_added_whitespace(&unit.source_text, &parsed.translated_text);
+                        log::debug!("{}: {translated:?}", unit.block_id);
                         result.translations.push(TranslatedUnit {
                             block_id: unit.block_id.clone(),
                             translated_text: translated,
                         });
                     }
-                    Err(_) => result.failed_ids.push(unit.block_id.clone()),
+                    Err(error) => {
+                        log::warn!(
+                            "Unreadable LibreTranslate response for {}: {error}",
+                            unit.block_id
+                        );
+                        result.failed_ids.push(unit.block_id.clone());
+                    }
                 },
-                Err(_) => result.failed_ids.push(unit.block_id.clone()),
+                Err(error) => {
+                    log::warn!("LibreTranslate failed on {}: {error}", unit.block_id);
+                    result.failed_ids.push(unit.block_id.clone());
+                }
             }
         }
 

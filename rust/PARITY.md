@@ -66,7 +66,7 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 | S11 | Compteur « N lignes non écrites dans les .rpy » | ✅ | `unwritten_count` ; `save_project` enregistre désormais la date d'écriture (`tl_saved_at`), le compteur revient à zéro après Ctrl+S (vérifié). |
 | S12 | Effacement en masse avec confirmation | ✅ | Dialogue fichier / projet × trois portées, compte affiché. Ouvert dans la vraie fenêtre, pas exécuté. |
 | S13 | Barre d'étapes (Setup / Review / Export), confirmation avant de revenir en arrière, navigation refusée pendant un job | ✅ | Vérifié pendant un vrai job. |
-| S14 | Dialogue de paramètres (langue de l'UI, journal détaillé, volume de la mémoire) | ✅ | Langue, thème (`system`/`light`/`dark`, déjà en 1.0.0), journal (format 1.0.0, sans effet en Rust : aucune journalisation), SDK, mémoire par paire de langues. |
+| S14 | Dialogue de paramètres (langue de l'UI, journal détaillé, volume de la mémoire) | ✅ | Langue, thème (`system`/`light`/`dark`, déjà en 1.0.0), journal détaillé (fichier `renpy-translation-studio.log` à côté de `settings.json`, DEBUG ou WARN à chaud, bouton « Ouvrir le journal » ; vérifié avec un vrai job Ollama), SDK, mémoire par paire de langues. |
 | S15 | Export zip : nom proposé affiché, avertissement d'écart avec `tl/` | ✅ | `export_sync` porté ; les trois avertissements (non écrit, non traduit, qualité) ; zip vérifié. |
 | S16 | i18n anglais + français | ✅ | Tous les écrans passent par `$t`, pluriels via `Intl.PluralRules` ; journal du job, messages qualité et erreurs des fournisseurs localisés (`JobMessage`, `ProviderError` structurés en `{ key, params }`). |
 | S17 | Boîtes de dialogue de confirmation, toasts | ✅ | `confirmDialog` (plus aucun `window.confirm`), toasts `role=status`/`alert`. |

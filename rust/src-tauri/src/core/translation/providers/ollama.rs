@@ -232,6 +232,7 @@ impl OllamaProvider {
                     .collect()
             })
             .unwrap_or_default();
+        log::debug!("list_models on {} -> {models:?}", self.endpoint);
         Ok(models)
     }
 
@@ -282,17 +283,24 @@ impl OllamaProvider {
         // A 404 on /api/show means the server answered but has no such
         // model: saying it is unreachable would send the user looking at
         // the wrong thing.
-        let num_ctx = self.resolve_num_ctx().await.map_err(|error| match error {
-            ProviderError::Network {
-                status: Some(404), ..
-            } => ProviderError::OllamaModelMissing {
-                model: self.model.clone(),
-                endpoint: self.endpoint.clone(),
-            },
-            _ => ProviderError::OllamaUnreachable {
-                endpoint: self.endpoint.clone(),
-            },
-        })?;
+        let num_ctx = self
+            .resolve_num_ctx()
+            .await
+            .inspect_err(|error| {
+                log::warn!("Cannot use {} on {}: {error}", self.model, self.endpoint);
+            })
+            .map_err(|error| match error {
+                ProviderError::Network {
+                    status: Some(404), ..
+                } => ProviderError::OllamaModelMissing {
+                    model: self.model.clone(),
+                    endpoint: self.endpoint.clone(),
+                },
+                _ => ProviderError::OllamaUnreachable {
+                    endpoint: self.endpoint.clone(),
+                },
+            })?;
+        log::debug!("num_ctx for {} on {}: {num_ctx}", self.model, self.endpoint);
         self.num_ctx = Some(num_ctx);
         Ok(num_ctx)
     }
@@ -383,7 +391,10 @@ impl OllamaProvider {
             .send()
             .await
             .and_then(reqwest::Response::error_for_status)
-            .map_err(|_| self.request_failed())?;
+            .map_err(|error| {
+                log::warn!("Ollama completion failed: {error}");
+                self.request_failed()
+            })?;
         let body: Value = resp.json().await.map_err(|_| self.request_failed())?;
         body["message"]["content"]
             .as_str()
@@ -412,7 +423,13 @@ impl OllamaProvider {
         let first_resolution = self.num_ctx.is_none();
         let num_ctx = self.ensure_num_ctx().await?;
         if first_resolution {
-            self.preload_and_warn().await;
+            log::info!("Loading {} into memory", self.model);
+            if let Some(percent) = self.preload_and_warn().await {
+                log::warn!(
+                    "{} runs {percent}% on the CPU: translation slowed down",
+                    self.model
+                );
+            }
         }
 
         let system_prompt = build_system_prompt(
@@ -430,6 +447,12 @@ impl OllamaProvider {
             self.batch_size.unwrap_or(MAX_UNITS_PER_BATCH),
         );
 
+        log::debug!(
+            "{} unit(s) in {} request(s) to {} (num_ctx {num_ctx})",
+            units.len(),
+            batches.len(),
+            self.model
+        );
         let mut result = TranslateBatchResult::default();
         for batch in batches {
             let (translations, failed) = self.translate_single_batch(&batch, &system_prompt).await;
@@ -470,12 +493,18 @@ impl OllamaProvider {
             .map(|u| (u.block_id.clone(), u.source_text.clone()))
             .collect();
         let user_prompt = build_batch_prompt(batch);
-        let fail_all = || {
+        let fail_all = |reason: &str| {
+            log::warn!("Batch of {} unit(s) failed: {reason}", batch.len());
             (
                 Vec::new(),
                 batch.iter().map(|u| u.block_id.clone()).collect(),
             )
         };
+        log::debug!(
+            "Batch request ({} unit(s)):
+{user_prompt}",
+            batch.len()
+        );
 
         let response = self
             .client
@@ -498,17 +527,19 @@ impl OllamaProvider {
             .await
             .and_then(reqwest::Response::error_for_status);
 
-        let Ok(response) = response else {
-            return fail_all();
+        let response = match response {
+            Ok(response) => response,
+            Err(error) => return fail_all(&error.to_string()),
         };
         let Ok(body) = response.json::<Value>().await else {
-            return fail_all();
+            return fail_all("unreadable response body");
         };
         let Some(content) = body["message"]["content"].as_str() else {
-            return fail_all();
+            return fail_all("no message content in the response");
         };
+        log::debug!("Batch raw response: {content}");
         let Ok(parsed) = serde_json::from_str::<Value>(content) else {
-            return fail_all();
+            return fail_all("the response is not JSON");
         };
 
         let array_value = match &parsed {
@@ -525,7 +556,7 @@ impl OllamaProvider {
             other => other.clone(),
         };
         let Some(items) = array_value.as_array() else {
-            return fail_all();
+            return fail_all("no array in the response");
         };
 
         let mut translations: Vec<TranslatedUnit> = Vec::new();
@@ -540,7 +571,10 @@ impl OllamaProvider {
             }
         }
 
-        let (translations, _duplicate_ids) = drop_duplicate_content(translations, &source_by_id);
+        let (translations, duplicate_ids) = drop_duplicate_content(translations, &source_by_id);
+        if !duplicate_ids.is_empty() {
+            log::warn!("Dropped padding duplicated across the batch: {duplicate_ids:?}");
+        }
 
         let present: HashSet<&str> = translations.iter().map(|t| t.block_id.as_str()).collect();
         let mut missing_ids: Vec<String> = requested_ids
@@ -549,6 +583,13 @@ impl OllamaProvider {
             .map(String::from)
             .collect();
         missing_ids.sort();
+        if !missing_ids.is_empty() {
+            log::warn!(
+                "{} of {} unit(s) missing from the response: {missing_ids:?}",
+                missing_ids.len(),
+                batch.len()
+            );
+        }
 
         (translations, missing_ids)
     }

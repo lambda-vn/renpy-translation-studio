@@ -194,6 +194,14 @@ impl serde::Serialize for JobMessage {
 }
 
 fn emit(tx: &UnboundedSender<JobEvent>, event: JobEvent) {
+    if let JobEvent::Event(message) = &event {
+        match message {
+            JobMessage::RejectedIdentical { .. } | JobMessage::Rejected { .. } => {
+                log::warn!("{message}");
+            }
+            _ => log::info!("{message}"),
+        }
+    }
     // A closed receiver (caller dropped it) means nobody is listening
     // any more, not a reason to stop translating — the job still
     // reports through progress.done/failed and its final Complete.
@@ -408,10 +416,13 @@ async fn retry_failed_units(
                 .await
             {
                 Ok(result) => result,
-                Err(_) => TranslateBatchResult {
-                    translations: Vec::new(),
-                    failed_ids: chunk.iter().map(|u| u.block_id.clone()).collect(),
-                },
+                Err(err) => {
+                    log::warn!("Retry of {} unit(s) failed: {err}", chunk.len());
+                    TranslateBatchResult {
+                        translations: Vec::new(),
+                        failed_ids: chunk.iter().map(|u| u.block_id.clone()).collect(),
+                    }
+                }
             };
             let (result, events) = verify_quality(chunk, result);
             for event in events {
@@ -441,6 +452,11 @@ pub async fn run_job(
     cancel: CancelToken,
     tx: UnboundedSender<JobEvent>,
 ) -> JobProgress {
+    log::info!(
+        "Starting translation job: provider={} units={} {source_lang}->{target_lang}",
+        provider.id(),
+        units.len()
+    );
     let mut progress = JobProgress {
         total: units.len(),
         running: true,
@@ -495,10 +511,17 @@ pub async fn run_job(
         {
             Ok(result) => result,
             Err(err) => {
+                log::warn!("Translation job stopped: {err}");
                 provider_error = Some(err);
                 break 'main;
             }
         };
+        log::debug!(
+            "Chunk of {} unit(s): {} translated, {} failed by the provider",
+            chunk.len(),
+            result.translations.len(),
+            result.failed_ids.len()
+        );
         let provider_failed = result.failed_ids.len();
         let (result, events) = verify_quality(chunk, result);
         if provider_failed > 0 {
@@ -537,6 +560,12 @@ pub async fn run_job(
 
     progress.running = false;
     progress.finished = true;
+    log::info!(
+        "Translation job finished: done={} failed={} cancelled={}",
+        progress.done,
+        progress.failed,
+        cancel.is_cancelled()
+    );
     emit(&tx, JobEvent::Complete(progress.clone()));
     progress
 }

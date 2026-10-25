@@ -59,6 +59,14 @@
 		await persist('verbose_logging', verbose ? '1' : null);
 	}
 
+	async function revealLog() {
+		try {
+			await api.revealLog();
+		} catch (e) {
+			error = String(e);
+		}
+	}
+
 	async function persist(key: string, value: string | null) {
 		try {
 			await api.setSetting(key, value);
@@ -146,6 +154,9 @@
 		<div class="grow">
 			<label for="set-log" class="switch-label">{$t('provider_config.verbose_logging_label')}</label>
 			<span class="help">{$t('settings.verbose_hint')}</span>
+			<button type="button" class="btn ghost log-btn" onclick={revealLog}>
+				{$t('settings.open_log')}
+			</button>
 		</div>
 		<span class="sw">
 			<input
@@ -241,6 +252,9 @@
 		display: block;
 		font-size: 13px;
 		font-weight: 500;
+	}
+	.log-btn {
+		margin-top: 6px;
 	}
 	.help.top {
 		margin: 0 0 8px;

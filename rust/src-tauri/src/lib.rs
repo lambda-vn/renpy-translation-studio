@@ -9,6 +9,11 @@ use app_state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    core::logging::init(
+        core::settings::Settings::load()
+            .get("verbose_logging")
+            .is_some_and(|v| !v.is_empty()),
+    );
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -58,6 +63,7 @@ pub fn run() {
             commands::settings::test_deepl_connection,
             commands::settings::test_ollama_connection,
             commands::settings::test_libretranslate_connection,
+            commands::settings::reveal_log,
             commands::characters::list_characters,
             commands::characters::detect_characters,
             commands::characters::upsert_character,

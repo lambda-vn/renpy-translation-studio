@@ -353,6 +353,7 @@ export const api = {
 		invoke<TestConnectionResult>('test_ollama_connection', { endpoint }),
 	testLibretranslateConnection: (url: string, apiKey: string | null) =>
 		invoke<TestConnectionResult>('test_libretranslate_connection', { url, apiKey }),
+	revealLog: () => invoke<void>('reveal_log'),
 
 	listCharacters: () => invoke<CharacterEntry[]>('list_characters'),
 	upsertCharacter: (variable: string, displayName: string, notes: string | null) =>

@@ -75,6 +75,7 @@
     "memory_confirm": "Confirmer",
     "sdk_none": "Aucun",
     "verbose_hint": "Pour le diagnostic. Écrit plus de détails dans le journal.",
+    "open_log": "Ouvrir le journal",
     "memory_forget_title": "Oublier cette paire de langues ?",
     "memory_forget_message": "Les {n} entrées de {source} → {target} sont retirées de la mémoire de traduction de cette machine. Les projets gardent leurs propres traductions. Cette action est irréversible.",
     "memory_forgotten": "Mémoire effacée pour {source} → {target}"

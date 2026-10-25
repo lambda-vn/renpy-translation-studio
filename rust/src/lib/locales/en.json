@@ -75,6 +75,7 @@
     "memory_confirm": "Confirm",
     "sdk_none": "None",
     "verbose_hint": "For diagnosis. Writes more detail in the log.",
+    "open_log": "Open the log",
     "memory_forget_title": "Forget this language pair?",
     "memory_forget_message": "The {n} entries of {source} → {target} are removed from the translation memory of this machine. Projects keep their own translations. This cannot be undone.",
     "memory_forgotten": "Memory cleared for {source} → {target}"
