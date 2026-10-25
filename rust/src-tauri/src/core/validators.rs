@@ -91,6 +91,19 @@ fn resolve_lexically(path: &Path) -> PathBuf {
     resolved
 }
 
+/// Whether a path names a Ren'Py launcher: a file called `renpy.exe`,
+/// `renpy.py` or `renpy.sh`, or a folder holding one. What the onboarding
+/// and settings screens check before keeping an SDK path.
+pub fn is_valid_sdk_path(path: &Path) -> bool {
+    const LAUNCHERS: [&str; 3] = ["renpy.exe", "renpy.py", "renpy.sh"];
+    if path.is_file() {
+        return path
+            .file_name()
+            .is_some_and(|n| LAUNCHERS.contains(&n.to_string_lossy().to_lowercase().as_str()));
+    }
+    path.is_dir() && LAUNCHERS.iter().any(|name| path.join(name).exists())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +161,17 @@ mod tests {
     fn without_a_base_any_path_resolves() {
         let root = scratch("free");
         assert!(resolve_safe_path(&root.join("x"), None).is_ok());
+    }
+
+    #[test]
+    fn an_sdk_path_is_a_launcher_or_a_folder_holding_one() {
+        let sdk = scratch("sdk");
+        assert!(!is_valid_sdk_path(&sdk));
+        std::fs::write(sdk.join("renpy.sh"), "").unwrap();
+        assert!(is_valid_sdk_path(&sdk));
+        assert!(is_valid_sdk_path(&sdk.join("renpy.sh")));
+        std::fs::write(sdk.join("other.sh"), "").unwrap();
+        assert!(!is_valid_sdk_path(&sdk.join("other.sh")));
+        assert!(!is_valid_sdk_path(&sdk.join("missing")));
     }
 }

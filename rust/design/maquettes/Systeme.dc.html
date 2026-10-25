@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Système de design</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;1,7..72,400&amp;display=swap">
+<style>
+body{margin:0}
+.rts{--bg:#F3F3F0;--panel:#FFFFFF;--sunken:#EAEAE5;--hover:#F8F8F5;--line:#E0E0D9;--line2:#C9C9C0;--ink:#1A1B1E;--ink2:#46424F;--ink3:#62656C;--acc:#2B55C6;--accInk:#FFFFFF;--accWeak:#E9EEFB;--accLine:#9FB4EE;--s-none:#858991;--s-draft:#A3650E;--s-imp:#13738A;--s-ai:#7041C4;--s-ok:#277A49;--flag:#BE3E0B;--flagWeak:#FCEFE6;--err:#B32222;--errWeak:#FBEBEB;--errInk:#FFFFFF;--warn:#7F5600;--mcpWeak:#F3EEFC;--tag:#55585F;--tagBg:#EAEAE4;--var:#0F6A7F;--varBg:#E2F0F3;--shadow:0 10px 28px rgba(20,22,28,.14),0 2px 6px rgba(20,22,28,.08);font-family:'Archivo',system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:13px;line-height:1.4}
+.rts.dark{--bg:#121316;--panel:#1A1B1F;--sunken:#0E0F11;--hover:#1F2125;--line:#2A2C32;--line2:#3B3E46;--ink:#E7E7E4;--ink2:#BDBFC5;--ink3:#979AA2;--acc:#86A3F5;--accInk:#0F1530;--accWeak:#1C2440;--accLine:#4A5FA8;--s-none:#80848C;--s-draft:#E2AA4E;--s-imp:#4DB5C9;--s-ai:#AE90F2;--s-ok:#62C28A;--flag:#F2894A;--flagWeak:#33221A;--err:#F27373;--errWeak:#361C1E;--errInk:#2A0C0C;--warn:#E5BC5A;--mcpWeak:#241D36;--tag:#B0B3BA;--tagBg:#2A2C32;--var:#6CC6D8;--varBg:#16313A;--shadow:0 10px 28px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.4)}
+.rts *{box-sizing:border-box}
+.rts button,.rts input,.rts select{font:inherit;color:inherit}
+.rts :focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.rts .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.rts .h{font-size:11.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin:0 0 10px}
+.rts .btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border:1px solid var(--line2);background:var(--panel);border-radius:6px;cursor:pointer;white-space:nowrap;font-size:13px;color:var(--ink)}
+.rts .btn.ghost{border-color:transparent;background:transparent;color:var(--ink2)}
+.rts .btn.primary{background:var(--acc);border-color:var(--acc);color:var(--accInk);font-weight:500}
+.rts .btn.danger{background:var(--err);border-color:var(--err);color:var(--errInk);font-weight:500}
+.rts .btn[disabled]{opacity:.45;cursor:not-allowed}
+.rts .btn.focus{outline:2px solid var(--acc);outline-offset:1px}
+.rts .ico{width:16px;height:16px;flex:none}
+.rts .g{width:16px;height:16px;flex:none}
+.rts .kbd{font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:16px;padding:0 5px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;color:var(--ink3);background:var(--panel);white-space:nowrap}
+.rts .btn.primary .kbd{background:transparent;color:var(--accInk);border-color:currentColor;opacity:.8}
+.rts .field{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border:1px solid var(--line2);border-radius:6px;background:var(--panel);color:var(--ink3)}
+.rts .field.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.rts .field input,.rts .field select{border:0;outline:0;background:transparent;min-width:0;flex:1;font-size:13px;color:var(--ink)}
+.rts .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border:1px solid transparent;border-radius:13px;background:transparent;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+.rts .chip[aria-pressed=true]{background:var(--panel);border-color:var(--line2);color:var(--ink);font-weight:500}
+.rts .chip .n{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink3);font-weight:400}
+.rts .st{display:grid;grid-template-columns:20px 120px minmax(0,1fr);align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.rts .st:last-child{border-bottom:0}
+.rts .st .nm{font-weight:500}
+.rts .st .ds{font-size:12px;color:var(--ink2)}
+.rts .sw{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--ink3)}
+.rts .sw i{display:block;height:34px;border-radius:6px;border:1px solid var(--line)}
+.rts .toast{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);font-size:13px}
+.rts .txt{font-family:'Literata',Georgia,serif;font-size:14.5px;line-height:1.5;color:var(--ink)}
+.rts .spk{font-family:'Archivo',sans-serif;font-size:12px;font-weight:600;color:var(--ink2);margin-right:7px}
+.rts .tk{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--tag);background:var(--tagBg);border-radius:3px;padding:0 3px}
+.rts .tv{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--var);background:var(--varBg);border-radius:3px;padding:0 3px}
+/* RenZip v2 : violet, Archivo, rayons 6/9/14 */
+.rts{--bg:#F4F2F8;--surf:#EFECF5;--panel:#FDFCFE;--sunken:#ECE9F2;--hover:#F7F5FB;--line:#E3E0EA;--line2:#CFCBD8;--ink:#1E1B26;--ink2:#46424F;--ink3:#625E6B;--acc:#7F56E0;--acc7:#6440BD;--accInk:#FFFFFF;--accWeak:#F3EEFF;--accLine:#BB9EF8;--s-none:#86838F;--s-imp:#3A68B0;--s-ai:#0B7A80;--mcpWeak:#E4F4F4;--tag:#55525E;--tagBg:#ECE9F2;--var:#6440BD;--varBg:#F0EAFF}
+.rts.dark{--bg:#17151D;--surf:#1B1922;--panel:#1E1C25;--sunken:#121017;--hover:#24212D;--line:#2E2B37;--line2:#423E4D;--ink:#ECEAF1;--ink2:#C3BFCC;--ink3:#9D99A8;--acc:#A788F6;--acc7:#BB9EF8;--accInk:#160F2B;--accWeak:#251E3D;--accLine:#6A52B8;--s-none:#85828E;--s-imp:#7FA7E8;--s-ai:#4CC3C9;--mcpWeak:#14302F;--tag:#B3B0BC;--tagBg:#2E2B37;--var:#C9B4FA;--varBg:#2E2550}
+.rts .btn,.rts .field{border-radius:9px}
+.rts .field.on{border-radius:999px;padding:0 12px}
+.rts .btn.primary{font-weight:600;box-shadow:0 1px 2px rgba(76,47,143,.28)}
+.rts .btn.focus{outline:2px solid var(--acc);outline-offset:2px}
+.rts .chip[aria-pressed=true]{background:var(--accWeak);border-color:var(--accLine);color:var(--acc7);font-weight:600}
+.rts .toast{border-radius:9px}
+.rts .sw i{border-radius:6px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1080px; display: flex; flex-direction: column; font-family: 'Archivo', system-ui, sans-serif; background: #EFECF5">
+<div style="display: flex; align-items: baseline; gap: 28px; padding: 24px 32px 18px; color: #1E1B26; border-bottom: 1px solid #E3E0EA">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.015em">Système</h1>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #46424F">Accent <span style="width: 14px; height: 14px; border-radius: 4px; background: #9B76F4"></span><span style="width: 14px; height: 14px; border-radius: 4px; background: #7F56E0"></span><span style="width: 14px; height: 14px; border-radius: 4px; background: #6440BD"></span><span class="mono" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">#9b76f4 · 600 · 700</span></span>
+<span style="font-size: 13px; color: #46424F">Interface : <strong style="font-weight: 800">Archivo</strong> 13 / 12,5 / 11,5</span>
+<span style="font-size: 13px; color: #46424F">Texte du jeu : <strong style="font-weight: 600; font-family: 'Literata', Georgia, serif">Literata</strong> 14,5 / 1,5</span>
+<span style="font-size: 13px; color: #46424F">Code, chemins, compteurs : <strong style="font-weight: 600; font-family: 'IBM Plex Mono', monospace">IBM Plex Mono</strong> 11,5–12,5</span>
+</div>
+<div style="flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 0">
+<sc-for list="{{themes}}" as="th" hint-placeholder-count="2">
+<div class="{{th.cls}}" style="padding: 24px 32px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 28px; align-content: start">
+<p class="h" style="grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--ink)">{{th.name}}</p>
+
+<div>
+<p class="h">Statuts</p>
+<div>
+<div class="st"><svg class="g" style="color: var(--s-none)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle></svg><span class="nm">Non traduit</span><span class="ds">cercle vide</span></div>
+<div class="st"><svg class="g" style="color: var(--s-draft)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle><path d="M8 2.5a5.5 5.5 0 0 0 0 11z" fill="currentColor"></path></svg><span class="nm">Brouillon</span><span class="ds">demi-plein : commencé</span></div>
+<div class="st"><svg class="g" style="color: var(--s-imp)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2L14 8 8 14 2 8z" fill="currentColor"></path></svg><span class="nm">Importé</span><span class="ds">losange : venu d’ailleurs</span></div>
+<div class="st"><svg class="g" style="color: var(--s-ai)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5L9.6 6.4 14.5 8 9.6 9.6 8 14.5 6.4 9.6 1.5 8 6.4 6.4z" fill="currentColor"></path></svg><span class="nm">Suggestion IA</span><span class="ds">étoile : machine</span></div>
+<div class="st"><svg class="g" style="color: var(--s-ok)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="currentColor"></circle><path d="M5 8.2l2 2 4-4.2" fill="none" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="nm">Validé</span><span class="ds">plein coché : humain</span></div>
+</div>
+<p class="h" style="margin-top: 16px">Marqueurs</p>
+<div>
+<div class="st"><svg class="g" style="color: var(--flag)" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14.5V2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><path d="M4 2.5h8l-1.8 3 1.8 3H4z" fill="currentColor"></path></svg><span class="nm">Signalée</span><span class="ds">drapeau, note en bandeau</span></div>
+<div class="st"><svg class="g" style="color: var(--err)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8L14.8 13.8H1.2z" fill="currentColor"></path><path d="M8 6.3v3.4M8 11.6v.1" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round"></path></svg><span class="nm">En erreur</span><span class="ds">bloque la validation</span></div>
+<div class="st"><svg class="g" style="color: var(--warn)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"></circle><path d="M8 4.8v3.8M8 11v.1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg><span class="nm">Avertissement</span><span class="ds">texte seul, non bloquant</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 22px">
+<div>
+<p class="h">Couleurs</p>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px">
+<span class="sw"><i style="background: var(--bg)"></i>Fond</span>
+<span class="sw"><i style="background: var(--panel)"></i>Panneau</span>
+<span class="sw"><i style="background: var(--ink)"></i>Encre</span>
+<span class="sw"><i style="background: var(--acc)"></i>Accent</span>
+<span class="sw"><i style="background: var(--accWeak)"></i>Job, sélection</span>
+<span class="sw"><i style="background: var(--flagWeak)"></i>Note</span>
+<span class="sw"><i style="background: var(--errWeak)"></i>Erreur</span>
+<span class="sw"><i style="background: var(--mcpWeak)"></i>Màj MCP</span>
+</div>
+</div>
+<div>
+<p class="h">Texte d’une ligne</p>
+<div class="txt" style="padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px"><span class="spk">Holt</span>Go home, <span class="tv">[player_name]</span>. <span class="tk">{color=#f00}</span>Now.<span class="tk">{/color}</span></div>
+</div>
+</div>
+
+<div>
+<p class="h">Boutons</p>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button class="btn primary">Écrire dans les .rpy<span class="kbd">Ctrl+S</span></button>
+<button class="btn">Secondaire</button>
+<button class="btn ghost">Discret</button>
+<button class="btn danger">Effacer 36 lignes</button>
+<button class="btn focus">Focus clavier</button>
+<button class="btn" disabled>Indisponible</button>
+</div>
+<p class="h" style="margin-top: 18px">Champs et filtres</p>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label class="field on"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.25"></circle><path d="M10.2 10.2L13.5 13.5"></path></svg><input aria-label="Recherche" defaultValue="lanterne"><span class="kbd">Ctrl+F</span></label>
+<div style="display: flex; gap: 2px; flex-wrap: wrap">
+<span class="chip" aria-pressed="true">Tous<span class="n">77</span></span>
+<span class="chip" aria-pressed="false"><svg class="g" style="width: 14px; height: 14px; color: var(--s-ok)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="currentColor"></circle><path d="M5 8.2l2 2 4-4.2" fill="none" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>Validé<span class="n">26</span></span>
+<span class="chip" aria-pressed="false"><svg class="g" style="width: 14px; height: 14px; color: var(--flag)" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14.5V2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><path d="M4 2.5h8l-1.8 3 1.8 3H4z" fill="currentColor"></path></svg>Signalées<span class="n">3</span></span>
+</div>
+</div>
+</div>
+
+<div>
+<p class="h">Toasts · bas à droite, 4 s</p>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div class="toast" role="status"><svg class="g" style="color: var(--s-ok)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="currentColor"></circle><path d="M5 8.2l2 2 4-4.2" fill="none" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="flex: 1"><span class="mono">51</span> lignes remplies depuis la mémoire</span></div>
+<div class="toast" role="status"><svg class="g" style="color: var(--acc)" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5h7.8l2.7 2.7v8.3H3z"></path><path d="M5.5 2.5v3h4.5v-3"></path></svg><span style="flex: 1"><span class="mono">72</span> lignes écrites dans 3 fichiers .rpy</span></div>
+<div class="toast" role="alert"><svg class="g" style="color: var(--err)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8L14.8 13.8H1.2z" fill="currentColor"></path><path d="M8 6.3v3.4M8 11.6v.1" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round"></path></svg><span style="flex: 1">Écriture impossible : tavern.rpy est en lecture seule</span><button class="btn ghost" style="height: 26px; padding: 0 8px">Détails</button></div>
+</div>
+</div>
+
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      themes: [
+        { name: 'Clair', cls: 'rts' },
+        { name: 'Sombre', cls: 'rts dark' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

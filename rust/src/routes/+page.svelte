@@ -12,25 +12,37 @@
 		type LanguageEntry,
 		type ProjectEntry
 	} from '$lib/api';
+	import Dialog from '$lib/components/Dialog.svelte';
+	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
+	import { languageName } from '$lib/languages';
+	import { ROUTES } from '$lib/navigation';
 	import { project } from '$lib/stores';
+	import { toast } from '$lib/toast';
 
-	let view = $state<'list' | 'form'>('list');
 	let recent = $state<ProjectEntry[]>([]);
+	let recentLoaded = $state(false);
 	let languages = $state<LanguageEntry[]>([]);
+	let listError = $state('');
+	let opening = $state('');
 
 	let folder = $state('');
 	let inspection = $state<GameInspection | null>(null);
 	let sourceLanguage = $state('english');
 	let targetLanguage = $state('');
 	let sdkPath = $state('');
+	let sdkError = $state('');
 
 	let extracting = $state(false);
 	let stage = $state<ExtractionStage | null>(null);
 	let failure = $state<ExtractionFailure | null>(null);
-	let listError = $state('');
-	let modeDialog = $state(false);
-	let discarded = $state<string[] | null>(null);
+
+	let modeOpen = $state(false);
+	let mode = $state<ExtractMode>('update');
+
+	let discarded = $state<string[]>([]);
+	let discardedOpen = $state(false);
+	let extractedUnits = $state(0);
 
 	let unlisten: UnlistenFn | undefined;
 
@@ -41,6 +53,8 @@
 			sdkPath = (await api.getSettings()).sdkPath ?? '';
 		} catch (e) {
 			listError = String(e);
+		} finally {
+			recentLoaded = true;
 		}
 	});
 
@@ -52,29 +66,60 @@
 		return localized === key ? entry.label : localized;
 	}
 
-	async function openRecent(path: string) {
+	function percent(entry: ProjectEntry): number {
+		const resume = entry.resume;
+		if (!resume || resume.total === 0) return 0;
+		return Math.floor((resume.validated * 100) / resume.total);
+	}
+
+	async function openRecent(entry: ProjectEntry) {
+		if (opening) return;
 		listError = '';
+		opening = entry.path;
 		try {
-			$project = await api.openProject(path);
-			await goto('/review');
+			$project = await api.openProject(entry.path);
+			await goto(ROUTES.review);
 		} catch (e) {
 			listError = $t('project_setup.resume_failed', { error: String(e) });
+		} finally {
+			opening = '';
 		}
 	}
 
-	function showForm() {
-		folder = '';
-		inspection = null;
-		targetLanguage = '';
-		failure = null;
-		view = 'form';
+	async function deleteEntry(entry: ProjectEntry) {
+		const confirmed = await confirmDialog({
+			title: $t('project_setup.delete_title'),
+			message: $t('project_setup.delete_message', { name: entry.name }),
+			confirmLabel: $t('project_setup.delete_btn'),
+			danger: true
+		});
+		if (!confirmed) return;
+		try {
+			await api.deleteProjectData(entry.path);
+			if ($project?.path === entry.path) $project = null;
+			recent = await api.listRecentProjects();
+		} catch (e) {
+			toast.error($t('project_setup.delete_failed', { name: entry.name }), {
+				action: { label: $t('common.details'), run: () => (listError = String(e)) }
+			});
+		}
 	}
 
 	async function inspect() {
-		inspection = folder ? await api.inspectGame(folder, targetLanguage) : null;
-		if (inspection && !targetLanguage && inspection.existingLanguages.length === 1) {
-			targetLanguage = inspection.existingLanguages[0];
-			inspection = await api.inspectGame(folder, targetLanguage);
+		failure = null;
+		if (!folder.trim()) {
+			inspection = null;
+			return;
+		}
+		try {
+			inspection = await api.inspectGame(folder.trim(), targetLanguage);
+			if (inspection.valid && !targetLanguage && inspection.existingLanguages.length === 1) {
+				targetLanguage = inspection.existingLanguages[0];
+				inspection = await api.inspectGame(folder.trim(), targetLanguage);
+			}
+		} catch (e) {
+			inspection = null;
+			failure = { code: 'internal', message: String(e), detail: null, params: {} };
 		}
 	}
 
@@ -82,7 +127,6 @@
 		const picked = await pickPath({ directory: true });
 		if (typeof picked !== 'string') return;
 		folder = picked;
-		failure = null;
 		await inspect();
 	}
 
@@ -91,40 +135,60 @@
 			filters: [{ name: "Ren'Py", extensions: ['exe', 'sh', 'py'] }]
 		});
 		if (typeof picked !== 'string') return;
+		sdkError = '';
+		let valid = false;
+		try {
+			valid = await api.validateSdkPath(picked);
+		} catch {
+			valid = false;
+		}
+		if (!valid) {
+			sdkError = $t('onboarding.sdk_invalid');
+			return;
+		}
 		sdkPath = picked;
 		await api.setSetting('sdk_path', picked);
 	}
 
 	const missing = $derived.by(() => {
 		const items: string[] = [];
-		if (!folder) items.push($t('project_setup.need_folder'));
+		if (!folder.trim()) items.push($t('project_setup.need_folder'));
 		if (!/^[a-z][a-z0-9_]{1,31}$/.test(targetLanguage)) items.push($t('project_setup.need_language'));
 		if (inspection?.valid && inspection.needsSdk && !sdkPath) items.push($t('project_setup.need_sdk'));
 		return items;
 	});
 
-	function extractClicked() {
-		if (missing.length > 0 || extracting) return;
-		if (inspection?.hasExistingTl) modeDialog = true;
-		else void run('update');
+	async function submit(event: SubmitEvent) {
+		event.preventDefault();
+		if (extracting) return;
+		await inspect();
+		if (missing.length > 0 || !inspection?.valid) return;
+		if (inspection.hasExistingTl) {
+			mode = 'update';
+			modeOpen = true;
+		} else {
+			await run('update');
+		}
 	}
 
-	async function run(mode: ExtractMode) {
-		modeDialog = false;
+	async function run(chosen: ExtractMode) {
+		modeOpen = false;
 		extracting = true;
 		failure = null;
 		try {
 			const outcome = await api.extractProject({
-				path: folder,
+				path: folder.trim(),
 				sourceLanguage,
 				targetLanguage,
-				mode
+				mode: chosen
 			});
 			$project = outcome.project;
 			if (outcome.report.discardedSources.length > 0) {
 				discarded = outcome.report.discardedSources;
+				extractedUnits = outcome.report.units;
+				discardedOpen = true;
 			} else {
-				await goto('/review');
+				await goto(ROUTES.review);
 			}
 		} catch (e) {
 			failure =
@@ -135,11 +199,6 @@
 			extracting = false;
 			stage = null;
 		}
-	}
-
-	async function acknowledgeDiscarded() {
-		discarded = null;
-		await goto('/review');
 	}
 
 	const stageKeys: Record<ExtractionStage, string> = {
@@ -174,280 +233,518 @@
 		const key = failureKeys[f.code];
 		return key ? $t(key, f.params) : f.message;
 	}
+
+	const modes: { id: ExtractMode; key: string }[] = [
+		{ id: 'keep', key: 'existing_keep' },
+		{ id: 'update', key: 'existing_update' },
+		{ id: 'reset', key: 'existing_reset' }
+	];
 </script>
 
-{#if view === 'list'}
-	<h1>{$t('project_setup.list_title')}</h1>
-	<p class="hint">{$t('project_setup.list_subtitle')}</p>
+<svelte:head><title>{$t('project_setup.list_title')} — Ren'Py Translation Studio</title></svelte:head>
 
-	<p><button class="primary" onclick={showForm}>{$t('project_setup.new_project')}</button></p>
+<div class="setup">
+	<section class="recent" aria-labelledby="h-recent">
+		<h1 id="h-recent">{$t('project_setup.list_title')}</h1>
 
-	{#if listError}<p class="error">{listError}</p>{/if}
-
-	{#if recent.length === 0}
-		<p class="hint">{$t('project_setup.list_empty')}</p>
-	{:else}
-		<ul class="recent-list">
-			{#each recent as entry (entry.path)}
-				<li>
-					<button class="recent-entry" disabled={!entry.ready} onclick={() => openRecent(entry.path)}>
-						<span class="name">{entry.name}</span>
-						<span class="path">{entry.path}</span>
-						{#if !entry.ready}
-							<span class="not-ready">{$t('extraction.not_extracted')}</span>
-						{/if}
-					</button>
-				</li>
-			{/each}
-		</ul>
-	{/if}
-{:else}
-	<button class="link" disabled={extracting} onclick={() => (view = 'list')}>
-		← {$t('project_setup.back_to_list')}
-	</button>
-	<h1>{$t('project_setup.title')}</h1>
-	<p class="hint">{$t('project_setup.subtitle')}</p>
-
-	<div class="form">
-		<label for="folder">{$t('project_setup.game_folder')}</label>
-		<div class="row">
-			<input
-				id="folder"
-				bind:value={folder}
-				placeholder={$t('project_setup.no_folder')}
-				disabled={extracting}
-				onchange={() => {
-					failure = null;
-					void inspect();
-				}}
-			/>
-			<button disabled={extracting} onclick={browseFolder}>{$t('common.browse')}</button>
-		</div>
-		{#if inspection && !inspection.valid}
-			<p class="error">{$t('project_setup.invalid_project_dir')}</p>
+		{#if listError}
+			<p class="notice err" role="alert">{listError}</p>
 		{/if}
 
-		<label for="source">{$t('project_setup.source_lang')}</label>
-		<select id="source" bind:value={sourceLanguage} disabled={extracting}>
-			{#each languages as entry (entry.code)}
-				<option value={entry.code}>{languageLabel(entry)}</option>
-			{/each}
-		</select>
-
-		<label for="target">{$t('project_setup.target_lang')}</label>
-		<select id="target" bind:value={targetLanguage} onchange={inspect} disabled={extracting}>
-			<option value="" disabled>{$t('project_setup.target_placeholder')}</option>
-			{#each languages as entry (entry.code)}
-				<option value={entry.code}>{languageLabel(entry)}</option>
-			{/each}
-		</select>
-		<p class="hint">{$t('project_setup.target_hint')}</p>
-
-		{#if inspection?.valid && inspection.needsSdk}
-			<label for="sdk">{$t('project_setup.sdk_title')}</label>
-			<p class="hint">{$t('project_setup.sdk_desc')}</p>
-			<div class="row">
-				<input id="sdk" readonly value={sdkPath} placeholder={$t('project_setup.sdk_file_hint')} />
-				<button disabled={extracting} onclick={browseSdk}>{$t('project_setup.sdk_select')}</button>
-			</div>
-		{/if}
-
-		<p class="notice">{$t('project_setup.code_execution_notice')}</p>
-
-		{#if extracting}
-			<p class="progress">{stage ? $t(stageKeys[stage]) : $t('project_setup.extracting')}</p>
+		{#if recentLoaded && recent.length === 0}
+			<p class="empty">{$t('project_setup.list_empty')}</p>
 		{:else}
-			<button class="primary" disabled={missing.length > 0} onclick={extractClicked}>
-				{$t('project_setup.extract')}
-			</button>
-			{#if missing.length > 0}
-				<p class="hint">{$t('project_setup.extract_missing', { items: missing.join(', ') })}</p>
+			<ul class="projects">
+				{#each recent as entry (entry.path)}
+					{@const resume = entry.resume}
+					{@const pct = percent(entry)}
+					<li class="proj">
+						<button
+							type="button"
+							class="open"
+							disabled={!resume || Boolean(opening)}
+							title={entry.path}
+							onclick={() => openRecent(entry)}
+						>
+							<span class="info">
+								<span class="name">{entry.name}</span>
+								<span class="meta">
+									{#if resume}
+										{languageName(resume.sourceLanguage, $t)} → {languageName(
+											resume.targetLanguage,
+											$t
+										)} ·
+									{/if}
+									<span class="mono">{entry.path}</span>
+								</span>
+							</span>
+							{#if resume}
+								<span
+									class="prog"
+									title={$t('project_setup.recent_lines', {
+										total: resume.total,
+										validated: resume.validated
+									})}
+								>
+									<span class="mono pct"
+										>{pct} %<span class="sr"> {$t('project_setup.validated_sr')}</span></span
+									>
+									<progress class="ok" value={pct} max="100" aria-hidden="true"></progress>
+								</span>
+							{:else}
+								<span class="prog"
+									><span class="mono pct">{$t('extraction.not_extracted')}</span></span
+								>
+							{/if}
+						</button>
+						<button
+							type="button"
+							class="btn ghost icon"
+							aria-label={$t('project_setup.delete_label', { name: entry.name })}
+							title={$t('project_setup.delete_tooltip')}
+							onclick={() => deleteEntry(entry)}
+						>
+							<svg
+								class="ico"
+								viewBox="0 0 16 16"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg
+							>
+						</button>
+					</li>
+				{/each}
+			</ul>
+			{#if recent.length > 0}
+				<p class="foot-note">{$t('project_setup.delete_note')}</p>
 			{/if}
 		{/if}
+	</section>
 
-		{#if failure}
-			<p class="error">{failureText(failure)}</p>
-			{#if failure.detail}<pre class="detail">{failure.detail}</pre>{/if}
-		{/if}
-	</div>
-{/if}
+	<section class="new" aria-labelledby="h-new">
+		<h2 id="h-new">{$t('project_setup.new_project')}</h2>
+		<form onsubmit={submit}>
+			<div>
+				<label class="lbl" for="np-dir">
+					{$t('project_setup.game_folder')}
+					<span class="optional">({$t('common.required')})</span>
+				</label>
+				<div class="row">
+					<input
+						id="np-dir"
+						class="mono"
+						required
+						placeholder={$t('project_setup.no_folder')}
+						aria-describedby="np-dir-info"
+						bind:value={folder}
+						disabled={extracting}
+						onchange={inspect}
+					/>
+					<button type="button" class="btn" disabled={extracting} onclick={browseFolder}>
+						{$t('common.browse')}…
+					</button>
+				</div>
+				<div id="np-dir-info" class="info-line">
+					{#if inspection && !inspection.valid}
+						<p class="status err">{$t('project_setup.invalid_project_dir')}</p>
+					{:else if inspection?.valid && !inspection.needsSdk}
+						<p class="status ok">
+							<svg
+								class="ico"
+								viewBox="0 0 16 16"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" /></svg
+							>
+							{$t('project_setup.engine_found')}
+						</p>
+					{:else}
+						<p class="help">{$t('project_setup.folder_hint')}</p>
+					{/if}
+				</div>
+			</div>
 
-{#if modeDialog}
-	<div class="backdrop">
-		<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="mode-title">
-			<h2 id="mode-title">{$t('project_setup.existing_tl_title')}</h2>
-			<p>{$t('project_setup.existing_tl_desc', { language: targetLanguage })}</p>
-			{#each [['keep', 'existing_keep'], ['update', 'existing_update'], ['reset', 'existing_reset']] as [mode, key] (mode)}
-				<button class="card" onclick={() => run(mode as ExtractMode)}>
-					<strong>{$t(`project_setup.${key}_title`)}</strong>
-					<span>{$t(`project_setup.${key}_desc`)}</span>
-				</button>
-			{/each}
-			<button onclick={() => (modeDialog = false)}>{$t('common.cancel')}</button>
-		</div>
-	</div>
-{/if}
+			<div class="langs">
+				<div>
+					<label class="lbl" for="np-src">{$t('project_setup.source_lang')}</label>
+					<select id="np-src" bind:value={sourceLanguage} disabled={extracting}>
+						{#each languages as entry (entry.code)}
+							<option value={entry.code}>{languageLabel(entry)}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label class="lbl" for="np-tgt">{$t('project_setup.target_lang')}</label>
+					<select
+						id="np-tgt"
+						bind:value={targetLanguage}
+						disabled={extracting}
+						onchange={inspect}
+						aria-describedby="np-tgt-help"
+					>
+						<option value="" disabled>{$t('project_setup.target_placeholder')}</option>
+						{#each languages as entry (entry.code)}
+							<option value={entry.code}>{languageLabel(entry)}</option>
+						{/each}
+					</select>
+				</div>
+				<p id="np-tgt-help" class="help span">{$t('project_setup.target_hint')}</p>
+			</div>
 
-{#if discarded}
-	<div class="backdrop">
-		<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="discarded-title">
-			<h2 id="discarded-title">{$t('project_setup.discarded_title')}</h2>
-			<p>{$t('project_setup.discarded_message')}</p>
-			<ul>
-				{#each discarded as name (name)}<li><code>{name}</code></li>{/each}
+			{#if inspection?.valid && inspection.needsSdk}
+				<div>
+					<label class="lbl" for="np-sdk">{$t('project_setup.sdk_title')}</label>
+					<div class="row">
+						<input
+							id="np-sdk"
+							class="mono"
+							readonly
+							value={sdkPath}
+							placeholder={$t('project_setup.sdk_file_hint')}
+							aria-describedby="np-sdk-help"
+						/>
+						<button type="button" class="btn" disabled={extracting} onclick={browseSdk}>
+							{$t('project_setup.sdk_select')}
+						</button>
+					</div>
+					{#if sdkError}<p class="status err" role="alert">{sdkError}</p>{/if}
+					<p id="np-sdk-help" class="help">{$t('project_setup.sdk_desc')}</p>
+				</div>
+			{/if}
+
+			<p id="np-notice" class="notice">
+				<svg
+					class="ico warn-ico"
+					viewBox="0 0 16 16"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+					><path d="M8 1.8l5.5 2v4c0 3.3-2.3 5.6-5.5 6.5-3.2-.9-5.5-3.2-5.5-6.5v-4z" /><path
+						d="M8 5.5v3.2M8 10.8v.1"
+					/></svg
+				>
+				<span>{$t('project_setup.code_execution_notice')}</span>
+			</p>
+
+			{#if extracting}
+				<div class="progress" role="status">
+					<progress aria-label={$t('project_setup.extracting')}></progress>
+					<span>{stage ? $t(stageKeys[stage]) : $t('project_setup.extracting')}</span>
+				</div>
+			{:else}
+				<div class="actions">
+					<button
+						type="submit"
+						class="btn primary"
+						aria-describedby="np-notice"
+						disabled={missing.length > 0}
+					>
+						{$t('project_setup.extract')}
+					</button>
+					<span class="help inline">
+						{missing.length > 0
+							? $t('project_setup.extract_missing', { items: missing.join(', ') })
+							: $t('project_setup.extract_hint')}
+					</span>
+				</div>
+			{/if}
+
+			{#if failure}
+				<div class="notice err" role="alert">
+					<div>
+						<p class="fail-text">{failureText(failure)}</p>
+						{#if failure.detail}
+							<details>
+								<summary>{$t('common.details')}</summary>
+								<pre>{failure.detail}</pre>
+							</details>
+						{/if}
+					</div>
+				</div>
+			{/if}
+		</form>
+	</section>
+</div>
+
+<Dialog bind:open={modeOpen} title={$t('project_setup.existing_tl_title')}>
+	<p class="lead">{$t('project_setup.existing_tl_desc', { language: targetLanguage })}</p>
+	<fieldset class="modes">
+		<legend class="sr">{$t('project_setup.existing_tl_title')}</legend>
+		{#each modes as option (option.id)}
+			<label class="opt" class:danger={option.id === 'reset'}>
+				<input type="radio" name="mode" value={option.id} bind:group={mode} />
+				<span>
+					<span class="t">{$t(`project_setup.${option.key}_title`)}</span>
+					<span class="d">{$t(`project_setup.${option.key}_desc`)}</span>
+				</span>
+			</label>
+		{/each}
+	</fieldset>
+	{#snippet actions()}
+		<button type="button" class="btn ghost" onclick={() => (modeOpen = false)}>
+			{$t('common.cancel')}
+		</button>
+		<button type="button" class="btn primary" onclick={() => run(mode)}>
+			{$t('project_setup.extract')}
+		</button>
+	{/snippet}
+</Dialog>
+
+<Dialog
+	bind:open={discardedOpen}
+	title={$t('extraction.extracted', { units: extractedUnits })}
+	onclose={() => void goto(ROUTES.review)}
+>
+	<div class="notice warn">
+		<div>
+			<p class="warn-title">{$t('project_setup.discarded_title')}</p>
+			<p class="warn-text">{$t('project_setup.discarded_message')}</p>
+			<ul class="mono">
+				{#each discarded as name (name)}<li>{name}</li>{/each}
 			</ul>
-			<button class="primary" onclick={acknowledgeDiscarded}>
-				{$t('project_setup.discarded_continue')}
-			</button>
 		</div>
 	</div>
-{/if}
+	{#snippet actions()}
+		<!-- svelte-ignore a11y_autofocus -->
+		<button type="button" class="btn primary" autofocus onclick={() => (discardedOpen = false)}>
+			{$t('project_setup.discarded_continue')}
+		</button>
+	{/snippet}
+</Dialog>
 
 <style>
-	.hint {
-		color: #666;
-		font-size: 0.9rem;
+	.setup {
+		width: 100%;
+		max-width: 1120px;
+		margin: 0 auto;
+		padding: 40px 32px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 48px;
+		align-items: flex-start;
 	}
 
-	.notice {
-		max-width: 640px;
-		padding: 0.6rem 0.8rem;
-		border-left: 3px solid #b7791f;
-		background: #fffaf0;
-		font-size: 0.85rem;
+	.recent {
+		flex: 999 1 480px;
+		min-width: 0;
+	}
+	.recent h1 {
+		margin: 0 0 8px;
+		font-size: 22px;
+	}
+	.empty {
+		margin: 0;
+		padding: 24px 0;
+		border-top: 1px solid var(--line);
+		color: var(--ink2);
 	}
 
-	.error {
-		color: #b00020;
+	.projects {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		border-top: 1px solid var(--line);
+	}
+	.proj {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		border-bottom: 1px solid var(--line);
+	}
+	.open {
+		flex: 1;
+		min-width: 0;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 140px;
+		gap: 16px;
+		align-items: center;
+		padding: 16px 12px;
+		margin-left: -12px;
+		border: 0;
+		border-radius: 10px;
+		background: transparent;
+		color: var(--ink);
+		text-align: left;
+	}
+	.open:hover:not(:disabled) {
+		background: var(--hover);
+	}
+	.open:hover:not(:disabled) .name {
+		color: var(--acc7);
+	}
+	.open:disabled {
+		cursor: default;
+		color: var(--ink2);
+	}
+	.info {
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.name {
+		font-size: 15px;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.meta {
+		font-size: 13px;
+		color: var(--ink3);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.meta .mono {
+		font-size: 12px;
+	}
+	.prog {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.pct {
+		font-size: 12.5px;
+		color: var(--ink2);
+		text-align: right;
+	}
+	.prog progress {
+		height: 4px;
+	}
+	.foot-note {
+		margin: 14px 0 0;
+		font-size: 12.5px;
+		color: var(--ink3);
 	}
 
-	.detail {
-		max-width: 640px;
+	.new {
+		flex: 1 1 360px;
+		min-width: 0;
+		padding: 24px;
+		border: 1px solid var(--line);
+		border-radius: var(--r-lg);
+	}
+	.new h2 {
+		margin: 0 0 20px;
+		font-size: 17px;
+	}
+	form {
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+		margin: 0;
+	}
+	.lbl {
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.optional {
+		font-weight: 400;
+		color: var(--ink3);
+	}
+	.row {
+		display: flex;
+		gap: 6px;
+	}
+	.langs {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12px;
+	}
+	.span {
+		grid-column: 1 / -1;
+		margin: -6px 0 0;
+	}
+	.info-line {
+		min-height: 20px;
+	}
+	.status {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: 8px 0 0;
+		font-size: 12.5px;
+		color: var(--ink2);
+	}
+	.status.ok .ico {
+		width: 14px;
+		height: 14px;
+		color: var(--s-ok);
+	}
+	.status.err {
+		color: var(--err);
+	}
+	.warn-ico {
+		color: var(--warn);
+	}
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+	.help.inline {
+		margin: 0;
+	}
+	.progress {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		font-weight: 600;
+	}
+	.fail-text {
+		margin: 0;
+		white-space: pre-line;
+	}
+	pre {
 		max-height: 240px;
 		overflow: auto;
-		padding: 0.5rem;
-		background: #f2f2f2;
-		font-size: 0.8rem;
+		margin: 8px 0 0;
+		padding: 8px;
+		border-radius: var(--r-sm);
+		background: var(--panel);
+		font-family: var(--font-mono);
+		font-size: 12px;
 		white-space: pre-wrap;
 	}
 
-	.progress {
-		font-weight: 600;
+	.lead {
+		margin: 0;
+		font-size: 13px;
+		color: var(--ink2);
 	}
-
-	.form {
+	.modes {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
-		max-width: 640px;
-	}
-
-	.form label {
-		margin-top: 0.6rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-		letter-spacing: 0.05em;
-	}
-
-	.row {
-		display: flex;
-		gap: 0.5rem;
-	}
-
-	.row input,
-	.form select {
-		flex: 1;
-		padding: 0.5rem;
-		border: 1px solid #ccc;
-		border-radius: 4px;
-	}
-
-	.primary {
-		padding: 0.5rem 1rem;
-		border: none;
-		border-radius: 4px;
-		background: #2b6cb0;
-		color: white;
-	}
-
-	.link {
-		border: none;
-		background: none;
-		color: #2b6cb0;
+		gap: 6px;
+		margin: 0;
 		padding: 0;
+		border: 0;
 	}
 
-	.recent-list {
-		list-style: none;
-		padding: 0;
-		max-width: 640px;
-	}
-
-	.recent-entry {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		width: 100%;
-		text-align: left;
-		padding: 0.6rem 0.8rem;
-		margin-bottom: 0.4rem;
-		border: 1px solid #ddd;
-		border-radius: 4px;
-		background: white;
-	}
-
-	.recent-entry:hover:not(:disabled) {
-		background: #f0f4fa;
-	}
-
-	.name {
+	.warn-title {
+		margin: 0 0 5px;
 		font-weight: 600;
+		color: var(--warn);
 	}
-
-	.path {
-		font-size: 0.8rem;
-		color: #777;
+	.warn-text {
+		margin: 0 0 6px;
+		font-size: 12.5px;
 	}
-
-	.not-ready {
-		font-size: 0.8rem;
-		color: #b00020;
-	}
-
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: rgb(0 0 0 / 0.4);
-	}
-
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		width: min(560px, 90vw);
-		max-height: 85vh;
-		overflow: auto;
-		padding: 1.2rem;
-		border-radius: 8px;
-		background: white;
-	}
-
-	.card {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 0.2rem;
-		padding: 0.7rem 0.9rem;
-		border: 1px solid #ccc;
-		border-radius: 6px;
-		background: #fafafa;
-		text-align: left;
-	}
-
-	.card:hover {
-		background: #f0f4fa;
+	.notice ul {
+		margin: 0;
+		padding-left: 16px;
+		font-size: 12px;
+		line-height: 1.7;
+		color: var(--ink2);
 	}
 </style>

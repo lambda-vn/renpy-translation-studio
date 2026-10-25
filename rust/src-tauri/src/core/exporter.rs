@@ -26,6 +26,22 @@ pub fn resolve_game_name(project_path: &Path) -> String {
     GAME_NAME_SANITIZE.replace_all(&name, "-").into_owned()
 }
 
+/// The file name the export screen proposes for the zip:
+/// `<game name>_<language>.zip`, the name sanitized with `_` (not the `-`
+/// of [`resolve_game_name`]) and `game` when blank, `lang` when the
+/// project records no target language.
+pub fn zip_file_name(game_name: &str, language: &str) -> String {
+    let trimmed = game_name.trim();
+    let name =
+        GAME_NAME_SANITIZE.replace_all(if trimmed.is_empty() { "game" } else { trimmed }, "_");
+    let language = if language.is_empty() {
+        "lang"
+    } else {
+        language
+    };
+    format!("{name}_{language}.zip")
+}
+
 fn read_build_name(project_path: &Path) -> Option<String> {
     let options = project_path.join("game").join("options.rpy");
     let content = std::fs::read_to_string(options).ok()?;
@@ -127,6 +143,13 @@ mod tests {
         .unwrap();
 
         assert_eq!(resolve_game_name(&project), "My-Game-");
+    }
+
+    #[test]
+    fn zip_file_name_sanitizes_with_underscores() {
+        assert_eq!(zip_file_name("My Game!", "french"), "My_Game__french.zip");
+        assert_eq!(zip_file_name("  ", "french"), "game_french.zip");
+        assert_eq!(zip_file_name("Game", ""), "Game_lang.zip");
     }
 
     #[test]

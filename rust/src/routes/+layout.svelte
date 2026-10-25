@@ -1,83 +1,81 @@
 <script lang="ts">
+	import '$lib/styles/app.css';
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
+	import AppHeader from '$lib/components/AppHeader.svelte';
+	import ConfirmHost from '$lib/components/ConfirmHost.svelte';
+	import HelpDialog from '$lib/components/HelpDialog.svelte';
+	import Onboarding from '$lib/components/Onboarding.svelte';
+	import SettingsDialog from '$lib/components/SettingsDialog.svelte';
+	import ToastHost from '$lib/components/ToastHost.svelte';
 	import { locale, t } from '$lib/i18n';
-	import { project } from '$lib/stores';
+	import { matches } from '$lib/shortcuts';
+	import { skipLinks } from '$lib/stores';
+	import { setTheme } from '$lib/theme';
 
 	let { children } = $props();
 
+	let helpOpen = $state(false);
+	// Read once at startup: the onboarding replaces the shell until it is done.
+	let ready = $state(false);
+	let firstLaunch = $state(false);
+
 	onMount(async () => {
 		try {
-			$locale = (await api.getSettings()).locale ?? 'en';
+			const settings = await api.getSettings();
+			$locale = settings.locale ?? 'en';
+			setTheme(settings.theme);
+			firstLaunch = await api.isFirstLaunch();
 		} catch {
-			// English stays: a settings read failing must not blank the interface.
+			// English and the system theme stay: a settings read failing must
+			// not blank the interface.
 		}
+		ready = true;
 	});
+
+	$effect(() => {
+		document.documentElement.lang = $locale;
+	});
+
+	// F1 works everywhere, fields included. Esc is not handled here: an open
+	// <dialog> or menu closes itself, and a screen's own Esc (clearing the
+	// search) must check `modalDepth` first.
+	function onkeydown(event: KeyboardEvent) {
+		if (matches('help', event)) {
+			event.preventDefault();
+			helpOpen = true;
+		}
+	}
 </script>
 
-<div class="app-shell">
-	<header>
-		<a class="brand" href="/">Ren'Py Translation Studio</a>
-		{#if $project}
-			<span class="project-summary">
-				{$project.gameName} · {$project.sourceLanguage} → {$project.targetLanguage || '?'}
-			</span>
-		{/if}
-		<nav>
-			<a href="/">{$t('project_setup.step_setup')}</a>
-			<a href="/review" class:disabled={!$project}>{$t('project_setup.step_review')}</a>
-			<a href="/characters" class:disabled={!$project}>{$t('characters.title')}</a>
-			<a href="/universe" class:disabled={!$project}>{$t('universe.title')}</a>
-			<a href="/export" class:disabled={!$project}>{$t('project_setup.step_export')}</a>
-			<a href="/provider-config">{$t('provider_config.title')}</a>
-		</nav>
-	</header>
-	<main>
-		{@render children()}
-	</main>
-</div>
+<svelte:window {onkeydown} />
+
+{#if !ready}
+	<div class="loading"></div>
+{:else if firstLaunch}
+	<Onboarding ondone={() => (firstLaunch = false)} />
+{:else}
+	<div class="app-shell">
+		<a class="skip" href="#contenu">{$t('nav.skip_to_content')}</a>
+		{#each $skipLinks as link (link.href)}
+			<a class="skip" href={link.href}>{link.label}</a>
+		{/each}
+		<AppHeader />
+		<main id="contenu" tabindex="-1">
+			{@render children()}
+		</main>
+	</div>
+
+	<HelpDialog bind:open={helpOpen} />
+	<SettingsDialog />
+{/if}
+<ConfirmHost />
+<ToastHost />
 
 <style>
-	:global(html, body) {
-		margin: 0;
-		font-family:
-			system-ui,
-			-apple-system,
-			'Segoe UI',
-			sans-serif;
-		color: #1a1a1a;
-		background: #fafafa;
-	}
-
-	:global(*) {
-		box-sizing: border-box;
-	}
-
-	:global(button) {
-		font: inherit;
-		cursor: pointer;
-	}
-
-	:global(button:disabled) {
-		cursor: not-allowed;
-		opacity: 0.5;
-	}
-
-	:global(input, textarea, select) {
-		font: inherit;
-	}
-
-	:global(table) {
-		border-collapse: collapse;
-		width: 100%;
-	}
-
-	:global(h1) {
-		font-size: 1.4rem;
-	}
-
-	:global(h2) {
-		font-size: 1.1rem;
+	.loading {
+		height: 100vh;
+		background: var(--bg);
 	}
 
 	.app-shell {
@@ -86,51 +84,18 @@
 		height: 100vh;
 	}
 
-	header {
-		display: flex;
-		align-items: center;
-		gap: 1.5rem;
-		padding: 0.6rem 1rem;
-		background: #22252b;
-		color: #eee;
-		flex-shrink: 0;
-	}
-
-	.brand {
-		font-weight: 600;
-		color: #fff;
-		text-decoration: none;
-	}
-
-	.project-summary {
-		color: #bbb;
-		font-size: 0.85rem;
-		flex: 1;
-	}
-
-	nav {
-		display: flex;
-		gap: 0.9rem;
-	}
-
-	nav a {
-		color: #ccc;
-		text-decoration: none;
-		font-size: 0.9rem;
-	}
-
-	nav a:hover {
-		color: #fff;
-	}
-
-	nav a.disabled {
-		color: #555;
-		pointer-events: none;
-	}
-
+	/* No padding: the screens lay themselves out edge to edge (file list
+	   beside the lines). Simple screens wrap their content in `.page`. */
 	main {
 		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
 		overflow: auto;
-		padding: 1rem 1.5rem;
+		background: var(--panel);
+	}
+
+	main:focus {
+		outline: none;
 	}
 </style>

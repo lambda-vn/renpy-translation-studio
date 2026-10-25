@@ -31,13 +31,21 @@ pub struct AppState {
     pub extracting: Arc<AtomicBool>,
     /// The endpoint other processes notify, while the review screen is up.
     pub live: Arc<Mutex<Option<LiveServer>>>,
+    /// Whether no settings file existed at startup, until the onboarding
+    /// is finished. Captured once: any early write to the settings (a
+    /// language picked before the screen is done) would otherwise make the
+    /// file exist and the screen vanish.
+    pub first_launch: Arc<AtomicBool>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
+        let settings = Settings::load();
+        let first_launch = settings.is_first_launch();
         Self {
             current: Arc::new(Mutex::new(None)),
-            settings: Arc::new(Mutex::new(Settings::load())),
+            settings: Arc::new(Mutex::new(settings)),
+            first_launch: Arc::new(AtomicBool::new(first_launch)),
             job: Arc::new(Mutex::new(None)),
             extracting: Arc::new(AtomicBool::new(false)),
             live: Arc::new(Mutex::new(None)),

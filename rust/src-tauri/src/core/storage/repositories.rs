@@ -143,20 +143,15 @@ fn like_pattern(query: &str) -> String {
     format!("%{escaped}%")
 }
 
-/// One page of a file's units plus the total matching row count, filtered
-/// like the review screen: status, a search substring across source and
-/// translation, a speaker, and the "needs another look" flag.
-#[allow(clippy::too_many_arguments)]
-pub fn get_page(
-    conn: &Connection,
+/// The WHERE clause and bound values shared by the paginated review
+/// queries ([`get_page`], [`get_matching`]).
+fn page_filters(
     source_file: &str,
-    page: i64,
-    page_size: i64,
     status_filter: Option<&str>,
     search_query: &str,
     character: Option<&str>,
     needs_review: bool,
-) -> rusqlite::Result<(Vec<TranslationUnit>, i64)> {
+) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
     let mut conditions = vec!["source_file = ?".to_string()];
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(source_file.to_string())];
 
@@ -180,7 +175,59 @@ pub fn get_page(
         params.push(Box::new(like.clone()));
         params.push(Box::new(like));
     }
-    let where_clause = conditions.join(" AND ");
+    (conditions.join(" AND "), params)
+}
+
+/// Every unit of a file the review filters keep, unpaginated.
+///
+/// Exists for the one filter SQL cannot express: a quality error is
+/// computed from the source and the translation, so the whole file has
+/// to be handed over and sliced afterwards.
+pub fn get_matching(
+    conn: &Connection,
+    source_file: &str,
+    status_filter: Option<&str>,
+    search_query: &str,
+    character: Option<&str>,
+    needs_review: bool,
+) -> rusqlite::Result<Vec<TranslationUnit>> {
+    let (where_clause, params) = page_filters(
+        source_file,
+        status_filter,
+        search_query,
+        character,
+        needs_review,
+    );
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLUMNS} FROM translation_units WHERE {where_clause} \
+         ORDER BY source_line"
+    ))?;
+    let rows = stmt.query_map(bound.as_slice(), unit_from_row)?;
+    rows.collect()
+}
+
+/// One page of a file's units plus the total matching row count, filtered
+/// like the review screen: status, a search substring across source and
+/// translation, a speaker, and the "needs another look" flag.
+#[allow(clippy::too_many_arguments)]
+pub fn get_page(
+    conn: &Connection,
+    source_file: &str,
+    page: i64,
+    page_size: i64,
+    status_filter: Option<&str>,
+    search_query: &str,
+    character: Option<&str>,
+    needs_review: bool,
+) -> rusqlite::Result<(Vec<TranslationUnit>, i64)> {
+    let (where_clause, params) = page_filters(
+        source_file,
+        status_filter,
+        search_query,
+        character,
+        needs_review,
+    );
     let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
     let total: i64 = conn.query_row(
@@ -413,6 +460,142 @@ pub fn clear_translations(
         ),
         bound.as_slice(),
     )
+}
+
+/// Per-file count of the units matching a search, a speaker and/or the
+/// review flag, so the file panel can tell an absent line from one living
+/// in another file. The status filter applies too: a count always matches
+/// what opening that file shows.
+///
+/// Empty when nothing narrows the project down (no search, no speaker, no
+/// flag), since the panel then has no count to show.
+pub fn count_matches_by_file(
+    conn: &Connection,
+    search_query: &str,
+    status_filter: Option<&str>,
+    character: Option<&str>,
+    needs_review: bool,
+) -> rusqlite::Result<std::collections::HashMap<String, i64>> {
+    let query = search_query.trim();
+    if query.is_empty() && character.is_none() && !needs_review {
+        return Ok(std::collections::HashMap::new());
+    }
+    let mut conditions: Vec<String> = Vec::new();
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    if !query.is_empty() {
+        conditions.push(
+            "(source_text LIKE ? ESCAPE '\\' OR translated_text LIKE ? ESCAPE '\\')".to_string(),
+        );
+        let like = like_pattern(query);
+        params.push(Box::new(like.clone()));
+        params.push(Box::new(like));
+    }
+    if let Some(speaker) = character {
+        conditions.push("character_variable = ?".to_string());
+        params.push(Box::new(speaker.to_string()));
+    }
+    if needs_review {
+        conditions.push("needs_review = 1".to_string());
+    }
+    if let Some(status) = status_filter {
+        conditions.push("status = ?".to_string());
+        params.push(Box::new(status.to_string()));
+    }
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let mut stmt = conn.prepare(&format!(
+        "SELECT source_file, COUNT(*) FROM translation_units WHERE {} GROUP BY source_file",
+        conditions.join(" AND ")
+    ))?;
+    let rows = stmt.query_map(bound.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?;
+    rows.collect()
+}
+
+/// How often a source text occurs in the project: every occurrence
+/// (`total`, the displayed one included) and those outside `source_file`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuplicateStats {
+    pub total: i64,
+    pub other_files: i64,
+}
+
+/// Occurrence counts for several source texts at once, restricted to the
+/// texts occurring more than once. Answered for a whole page in one query
+/// rather than one per displayed line.
+pub fn count_duplicates(
+    conn: &Connection,
+    source_texts: &[String],
+    source_file: &str,
+) -> rusqlite::Result<std::collections::HashMap<String, DuplicateStats>> {
+    let mut unique: Vec<&String> = Vec::new();
+    for text in source_texts {
+        if !unique.contains(&text) {
+            unique.push(text);
+        }
+    }
+    if unique.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let placeholders = vec!["?"; unique.len()].join(",");
+    let mut stmt = conn.prepare(&format!(
+        "SELECT source_text, COUNT(*) AS total, \
+                SUM(CASE WHEN source_file != ? THEN 1 ELSE 0 END) \
+         FROM translation_units WHERE source_text IN ({placeholders}) \
+         GROUP BY source_text HAVING total > 1"
+    ))?;
+    let mut bound: Vec<&dyn rusqlite::ToSql> = vec![&source_file];
+    bound.extend(unique.iter().map(|t| *t as &dyn rusqlite::ToSql));
+    let rows = stmt.query_map(bound.as_slice(), |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            DuplicateStats {
+                total: row.get(1)?,
+                other_files: row.get(2)?,
+            },
+        ))
+    })?;
+    rows.collect()
+}
+
+/// The units sharing a source text and still open to a change, in file
+/// order. Units already `human_validated` are left out: they carry
+/// reviewed work that must not be replaced, and [`update_translations`]
+/// would refuse them anyway.
+pub fn find_duplicate_block_ids(
+    conn: &Connection,
+    source_text: &str,
+    exclude_block_id: &str,
+) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT block_id FROM translation_units \
+         WHERE source_text = ?1 AND block_id != ?2 AND status != 'human_validated' \
+         ORDER BY source_file, source_line",
+    )?;
+    let rows = stmt.query_map(params![source_text, exclude_block_id], |row| row.get(0))?;
+    rows.collect()
+}
+
+/// Every Ren'Py character variable speaking in the project, sorted; lines
+/// with no speaker are left out.
+pub fn character_variables(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT character_variable FROM translation_units \
+         WHERE character_variable IS NOT NULL AND character_variable != '' \
+         ORDER BY character_variable",
+    )?;
+    let rows = stmt.query_map([], |row| row.get(0))?;
+    rows.collect()
+}
+
+/// Every unit holding a translation, whatever its status, in file order.
+/// Asked for by the checks that weigh a translation against its source
+/// and have nothing to say about a line with no translation at all.
+pub fn get_translated(conn: &Connection) -> rusqlite::Result<Vec<TranslationUnit>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLUMNS} FROM translation_units WHERE translated_text != '' \
+         ORDER BY source_file, source_line"
+    ))?;
+    let rows = stmt.query_map([], unit_from_row)?;
+    rows.collect()
 }
 
 /// What [`resync_sources`] changed.
@@ -1263,5 +1446,122 @@ mod tests {
 
         assert_eq!(deleted, 0);
         assert_eq!(get_all(db.conn(), None, None).unwrap().len(), 4);
+    }
+
+    fn insert_units(conn: &Connection, rows: &[(&str, &str, i64, Option<&str>, &str)]) {
+        let units: Vec<NewUnit> = rows
+            .iter()
+            .map(
+                |(block_id, source_file, source_line, speaker, text)| NewUnit {
+                    block_id,
+                    source_file,
+                    source_line: *source_line,
+                    character_variable: *speaker,
+                    source_text: text,
+                },
+            )
+            .collect();
+        bulk_insert(conn, &units).unwrap();
+    }
+
+    #[test]
+    fn match_counts_follow_search_speaker_flag_and_status() {
+        let db = open_temp();
+        let conn = db.conn();
+        insert_units(
+            conn,
+            &[
+                ("a", "f1.rpy", 1, Some("e"), "100% sure"),
+                ("b", "f1.rpy", 2, Some("m"), "1000 sure"),
+                ("c", "f2.rpy", 1, Some("e"), "100% maybe"),
+            ],
+        );
+        assert!(count_matches_by_file(conn, "  ", None, None, false)
+            .unwrap()
+            .is_empty());
+
+        let by_search = count_matches_by_file(conn, "100%", None, None, false).unwrap();
+        assert_eq!(by_search.get("f1.rpy"), Some(&1));
+        assert_eq!(by_search.get("f2.rpy"), Some(&1));
+
+        let by_speaker = count_matches_by_file(conn, "", None, Some("e"), false).unwrap();
+        assert_eq!(by_speaker.len(), 2);
+
+        update_translation(conn, "a", "Oui", "draft").unwrap();
+        let by_status = count_matches_by_file(conn, "", Some("draft"), Some("e"), false).unwrap();
+        assert_eq!(by_status.len(), 1);
+        assert_eq!(by_status.get("f1.rpy"), Some(&1));
+
+        set_needs_review(conn, "c", true).unwrap();
+        let flagged = count_matches_by_file(conn, "", None, None, true).unwrap();
+        assert_eq!(flagged.get("f2.rpy"), Some(&1));
+    }
+
+    #[test]
+    fn duplicates_are_counted_per_text_with_other_files_split_out() {
+        let db = open_temp();
+        let conn = db.conn();
+        insert_units(
+            conn,
+            &[
+                ("a", "f1.rpy", 1, None, "Yes."),
+                ("b", "f1.rpy", 2, None, "Yes."),
+                ("c", "f2.rpy", 1, None, "Yes."),
+                ("d", "f2.rpy", 2, None, "Unique."),
+            ],
+        );
+        let texts = vec![
+            "Yes.".to_string(),
+            "Unique.".to_string(),
+            "Yes.".to_string(),
+        ];
+        let found = count_duplicates(conn, &texts, "f1.rpy").unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(
+            found["Yes."],
+            DuplicateStats {
+                total: 3,
+                other_files: 1
+            }
+        );
+        assert!(count_duplicates(conn, &[], "f1.rpy").unwrap().is_empty());
+    }
+
+    #[test]
+    fn speakers_are_distinct_sorted_and_skip_narration() {
+        let db = open_temp();
+        let conn = db.conn();
+        insert_units(
+            conn,
+            &[
+                ("a", "f.rpy", 1, Some("m"), "One."),
+                ("b", "f.rpy", 2, Some("e"), "Two."),
+                ("c", "f.rpy", 3, Some("m"), "Three."),
+                ("d", "f.rpy", 4, None, "Four."),
+            ],
+        );
+        assert_eq!(character_variables(conn).unwrap(), vec!["e", "m"]);
+    }
+
+    #[test]
+    fn translated_units_exclude_empty_text_whatever_the_status() {
+        let db = open_temp();
+        let conn = db.conn();
+        seed(conn);
+        update_translation(conn, "b", "Au revoir.", "imported").unwrap();
+        let translated = get_translated(conn).unwrap();
+        assert_eq!(translated.len(), 1);
+        assert_eq!(translated[0].block_id, "b");
+    }
+
+    #[test]
+    fn matching_returns_the_whole_file_unpaginated() {
+        let db = open_temp();
+        let conn = db.conn();
+        seed(conn);
+        let all = get_matching(conn, "script.rpy", None, "", None, false).unwrap();
+        assert_eq!(all.len(), 2);
+        let speaker = get_matching(conn, "script.rpy", None, "", Some("e"), false).unwrap();
+        assert_eq!(speaker.len(), 1);
     }
 }

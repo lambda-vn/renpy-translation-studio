@@ -16,7 +16,15 @@
     "browse": "Parcourir",
     "close": "Fermer",
     "save": "Enregistrer",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "optional": "facultatif",
+    "required": "obligatoire",
+    "actions": "Actions",
+    "details": "Détails",
+    "autosaved": "Enregistré automatiquement",
+    "saving": "Enregistrement…",
+    "open_project_first": "Ouvrez d'abord un projet."
   },
   "help": {
     "title": "Aide",
@@ -39,7 +47,11 @@
     "shortcut_next_file": "Fichier suivant",
     "shortcut_prev_page": "Page précédente",
     "shortcut_next_page": "Page suivante",
-    "shortcut_file_menu": "Actions sur le fichier sélectionné"
+    "shortcut_file_menu": "Actions sur le fichier sélectionné",
+    "key_ctrl": "Ctrl",
+    "key_shift": "Maj",
+    "key_alt": "Alt",
+    "intro": "Les raccourcis marchent aussi quand le curseur est dans un champ."
   },
   "settings": {
     "title": "Paramètres",
@@ -59,7 +71,12 @@
     "memory_entries": "{n} entrées",
     "memory_forget": "Oublier cette paire de langues",
     "memory_cancel": "Conserver cette paire de langues",
-    "memory_confirm": "Confirmer"
+    "memory_confirm": "Confirmer",
+    "sdk_none": "Aucun",
+    "verbose_hint": "Pour le diagnostic. Écrit plus de détails dans le journal.",
+    "memory_forget_title": "Oublier cette paire de langues ?",
+    "memory_forget_message": "Les {n} entrées de {source} → {target} sont retirées de la mémoire de traduction de cette machine. Les projets gardent leurs propres traductions. Cette action est irréversible.",
+    "memory_forgotten": "Mémoire effacée pour {source} → {target}"
   },
   "provider_config": {
     "title": "Fournisseurs de traduction",
@@ -93,7 +110,16 @@
     "llm_connection_ok": "Connexion OK",
     "verbose_logging_label": "Journalisation détaillée",
     "verbose_logging_hint": "Affiche des informations techniques détaillées dans la console — utile quand un fournisseur ne fonctionne pas.",
-    "keyring_unavailable": "Impossible d'enregistrer la clé API : aucun trousseau système n'est disponible sur cette machine."
+    "keyring_unavailable": "Impossible d'enregistrer la clé API : aucun trousseau système n'est disponible sur cette machine.",
+    "status_error": "Erreur",
+    "status_unconfigured": "Non configuré",
+    "key_saved_placeholder": "Clé enregistrée — saisissez pour la remplacer",
+    "key_remove": "Retirer la clé",
+    "key_remove_title": "Retirer la clé {provider} ?",
+    "key_remove_message": "La clé est supprimée du trousseau du système. Vous devrez la saisir à nouveau pour utiliser ce fournisseur.",
+    "key_stored": "Stockée dans le trousseau du système, jamais dans le projet.",
+    "default_label": "Fournisseur par défaut",
+    "saved": "Réglages des fournisseurs enregistrés"
   },
   "translation": {
     "translate_with": "Traduire avec",
@@ -147,7 +173,17 @@
     "detected_count": "{n} personnage(s) détecté(s)",
     "notes_saved": "Notes enregistrées",
     "back": "Retour à la révision",
-    "deleted_one": "Personnage « {name} » supprimé"
+    "deleted_one": "Personnage « {name} » supprimé",
+    "intro": "Ces fiches partent dans le contexte envoyé aux traducteurs automatiques. Pour traduire un nom, écrivez Nom -> Traduction dans les notes.",
+    "empty_hint": "Lancez la détection automatique pour lister les personnages qui parlent, ou ajoutez-les à la main.",
+    "found_by_detection": "Trouvé par la détection automatique · à compléter",
+    "unnamed": "(sans nom)",
+    "notes_placeholder": "Genre, registre, tutoiement…",
+    "delete_label": "Supprimer {name}",
+    "add_title": "Ajouter un personnage",
+    "variable_hint": "La variable Ren'Py utilisée dans le script, par exemple e.",
+    "add_submit": "Ajouter",
+    "variable_exists": "Un personnage utilise déjà cette variable."
   },
   "universe": {
     "title": "Résumé de l'univers",
@@ -170,7 +206,9 @@
     "purpose_names": "Il dit quels noms propres restent tels quels et lesquels se traduisent.",
     "purpose_terms": "Il donne le vocabulaire propre au jeu (lieux, objets, factions), que le modèle ne peut pas deviner.",
     "generate_title": "Rédiger avec l'IA",
-    "generate_desc": "Un extrait des dialogues du jeu est envoyé au fournisseur choisi, qui en tire un premier jet. Le texte remplace le champ ci-dessous ; rien n'est enregistré avant que vous ne cliquiez sur Enregistrer."
+    "generate_desc": "Un extrait des dialogues du jeu est envoyé au fournisseur choisi, qui en tire un premier jet. Le texte remplace le champ ci-dessous ; rien n'est enregistré avant que vous ne cliquiez sur Enregistrer.",
+    "intro": "Résumé, ton et lexique propres au jeu. Joint au contexte de chaque traduction automatique.",
+    "unsaved_generated": "Texte généré, pas encore enregistré."
   },
   "project_setup": {
     "title": "Configuration du projet",
@@ -181,10 +219,10 @@
     "step_done": "Étape terminée",
     "step_back_to": "Revenir à : {step}",
     "step_go_to": "Aller à : {step}",
-    "game_folder": "DOSSIER DU JEU",
+    "game_folder": "Dossier du jeu",
     "no_folder": "Aucun dossier sélectionné",
-    "source_lang": "LANGUE SOURCE",
-    "target_lang": "LANGUE CIBLE",
+    "source_lang": "Langue source",
+    "target_lang": "Langue cible",
     "target_hint": "Utilisé comme nom du dossier de traduction généré.",
     "target_placeholder": "Sélectionnez une langue",
     "sdk_title": "Ren'Py SDK",
@@ -224,12 +262,18 @@
     "existing_tl_title": "Traduction existante détectée",
     "existing_tl_desc": "Le dossier de traduction « {language} » contient déjà des fichiers. Que voulez-vous faire ?",
     "existing_keep_title": "Reprendre la traduction",
-    "existing_keep_desc": "Garde les fichiers tels quels et récupère les lignes déjà traduites.",
+    "existing_keep_desc": "Utilise les fichiers de traduction tels quels, sans lancer Ren'Py. Les lignes déjà traduites sont récupérées ; les textes ajoutés par une nouvelle version du jeu n'apparaissent pas.",
     "existing_update_title": "Reprendre et mettre à jour les fichiers",
-    "existing_update_desc": "Conserve les traductions, mais laisse le SDK Ren'Py régénérer les fichiers : les textes ajoutés par une nouvelle version du jeu apparaissent, ceux qu'elle a supprimés disparaissent.",
+    "existing_update_desc": "Ren'Py régénère les fichiers, après archivage d'une copie des fichiers actuels dans .rts/backups. Les textes nouveaux apparaissent, ceux qui ont disparu du jeu sont retirés. Les traductions du projet, et celles déjà écrites dans les fichiers, sont conservées.",
     "existing_reset_title": "Nouvelle traduction",
-    "existing_reset_desc": "Archive les fichiers actuels dans .rts/backups, puis repart de zéro. Les traductions enregistrées sont effacées.",
-    "archive_failed": "Impossible d'archiver le dossier de traduction existant : un autre programme l'utilise. Fermez le jeu, votre éditeur, ou tout gestionnaire de fichiers ou terminal ouvert dans game/tl/, puis réessayez.\n{error}"
+    "existing_reset_desc": "Ren'Py régénère les fichiers et toutes les traductions enregistrées dans le projet sont effacées. Les fichiers actuels sont d'abord archivés dans .rts/backups. Les notes et les drapeaux sont conservés.",
+    "archive_failed": "Impossible d'archiver le dossier de traduction existant : un autre programme l'utilise. Fermez le jeu, votre éditeur, ou tout gestionnaire de fichiers ou terminal ouvert dans game/tl/, puis réessayez.\n{error}",
+    "engine_found": "Le jeu embarque son propre moteur Ren'Py : SDK inutile.",
+    "folder_hint": "Le dossier qui contient game/, pas game/ lui-même.",
+    "validated_sr": "validé",
+    "delete_label": "Supprimer les données de « {name} »",
+    "delete_note": "La croix supprime les traductions enregistrées et les sauvegardes d'un projet (son dossier .rts) après confirmation. Les fichiers du jeu ne sont jamais touchés.",
+    "extract_hint": "De quelques secondes à quelques minutes"
   },
   "review": {
     "files_panel_title": "Fichiers",
@@ -314,7 +358,71 @@
     "file_menu_interchange": "Importer / exporter",
     "file_menu_clear": "Supprimer les traductions",
     "file_menu_copied": "Chemin copié dans le presse-papiers.",
-    "file_menu_reveal_failed": "Impossible d'ouvrir l'explorateur sur ce fichier."
+    "file_menu_reveal_failed": "Impossible d'ouvrir l'explorateur sur ce fichier.",
+    "act_translate": "Traduire la ligne {n}",
+    "act_copy": "Copier la source dans la traduction, ligne {n}",
+    "act_clear": "Effacer la traduction, ligne {n}",
+    "act_flag": "Signaler la ligne {n}",
+    "act_validate": "Valider la ligne {n}",
+    "clear_irreversible": "Impossible d'annuler.",
+    "clear_n_lines": "Effacer {n} lignes",
+    "clear_search": "Vider la recherche",
+    "clear_summary": "{n} traductions seront effacées.",
+    "clear_where": "Effacer dans",
+    "duplicates_aria": "{n} autres lignes ont le même texte que la ligne {line}. La valider et leur appliquer la traduction.",
+    "empty_file": "{file} ne contient aucune ligne à traduire.",
+    "empty_file_title": "Aucune ligne",
+    "empty_title": "Aucune ligne ne correspond",
+    "empty_with_filter": "Aucune ligne de {file} ne correspond à ce filtre.",
+    "empty_with_search": "Aucune ligne de {file} ne contient « {query} » avec ce filtre.",
+    "file_aria": "{name}, {dir}, {ok} validées sur {total}",
+    "file_matches": "{n} correspondantes",
+    "file_opened": "Fichier {name}",
+    "file_root": "racine du jeu",
+    "files_count": "{n} fichiers",
+    "filter_label": "Filtrer les lignes",
+    "hint_leave": "quitter le champ",
+    "hint_validate": "valider et passer à la suivante",
+    "job_failures": "échecs",
+    "job_finished_title": "Traduction automatique terminée",
+    "job_log": "Journal",
+    "job_log_empty": "Rien dans le journal pour l'instant.",
+    "job_log_label": "Journal du job",
+    "job_reassurance": "Les lignes validées ne sont jamais touchées. La révision reste utilisable pendant le job.",
+    "job_running_title": "Traduction automatique en cours",
+    "line_n": "ligne {n}",
+    "lines_label": "Lignes {from} à {to} de {file}",
+    "lines_range": "Lignes {from}–{to} sur {total}",
+    "live_updated": "{n} ligne(s) modifiée(s) par l'assistant",
+    "more_actions": "Plus d'actions",
+    "narration": "Narration",
+    "no_project_action": "Aller à la configuration",
+    "no_project_message": "Ouvrez un projet pour réviser ses traductions.",
+    "no_project_title": "Aucun projet ouvert",
+    "not_translated_yet": "Pas encore traduite",
+    "note_label": "Note sur la ligne {n}",
+    "page_next": "Suivante",
+    "page_opened": "Page {n} sur {total}",
+    "page_prev": "Précédente",
+    "page_title": "Révision",
+    "page_word": "Page",
+    "pagination_label": "Pagination",
+    "progress_lines": "{done} / {total} lignes",
+    "project_validated": "Projet validé",
+    "row_label": "Ligne {n}, statut : {status}",
+    "scope_filter_hint": "Les lignes que le filtre actuel sélectionne, hors lignes validées.",
+    "search_label": "Rechercher dans la source et la traduction",
+    "search_placeholder": "Rechercher…",
+    "shortcuts_button": "Raccourcis clavier",
+    "show_all": "Afficher toutes les lignes",
+    "skip_files": "Aller aux fichiers",
+    "skip_lines": "Aller aux lignes",
+    "status_group": "Statut",
+    "translation_of": "Traduction de la ligne {n}",
+    "untranslated_lines": "lignes non traduites",
+    "updated_by_assistant": "Modifiée par l'assistant",
+    "validation_refused": "Validation refusée.",
+    "write_rpy": "Écrire dans les .rpy"
   },
   "interchange": {
     "label": "Import / export",
@@ -348,7 +456,7 @@
     "title": "Exporter la traduction",
     "subtitle": "Vérifiez le résultat puis générez votre archive.",
     "blocks_extracted": "blocs de traduction extraits",
-    "game_name_label": "NOM DU JEU",
+    "game_name_label": "Nom du jeu",
     "export_btn": "Exporter le zip",
     "generating": "Génération...",
     "success_title": "Archive exportée avec succès.",
@@ -362,7 +470,13 @@
     "sync_never_saved": "Aucune traduction n'a jamais été écrite dans les fichiers : l'archive ne contiendra que la langue source.",
     "sync_unsaved_units": "{n} traduction(s) ne sont pas enregistrées dans les fichiers et manqueront à l'archive.",
     "sync_external_edit": "Les fichiers tl/ ont été modifiés en dehors de l'application depuis le dernier enregistrement. Ces retouches seront écrasées au prochain enregistrement.",
-    "sync_export_anyway": "Exporter quand même"
+    "sync_export_anyway": "Exporter quand même",
+    "description": "Emballe les fichiers de traduction écrits dans le jeu en une archive zip à distribuer.",
+    "summary": "{total} lignes · {untranslated} non traduites",
+    "write_rpy": "Écrire dans les .rpy",
+    "written": "{n} lignes écrites dans les .rpy",
+    "game_name_help": "Proposé à partir du jeu, modifiable.",
+    "zip_name_label": "Nom de l'archive"
   },
   "job_events": {
     "translation_rejected_identical": "Traduction ignorée ({block_id}) : identique au texte source",
@@ -397,7 +511,8 @@
   },
   "themes": {
     "dark": "Sombre",
-    "light": "Clair"
+    "light": "Clair",
+    "system": "Comme le système"
   },
   "languages": {
     "english": "Anglais",
@@ -440,5 +555,25 @@
       "invalid_language": "La langue cible n'est pas un nom de dossier valide.",
       "busy": "Une extraction est déjà en cours."
     }
+  },
+  "nav": {
+    "skip_to_content": "Aller au contenu",
+    "steps": "Étapes du projet",
+    "tools": "Outils du projet",
+    "characters": "Personnages",
+    "universe": "Univers",
+    "providers": "Fournisseurs",
+    "unavailable_no_project": "ouvrez d'abord un projet",
+    "unavailable_during_job": "indisponible pendant la traduction automatique"
+  },
+  "status": {
+    "not_translated": "Non traduit",
+    "draft": "Brouillon",
+    "imported": "Importé",
+    "ai_suggested": "Suggestion IA",
+    "human_validated": "Validé",
+    "flag": "Signalée",
+    "error": "En erreur",
+    "warning": "Avertissement"
   }
 }

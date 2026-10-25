@@ -176,6 +176,33 @@ impl Settings {
     }
 }
 
+/// Finish the first-launch screen: validate the optional SDK path, then
+/// write the locale. The locale is written even when it did not change:
+/// first launch is "no settings file yet", and leaving without writing one
+/// would bring the screen back at every start.
+///
+/// A game ships the engine that extracts it, so leaving with no SDK at all
+/// is the ordinary case. A path that was picked and does not name a
+/// Ren'Py launcher is a mistake made on that screen and is refused.
+pub fn finish_onboarding(
+    settings: &mut Settings,
+    locale: &str,
+    sdk_path: Option<&str>,
+) -> Result<(), String> {
+    let sdk_path = sdk_path.map(str::trim).filter(|p| !p.is_empty());
+    if let Some(path) = sdk_path {
+        if !super::validators::is_valid_sdk_path(std::path::Path::new(path)) {
+            return Err(format!("Not a Ren'Py SDK: {path}"));
+        }
+    }
+    settings
+        .set("sdk_path", sdk_path)
+        .map_err(|e| e.to_string())?;
+    settings
+        .set("locale", Some(locale))
+        .map_err(|e| e.to_string())
+}
+
 /// The directory holding the machine-wide application files: settings,
 /// the recent-project registry, and the translation memory.
 ///
@@ -248,6 +275,25 @@ mod tests {
         s.reload();
         assert_eq!(s.get("locale").as_deref(), Some("fr"));
         assert_eq!(s.get("sdk_path").as_deref(), None);
+    }
+
+    #[test]
+    fn finishing_onboarding_writes_the_locale_and_ends_first_launch() {
+        let mut s = temp_settings();
+        assert!(s.is_first_launch());
+        finish_onboarding(&mut s, "fr", None).unwrap();
+        assert!(!s.is_first_launch());
+        assert_eq!(s.get("locale").as_deref(), Some("fr"));
+        assert_eq!(s.get("sdk_path"), None);
+    }
+
+    #[test]
+    fn finishing_onboarding_refuses_a_path_that_is_not_an_sdk() {
+        let mut s = temp_settings();
+        let bogus = std::env::temp_dir().join("rts-definitely-not-an-sdk");
+        let result = finish_onboarding(&mut s, "fr", Some(&bogus.to_string_lossy()));
+        assert!(result.is_err());
+        assert!(s.is_first_launch());
     }
 
     #[test]

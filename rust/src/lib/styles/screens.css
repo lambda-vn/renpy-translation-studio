@@ -1,0 +1,190 @@
+/* Pieces shared by the secondary screens (setup, tools, export, onboarding,
+   settings): option cards, notices, switch, help text. */
+
+.screen {
+	width: 100%;
+	margin-inline: auto;
+	padding: 20px 28px 36px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.screen-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 12px 24px;
+}
+
+.screen-head h1 {
+	margin: 0 0 6px;
+}
+
+.screen-head p {
+	margin: 0;
+	max-width: 620px;
+	color: var(--ink2);
+	font-size: 13.5px;
+	line-height: 1.5;
+}
+
+.help {
+	margin: 5px 0 0;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--ink3);
+}
+
+/* Option card: a radio or checkbox with a title and a description. */
+.opt {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px 12px;
+	border: 1px solid var(--line2);
+	border-radius: var(--r-md);
+	background: var(--panel);
+	cursor: pointer;
+}
+.opt:hover {
+	background: var(--hover);
+}
+.opt:has(input:checked) {
+	border-color: var(--acc);
+	box-shadow: 0 0 0 1px var(--acc);
+	background: var(--accWeak);
+}
+.opt:has(input:focus-visible) {
+	outline: 2px solid var(--acc);
+	outline-offset: 2px;
+}
+.opt.danger:has(input:checked) {
+	border-color: var(--err);
+	box-shadow: 0 0 0 1px var(--err);
+	background: var(--errWeak);
+}
+.opt input {
+	margin: 2px 0 0;
+	flex: none;
+}
+.opt.danger input {
+	accent-color: var(--err);
+}
+.opt .t {
+	display: block;
+	font-weight: 500;
+}
+.opt.danger .t {
+	color: var(--err);
+}
+.opt .d {
+	display: block;
+	margin-top: 2px;
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--ink2);
+}
+
+/* Notice: an icon and a message on a tinted background. */
+.notice {
+	display: flex;
+	gap: 10px;
+	margin: 0;
+	padding: 12px 14px;
+	border-radius: 10px;
+	background: var(--bg);
+	font-size: 13px;
+	line-height: 1.55;
+	color: var(--ink2);
+}
+.notice .ico {
+	margin-top: 2px;
+}
+.notice.warn {
+	background: var(--warnWeak);
+}
+.notice.warn .ico {
+	color: var(--warn);
+}
+.notice.err {
+	background: var(--errWeak);
+}
+.notice.err .ico {
+	color: var(--err);
+}
+.notice.ok .ico {
+	color: var(--s-ok);
+}
+.notice strong {
+	font-weight: 600;
+}
+
+/* Switch: <span class="sw"><input type="checkbox" /><span></span></span> */
+.sw {
+	position: relative;
+	width: 34px;
+	height: 20px;
+	flex: none;
+}
+.sw input {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	margin: 0;
+	cursor: pointer;
+}
+.sw span {
+	position: absolute;
+	inset: 0;
+	border-radius: 10px;
+	background: var(--line2);
+	pointer-events: none;
+}
+.sw span::after {
+	content: '';
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 16px;
+	height: 16px;
+	border-radius: 8px;
+	background: #fff;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.sw input:checked + span {
+	background: var(--acc);
+}
+.sw input:checked + span::after {
+	left: 16px;
+}
+.sw input:focus-visible + span {
+	outline: 2px solid var(--acc);
+	outline-offset: 2px;
+}
+
+/* Pill with a status glyph (providers). */
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 24px;
+	padding: 0 10px 0 7px;
+	border-radius: 12px;
+	font-size: 12px;
+	font-weight: 500;
+	white-space: nowrap;
+	background: var(--sunken);
+	color: var(--ink2);
+}
+.badge.ok {
+	background: var(--okWeak, color-mix(in srgb, var(--s-ok) 14%, var(--panel)));
+	color: var(--s-ok);
+}
+.badge.err {
+	background: var(--errWeak);
+	color: var(--err);
+}

@@ -9,7 +9,35 @@ compatibles avec la 1.0.0 Python, MCP sur
 `main` n'est remplacé qu'à la sortie de la 2.0.0 — cette branche coexiste
 avec le code Python (`../src/`) le temps du chantier.
 
-## En cours : `2.0.0-rc.2`
+## En cours : `2.0.0-rc.3`
+
+L'interface, refaite dans le design livré par Claude Design
+([`design/`](design/HANDOFF.md) : maquettes et passation). La check-list
+[`PARITY.md`](PARITY.md) passe à 33 ✅ · 7 🟡 · 0 ❌ ; les 🟡 sont des
+vérifications réelles restantes, plus aucune fonction n'est absente.
+
+- Fondations (`src/lib/`) : tokens clair / sombre (`styles/tokens.css`,
+  réglage `theme` comme en 1.0.0), polices embarquées (`@fontsource`,
+  aucune requête réseau), composants communs dans `components/` (glyphes de
+  statut, puces de balises, `<dialog>` natif, confirmations, toasts, menu
+  contextuel, aide F1), table unique des raccourcis (`shortcuts.ts`).
+- Écran de révision découpé dans `components/review/` ; autres écrans,
+  premier lancement et dialogue des paramètres refaits.
+- Commandes ajoutées pour l'interface (effacement en masse, propagation aux
+  doublons, compteur de lignes non écrites, `export_sync`, traduction d'une
+  ligne, locuteurs, filtre *En erreur*, actions de fichier, mémoire par
+  paire de langues, onboarding).
+- Correctifs trouvés en l'exerçant : un job comptait les identifiants
+  répétés ou inventés par un petit modèle (progression « 100 / 96 ») et
+  pouvait écrire sur une ligne non envoyée ; un modèle Ollama absent était
+  annoncé comme serveur injoignable ; `save_project` n'enregistrait pas la
+  date d'écriture, le compteur ne revenait jamais à zéro.
+
+Vérifié dans la vraie fenêtre sous Windows (voir `PARITY.md`, Bilan). Non
+vérifié : macOS et Linux, l'onboarding affiché, un audit avec un vrai lecteur
+d'écran.
+
+## Précédemment : `2.0.0-rc.2`
 
 La rc.2 est la check-list de parité contre la 1.0.0 : voir
 [`PARITY.md`](PARITY.md), qui dit ligne par ligne ce qui est fait, partiel

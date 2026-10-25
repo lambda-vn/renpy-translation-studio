@@ -1,0 +1,350 @@
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+}
+
+body {
+	font-family: var(--font-ui);
+	font-size: 13.5px;
+	line-height: 1.45;
+	color: var(--ink);
+	background: var(--bg);
+	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+	letter-spacing: -0.01em;
+}
+h1 {
+	font-size: 21px;
+	font-weight: 700;
+}
+h2 {
+	font-size: 16px;
+	font-weight: 700;
+}
+h3 {
+	font-size: 14px;
+	font-weight: 600;
+}
+
+a {
+	color: var(--acc7);
+}
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+:focus-visible {
+	outline: 2px solid var(--acc);
+	outline-offset: 2px;
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled='true'] {
+	cursor: not-allowed;
+}
+
+/* Utilities ------------------------------------------------------- */
+
+.sr {
+	position: absolute !important;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	border: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+.skip {
+	position: absolute;
+	left: 12px;
+	top: -60px;
+	z-index: 1000;
+	padding: 8px 14px;
+	border-radius: var(--r-md);
+	background: var(--acc);
+	color: var(--accInk);
+	font-weight: 600;
+	text-decoration: none;
+}
+.skip:focus {
+	top: 10px;
+}
+
+.mono {
+	font-family: var(--font-mono);
+}
+
+/* Section caption ("FILES"): small uppercase heading. */
+.cap {
+	margin: 0;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--ink3);
+}
+
+/* Padded, readable column for the simple screens. */
+.page {
+	padding: 24px 28px 32px;
+	max-width: 960px;
+	margin-inline: auto;
+}
+
+/* Buttons --------------------------------------------------------- */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	height: 34px;
+	padding: 0 13px;
+	border: 1px solid var(--line2);
+	border-radius: var(--r-md);
+	background: var(--panel);
+	color: var(--ink);
+	font-size: 13.5px;
+	font-weight: 500;
+	white-space: nowrap;
+	text-decoration: none;
+}
+.btn:hover:not(:disabled, [aria-disabled='true']) {
+	background: var(--hover);
+	border-color: var(--ink3);
+}
+.btn.ghost {
+	border-color: transparent;
+	background: transparent;
+	color: var(--ink2);
+}
+.btn.ghost:hover:not(:disabled, [aria-disabled='true']) {
+	background: var(--sunken);
+	border-color: transparent;
+	color: var(--ink);
+}
+/* Full violet is reserved for the one main action of a screen. */
+.btn.primary {
+	background: var(--acc);
+	border-color: var(--acc);
+	color: var(--accInk);
+	font-weight: 600;
+}
+.btn.primary:hover:not(:disabled, [aria-disabled='true']) {
+	background: var(--acc7);
+	border-color: var(--acc7);
+}
+.btn.danger {
+	background: var(--err);
+	border-color: var(--err);
+	color: var(--errInk);
+	font-weight: 600;
+}
+.btn.danger:hover:not(:disabled, [aria-disabled='true']) {
+	filter: brightness(0.92);
+	background: var(--err);
+	border-color: var(--err);
+}
+.btn.icon {
+	width: 34px;
+	padding: 0;
+}
+.btn.sm {
+	height: 28px;
+	padding: 0 9px;
+	font-size: 13px;
+}
+.btn:disabled,
+.btn[aria-disabled='true'] {
+	opacity: 0.45;
+}
+
+.ico {
+	width: 16px;
+	height: 16px;
+	flex: none;
+}
+
+/* Fields ----------------------------------------------------------
+   :where() keeps these at zero specificity, so a component's own
+   rules (and `.field input`) always win. */
+
+:where(
+		input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color']),
+		select,
+		textarea
+	) {
+	height: 34px;
+	width: 100%;
+	min-width: 0;
+	padding: 0 12px;
+	border: 1px solid var(--line2);
+	border-radius: var(--r-md);
+	background: var(--panel);
+	color: var(--ink);
+}
+:where(textarea) {
+	height: auto;
+	padding: 8px 11px;
+	line-height: 1.5;
+	resize: vertical;
+}
+:where(input, select, textarea)::placeholder {
+	color: var(--ink3);
+	opacity: 1;
+}
+:where(input, select, textarea):focus-visible {
+	border-color: var(--acc);
+	box-shadow: 0 0 0 3px var(--accRing);
+}
+:where(input, select, textarea):disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+:where(input[type='checkbox'], input[type='radio']) {
+	accent-color: var(--acc);
+	width: 15px;
+	height: 15px;
+	margin: 0;
+}
+
+/* Field wrapper with a leading icon and/or trailing hint. */
+.field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	height: 34px;
+	padding: 0 12px;
+	border: 1px solid var(--line2);
+	border-radius: var(--r-md);
+	background: var(--panel);
+	color: var(--ink3);
+}
+.field.pill {
+	border-radius: 999px;
+}
+.field input,
+.field select {
+	flex: 1;
+	min-width: 0;
+	height: auto;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	outline: 0;
+	box-shadow: none;
+	background: transparent;
+	color: var(--ink);
+}
+.field:focus-within {
+	border-color: var(--acc);
+	box-shadow: 0 0 0 3px var(--accRing);
+	outline: 2px solid var(--acc);
+	outline-offset: 2px;
+}
+
+.lbl {
+	display: block;
+	margin-bottom: 5px;
+	font-size: 12.5px;
+	font-weight: 500;
+}
+
+/* Keyboard hints ---------------------------------------------------- */
+
+kbd {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 16px;
+	padding: 0 5px;
+	border: 1px solid var(--line2);
+	border-radius: 4px;
+	color: var(--ink3);
+	background: transparent;
+	font-weight: 400;
+	white-space: nowrap;
+}
+kbd kbd {
+	padding: 0;
+	border: 0;
+	font-size: inherit;
+	color: inherit;
+}
+.btn.primary kbd,
+.btn.danger kbd {
+	color: inherit;
+	border-color: currentColor;
+	opacity: 0.8;
+}
+
+/* Progress ----------------------------------------------------------- */
+
+progress {
+	-webkit-appearance: none;
+	appearance: none;
+	display: block;
+	width: 100%;
+	height: 6px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--sunken);
+	overflow: hidden;
+}
+progress::-webkit-progress-bar {
+	background: var(--sunken);
+	border-radius: 999px;
+}
+progress::-webkit-progress-value {
+	background: var(--acc);
+	border-radius: 999px;
+}
+progress::-moz-progress-bar {
+	background: var(--acc);
+	border-radius: 999px;
+}
+progress.ok::-webkit-progress-value {
+	background: var(--s-ok);
+}
+progress.ok::-moz-progress-bar {
+	background: var(--s-ok);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		/* Not a 0.01ms duration: that still starts a transition, and an
+		   element mid-transition on `visibility` can't take focus yet. */
+		transition: none !important;
+	}
+}

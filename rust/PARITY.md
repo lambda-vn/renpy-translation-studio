@@ -1,8 +1,8 @@
-# Check-list de parité 1.0.0 → 2.0.0 (rc.2)
+# Check-list de parité 1.0.0 → 2.0.0 (rc.3)
 
 Chaque ligne vient du README et de `docs/en/` de la 1.0.0 (liste des
 fonctionnalités, fournisseurs, serveur MCP, écrans). Audit fait le
-2026-10-24 sur le commit `b1189d7`, mis à jour après l'extraction en lisant le code de `rust/`, pas en
+2026-10-24 sur le commit `b1189d7`, mis à jour à chaque étape de la rc.2 et pour l'interface de la rc.3, en lisant le code de `rust/`, pas en
 l'exécutant : une ligne n'est « ✅ » que si du code **et** un test ou une
 vérification réelle la couvrent.
 
@@ -21,14 +21,14 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 |---|---|---|---|
 | F1 | Extraction par le moteur du jeu, repli sur le SDK | ✅ | `core::extraction` : moteur du jeu puis SDK, désarchivage des `.rpa` (lecteur sans pickle exécutable), sources refusées écartées et listées, modes garder / mettre à jour / réinitialiser, réextraction qui préserve le travail validé. Vérifié contre le vrai SDK 8.5.3 (The Question, qui livre un `tl/french`) et sur un jeu packagé Ren'Py 7 (CampusLyfe, 3 008 unités, 121 sources désarchivées) dont les identifiants sont identiques à ceux du parseur Python. |
 | F2 | Cinq statuts, `human_validated` jamais écrasé | ✅ | Schéma, déclencheurs et contrat portés ; `compat_tests`. |
-| F3 | Drapeau « à revoir » et note par ligne | 🟡 | Commandes `set_needs_review` / `set_note` et saisie de note dans la ligne. L'écriture d'une note ne lève pas le drapeau côté UI (à vérifier). |
+| F3 | Drapeau « à revoir » et note par ligne | ✅ | Ctrl+M, champ de note sous la ligne signalée ; écrire une note lève le drapeau ; retirer le drapeau d'une ligne annotée demande confirmation. Vérifié dans la vraie fenêtre (rc.3). |
 | F4 | Job de fond, contrôles qualité, relances | ✅ | `job.rs` testé (relances 8 puis 1, interpolation refusée). |
-| F5 | Progression en bandeau, révision utilisable | 🟡 | Barre de progression et annulation présentes ; jamais vu dans la vraie fenêtre. |
+| F5 | Progression en bandeau, révision utilisable | ✅ | Bandeau non modal (progression, échecs, journal repliable, annulation), navigation refusée pendant le job. Vérifié dans la vraie fenêtre avec un vrai job Ollama (`gemma3:1b`, 96 lignes) et sur un échec. |
 | F6 | Glossaire des personnages | ✅ | Écran CRUD et détection automatique (`core::renpy::character_detector`, aussi exposée au MCP). L'écran reste en anglais (voir S16). |
-| F7 | Résumé d'univers | 🟡 | Édition, sauvegarde et génération IA (`core::translation::universe_generator`, prompt repris à l'identique, confirmation d'envoi à chaque fois). Le chemin d'échec est vu dans la vraie fenêtre ; **jamais exécuté contre un vrai modèle** (Ollama éteint). |
+| F7 | Résumé d'univers | ✅ | Génération exécutée contre un vrai modèle (`gemma3:1b`) dans la vraie fenêtre : confirmation à chaque envoi, texte non enregistré tant qu'on ne clique pas. |
 | F8 | Import / export CSV, XLIFF 1.2, JSON | ✅ | `core::interchange` (21 tests portés de la suite Python), commandes et boîte de dialogue dans la barre de révision. Export, aperçu et application exercés dans la vraie fenêtre sur les trois formats ; **les boîtes natives d'enregistrement et d'ouverture n'ont pas été pilotées** (chemins passés directement aux commandes). Un export écrit des chemins relatifs au jeu, là où la 1.x écrivait les absolus. |
 | F9 | Mémoire de traduction partagée | ✅ | Moteur compatible (`memory.db`), outil MCP et bouton « Mémoire » (51 lignes remplies sur la démo, puis aucune au second appel). Son volume n'est pas encore affiché dans les paramètres (S14). |
-| F10 | Tout au clavier, F1, statuts en glyphe + libellé lecteur d'écran | ❌ | Seuls Ctrl+S, Ctrl+F et Ctrl+Entrée existent. Aucune aide F1, aucun `aria-*` dans `src/`, statuts sans glyphe. |
+| F10 | Tout au clavier, F1, statuts en glyphe + libellé lecteur d'écran | ✅ | Table unique `src/lib/shortcuts.ts`, aide F1, glyphe + texte `.sr` par statut, liens d'évitement, focus visible. Raccourcis vérifiés avec de vrais événements clavier (Ctrl+Entrée, Ctrl+D, Ctrl+M, Alt+↓, Ctrl+S, F1, Échap, touche Menu). Pas d'audit avec un vrai lecteur d'écran. |
 | F11 | Export zip `<jeu>/game/tl/<langue>/` | ✅ | `exporter.rs` testé (exclusion `.rpyc`, refus de `../`, nom du jeu). Écran d'export : saisie à la main du chemin. |
 
 ## Fournisseurs
@@ -37,7 +37,7 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 |---|---|---|---|
 | P1 | DeepL (+ glossaire serveur) | 🟡 | Porté et testé sur HTTP simulé. Jamais appelé contre la vraie API depuis la réécriture. |
 | P2 | LibreTranslate | 🟡 | Idem. |
-| P3 | Ollama (garde-fous petits modèles, `-cloud`) | 🟡 | Garde-fous copiés, plafond 8192 hors `-cloud`. Prompts non rejoués contre un vrai modèle ici. |
+| P3 | Ollama (garde-fous petits modèles, `-cloud`) | 🟡 | Job et génération exécutés contre un vrai serveur avec `gemma3:1b` (rc.3) ; le modèle configuré chez l'utilisateur (`gemma3:4b`) non essayé. Un modèle absent est maintenant signalé comme tel (« not installed … ollama pull »), là où la 1.0.0 disait « injoignable ». |
 
 ## Serveur MCP
 
@@ -53,23 +53,23 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 
 | # | 1.0.0 | État | Détail |
 |---|---|---|---|
-| S1 | Onboarding (langue de l'UI, SDK facultatif) | ❌ | |
-| S2 | Liste des projets récents, reprise (fichier, page, filtre, recherche) | 🟡 | Liste présente ; la reprise de l'état de navigation et la croix de retrait de l'entrée sont à confirmer. |
+| S1 | Onboarding (langue de l'UI, SDK facultatif) | 🟡 | Écran porté (`Onboarding.svelte`, `isFirstLaunch`), **jamais affiché dans la vraie fenêtre** (la config réelle existe déjà). |
+| S2 | Liste des projets récents, reprise (fichier, page, filtre, recherche) | ✅ | Cartes avec avancement, ouverture directe en révision, × qui supprime `.rts/` après confirmation (comportement du code 1.0.0, sa doc disait le contraire). État de navigation gardé en mémoire comme en 1.0.0. |
 | S3 | Nouveau projet : dossier, langues, SDK, bouton Extraire | ✅ | Sélecteur natif (ou chemin collé), langues source et cible, SDK demandé seulement si le jeu n'embarque pas de moteur utilisable, avis d'exécution de code tiers, dialogue des trois modes, liste des sources écartées. Exercé dans la vraie fenêtre. Visuellement provisoire (refonte prévue). |
-| S4 | Panneau de fichiers : compteurs par statut, barre globale | 🟡 | Liste plate, sans arbre. À confirmer : compteurs complets (suggestions, importés, brouillons). |
-| S5 | Menu contextuel d'un fichier (ouvrir, copier le chemin, montrer, traduire, exporter, effacer) | ❌ | |
-| S6 | Filtres : statut, *Flagged*, *In error*, locuteur, recherche `%`/`_` littéraux | 🟡 | Statut, « Needs review » et recherche. Le filtre par locuteur existe côté Rust (`speaker`) mais pas dans l'UI ; *In error* absent. |
-| S7 | Actions de ligne : traduire, copier la source (Ctrl+D), effacer, drapeau (Ctrl+M), valider | 🟡 | Valider et note seulement. |
-| S8 | Ctrl+Maj+Entrée : valider et propager aux doublons | ❌ | |
-| S9 | Navigation clavier entre lignes, fichiers, pages | ❌ | |
-| S10 | Avertissements qualité consultatifs sous la ligne | 🟡 | Validation refusée sur erreur bloquante (vérifié sur un faux pont) ; affichage des avertissements non bloquants à confirmer. |
-| S11 | Compteur « N lignes non écrites dans les .rpy » | ❌ | `count_modified_since` existe mais n'est branché à rien. |
-| S12 | Effacement en masse avec confirmation | ❌ | Seul le MCP (`--allow-clear`) sait le faire. |
-| S13 | Barre d'étapes (Setup / Review / Export), confirmation avant de revenir en arrière, navigation refusée pendant un job | ❌ | |
-| S14 | Dialogue de paramètres (langue de l'UI, journal détaillé, volume de la mémoire) | ❌ | Seuls les fournisseurs sont configurables. |
-| S15 | Export zip : nom proposé affiché, avertissement d'écart avec `tl/` | 🟡 | Zip oui ; `export_sync` non porté. |
-| S16 | i18n anglais + français | 🟡 | Mécanisme en place (`src/lib/i18n.ts`, catalogues de la 1.0.0 repris et étendus, langue lue dans les paramètres, repli sur l'anglais). Appliqué à la barre de navigation et à l'écran de configuration ; les autres écrans sont encore en anglais. |
-| S17 | Boîtes de dialogue de confirmation, toasts | ❌ | |
+| S4 | Panneau de fichiers : compteurs par statut, barre globale | ✅ | Barre projet, compteurs validés/total + brouillons/IA/importés, fichiers grisés selon le filtre. |
+| S5 | Menu contextuel d'un fichier (ouvrir, copier le chemin, montrer, traduire, exporter, effacer) | ✅ | Clic droit, touche Menu, Maj+F10 ; vérifié dans la vraie fenêtre. |
+| S6 | Filtres : statut, *Flagged*, *In error*, locuteur, recherche `%`/`_` littéraux | ✅ | Puces de statut + Signalées + En erreur, menu des locuteurs (vérifié : 18 lignes de `s`), recherche. La puce *En erreur* n'a pas de compteur. |
+| S7 | Actions de ligne : traduire, copier la source (Ctrl+D), effacer, drapeau (Ctrl+M), valider | ✅ | Les cinq, au survol / focus / ligne active. |
+| S8 | Ctrl+Maj+Entrée : valider et propager aux doublons | 🟡 | Porté (`validate_and_propagate`, testé), toast après une validation simple ; pas exercé dans la vraie fenêtre. |
+| S9 | Navigation clavier entre lignes, fichiers, pages | ✅ | Alt+↑/↓, Maj+Alt+↑/↓, Alt+←/→ ; Alt+↓ vérifié dans la vraie fenêtre. |
+| S10 | Avertissements qualité consultatifs sous la ligne | ✅ | Erreurs bloquantes (`role=alert`) et avertissements sous le champ. |
+| S11 | Compteur « N lignes non écrites dans les .rpy » | ✅ | `unwritten_count` ; `save_project` enregistre désormais la date d'écriture (`tl_saved_at`), le compteur revient à zéro après Ctrl+S (vérifié). |
+| S12 | Effacement en masse avec confirmation | ✅ | Dialogue fichier / projet × trois portées, compte affiché. Ouvert dans la vraie fenêtre, pas exécuté. |
+| S13 | Barre d'étapes (Setup / Review / Export), confirmation avant de revenir en arrière, navigation refusée pendant un job | ✅ | Vérifié pendant un vrai job. |
+| S14 | Dialogue de paramètres (langue de l'UI, journal détaillé, volume de la mémoire) | ✅ | Langue, thème (`system`/`light`/`dark`, déjà en 1.0.0), journal (format 1.0.0, sans effet en Rust : aucune journalisation), SDK, mémoire par paire de langues. |
+| S15 | Export zip : nom proposé affiché, avertissement d'écart avec `tl/` | ✅ | `export_sync` porté ; les trois avertissements (non écrit, non traduit, qualité) ; zip vérifié. |
+| S16 | i18n anglais + français | ✅ | Tous les écrans passent par `$t` ; les messages venant du Rust (journal du job, détail des contrôles qualité) restent en anglais. |
+| S17 | Boîtes de dialogue de confirmation, toasts | ✅ | `confirmDialog` (plus aucun `window.confirm`), toasts `role=status`/`alert`. |
 
 ## Données (contrat gelé)
 
@@ -82,11 +82,14 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 
 ## Bilan
 
-- ✅ 15 · 🟡 15 · ❌ 10 sur 40 lignes.
-- Le noyau, les données, l'extraction, l'échange de fichiers et le
-  rafraîchissement en direct sont à parité, ainsi que les 17 outils MCP. Ce qui manque est presque tout de
-  l'**interface** (S4 à S17, F10) : plus aucune fonction du noyau n'est
-  absente.
-- L'extraction (F1, S3) est faite : la 2.0.0 peut créer un projet sans la
-  1.x, ce qui était le blocage le plus lourd pour remplacer `main`.
-- Rien ici n'a été vu dans la vraie fenêtre Tauri.
+- ✅ 33 · 🟡 7 · ❌ 0 sur 40 lignes (rc.3, étape 4 : l'interface refaite dans
+  le design de `design/`).
+- Plus aucune ligne absente. Les 🟡 restants sont des vérifications réelles,
+  pas du code : DeepL et LibreTranslate contre leurs API (P1, P2), le modèle
+  Ollama configuré (P3), le trousseau avec une vraie clé (D4), le lanceur
+  `rts-mcp` installé (M5), l'onboarding jamais affiché (S1) et Ctrl+Maj+Entrée
+  dans la vraie fenêtre (S8).
+- L'étape 4 a été exercée dans la vraie fenêtre Tauri sous Windows, sur une
+  copie de *The Question* : extraction, révision au clavier, menus, job Ollama
+  réel, rafraîchissement par un vrai `rts-mcp`, personnages, univers,
+  fournisseurs, export, paramètres, thème sombre. Pas de macOS ni de Linux.

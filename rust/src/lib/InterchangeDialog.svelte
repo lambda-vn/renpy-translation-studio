@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { open as pickFile, save as pickDestination } from '@tauri-apps/plugin-dialog';
 	import { api, type ImportPreview } from '$lib/api';
+	import Dialog from '$lib/components/Dialog.svelte';
 	import { t } from '$lib/i18n';
 	import { project } from '$lib/stores';
 
@@ -23,6 +24,7 @@
 	] as const;
 	const READABLE = ['csv', 'xlf', 'xliff', 'json'];
 
+	let open = $state(true);
 	let format = $state<(typeof FORMATS)[number]['id']>('csv');
 	let scope = $state<'file' | 'project'>('file');
 	let error = $state('');
@@ -111,105 +113,78 @@
 	}
 </script>
 
-<div class="backdrop">
-	<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="interchange-title">
-		{#if pending}
-			<h2 id="interchange-title">{$t('interchange.confirm_title')}</h2>
-			<p>{$t('interchange.confirm_applicable', { n: pending.plan.applicable })}</p>
-			{#each COUNTS as [field, key] (field)}
-				{#if pending.plan[field] > 0}
-					<p class="muted">{$t(`interchange.confirm_${key}`, { n: pending.plan[field] })}</p>
-				{/if}
-			{/each}
-			{#if error}<p class="error">{error}</p>{/if}
-			<div class="actions">
-				<button onclick={() => (pending = null)} disabled={busy}>{$t('common.cancel')}</button>
-				<button class="primary" onclick={confirmImport} disabled={busy}>
-					{$t('interchange.confirm_action')}
-				</button>
-			</div>
-		{:else}
-			<h2 id="interchange-title">{$t('interchange.title')}</h2>
-			<p class="muted">{$t('interchange.message')}</p>
+<Dialog bind:open title={pending ? $t('interchange.confirm_title') : $t('interchange.title')} {onclose}>
+	{#if pending}
+		<p class="lead">{$t('interchange.confirm_applicable', { n: pending.plan.applicable })}</p>
+		{#each COUNTS as [field, key] (field)}
+			{#if pending.plan[field] > 0}
+				<p class="muted">{$t(`interchange.confirm_${key}`, { n: pending.plan[field] })}</p>
+			{/if}
+		{/each}
+		{#if error}<p class="error" role="alert">{error}</p>{/if}
+	{:else}
+		<p class="muted">{$t('interchange.message')}</p>
 
-			<label for="format">{$t('interchange.format_label')}</label>
-			<select id="format" bind:value={format}>
+		<div>
+			<label class="lbl" for="interchange-format">{$t('interchange.format_label')}</label>
+			<select id="interchange-format" bind:value={format}>
 				{#each FORMATS as f (f.id)}
 					<option value={f.id}>{$t(f.label)}</option>
 				{/each}
 			</select>
+		</div>
 
-			<label for="scope">{$t('interchange.scope_label')}</label>
-			<select id="scope" bind:value={scope}>
+		<div>
+			<label class="lbl" for="interchange-scope">{$t('interchange.scope_label')}</label>
+			<select id="interchange-scope" bind:value={scope}>
 				<option value="file" disabled={!selectedFile}>{$t('translation.scope_file')}</option>
 				<option value="project">{$t('translation.scope_all')}</option>
 			</select>
+		</div>
 
-			{#if error}<p class="error">{error}</p>{/if}
-			<div class="actions">
-				<button onclick={onclose} disabled={busy}>{$t('common.cancel')}</button>
-				<button onclick={importFile} disabled={busy}>{$t('interchange.import_action')}</button>
-				<button class="primary" onclick={exportFile} disabled={busy}>
-					{$t('interchange.export_action')}
-				</button>
-			</div>
+		{#if error}<p class="error" role="alert">{error}</p>{/if}
+	{/if}
+
+	{#snippet actions()}
+		{#if pending}
+			<button type="button" class="btn ghost" onclick={() => (pending = null)} disabled={busy}>
+				{$t('common.cancel')}
+			</button>
+			<button type="button" class="btn primary" onclick={confirmImport} disabled={busy}>
+				{$t('interchange.confirm_action')}
+			</button>
+		{:else}
+			<button type="button" class="btn ghost" onclick={() => (open = false)} disabled={busy}>
+				{$t('common.cancel')}
+			</button>
+			<button type="button" class="btn" onclick={importFile} disabled={busy}>
+				{$t('interchange.import_action')}
+			</button>
+			<button type="button" class="btn primary" onclick={exportFile} disabled={busy}>
+				{$t('interchange.export_action')}
+			</button>
 		{/if}
-	</div>
-</div>
+	{/snippet}
+</Dialog>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: rgb(0 0 0 / 0.4);
-	}
-
-	.dialog {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		width: min(520px, 90vw);
-		padding: 1.2rem;
-		border-radius: 8px;
-		background: white;
-	}
-
-	label {
-		margin-top: 0.4rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-	}
-
-	select {
-		padding: 0.4rem;
-		border: 1px solid #ccc;
-		border-radius: 4px;
+	.lead {
+		margin: 0;
 	}
 
 	.muted {
-		color: #666;
-		font-size: 0.9rem;
+		margin: 0;
+		color: var(--ink2);
+		font-size: 13px;
+		line-height: 1.5;
 	}
 
 	.error {
-		color: #b00020;
-	}
-
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 0.8rem;
-	}
-
-	.primary {
-		border: none;
-		border-radius: 4px;
-		background: #2b6cb0;
-		color: white;
-		padding: 0.4rem 0.9rem;
+		margin: 0;
+		padding: 8px 11px;
+		border-radius: 8px;
+		background: var(--errWeak);
+		color: var(--ink);
+		font-size: 13px;
 	}
 </style>

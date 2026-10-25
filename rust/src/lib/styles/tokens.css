@@ -1,0 +1,89 @@
+/* Design tokens. `theme.ts` sets `data-theme="light|dark"` on <html>
+   (already resolved, "system" included); light is the fallback. */
+:root {
+	--font-ui: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-text: 'Literata', Georgia, serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+	--r-sm: 6px;
+	--r-md: 9px;
+	--r-lg: 14px;
+
+	color-scheme: light;
+	--bg: #f6f5f9;
+	--panel: #ffffff;
+	--sunken: #eeecf3;
+	--hover: #f9f8fc;
+	--line: #e8e6ee;
+	--line2: #d3d0db;
+	--ink: #1e1b26;
+	--ink2: #4a4653;
+	--ink3: #67636f;
+	--acc: #7f56e0;
+	--acc7: #6440bd;
+	--accInk: #ffffff;
+	--accWeak: #f4f0fe;
+	--accLine: #bb9ef8;
+	--accRing: rgba(127, 86, 224, 0.18);
+	--s-none: #86838f;
+	--s-draft: #a3650e;
+	--s-imp: #3a68b0;
+	--s-ai: #0b7a80;
+	--s-ok: #277a49;
+	--flag: #be3e0b;
+	--flagWeak: #fdf3ec;
+	--err: #b32222;
+	--errWeak: #fcefef;
+	--errInk: #ffffff;
+	--warn: #7f5600;
+	--warnWeak: #f8f1df;
+	--mcp: #0b6e73;
+	--mcpWeak: #eef8f8;
+	--tag: #55525e;
+	--tagBg: #efedf3;
+	--var: #6440bd;
+	--varBg: #f2edff;
+	--backdrop: rgba(30, 27, 38, 0.45);
+	--shadow-pop: 0 12px 32px rgba(45, 32, 90, 0.16);
+	--shadow-dialog: 0 24px 60px rgba(45, 32, 90, 0.16), 0 4px 12px rgba(30, 27, 38, 0.06);
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--bg: #17151d;
+	--panel: #1e1c25;
+	--sunken: #14121a;
+	--hover: #232029;
+	--line: #2c2934;
+	--line2: #423e4d;
+	--ink: #eceaf1;
+	--ink2: #c3bfcc;
+	--ink3: #a09cab;
+	--acc: #a788f6;
+	--acc7: #c2a9fa;
+	--accInk: #160f2b;
+	--accWeak: #241e36;
+	--accLine: #6a52b8;
+	--accRing: rgba(167, 136, 246, 0.25);
+	--s-none: #85828e;
+	--s-draft: #e2aa4e;
+	--s-imp: #7fa7e8;
+	--s-ai: #4cc3c9;
+	--s-ok: #62c28a;
+	--flag: #f2894a;
+	--flagWeak: #2e211b;
+	--err: #f27373;
+	--errWeak: #341d20;
+	--errInk: #2a0c0c;
+	--warn: #e5bc5a;
+	--warnWeak: #2e2814;
+	--mcp: #4cc3c9;
+	--mcpWeak: #182b2c;
+	--tag: #b3b0bc;
+	--tagBg: #2c2934;
+	--var: #c9b4fa;
+	--varBg: #2b2442;
+	--backdrop: rgba(0, 0, 0, 0.6);
+	--shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
+	--shadow-dialog: 0 24px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.4);
+}

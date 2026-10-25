@@ -16,7 +16,15 @@
     "browse": "Browse",
     "close": "Close",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "optional": "optional",
+    "required": "required",
+    "actions": "Actions",
+    "details": "Details",
+    "autosaved": "Saved automatically",
+    "saving": "Saving…",
+    "open_project_first": "Open a project first."
   },
   "help": {
     "title": "Help",
@@ -39,7 +47,11 @@
     "shortcut_next_file": "Next file",
     "shortcut_prev_page": "Previous page",
     "shortcut_next_page": "Next page",
-    "shortcut_file_menu": "Actions on the selected file"
+    "shortcut_file_menu": "Actions on the selected file",
+    "key_ctrl": "Ctrl",
+    "key_shift": "Shift",
+    "key_alt": "Alt",
+    "intro": "Shortcuts also work while the cursor is in a field."
   },
   "settings": {
     "title": "Settings",
@@ -59,7 +71,12 @@
     "memory_entries": "{n} entries",
     "memory_forget": "Forget this language pair",
     "memory_cancel": "Keep this language pair",
-    "memory_confirm": "Confirm"
+    "memory_confirm": "Confirm",
+    "sdk_none": "None",
+    "verbose_hint": "For diagnosis. Writes more detail in the log.",
+    "memory_forget_title": "Forget this language pair?",
+    "memory_forget_message": "The {n} entries of {source} → {target} are removed from the translation memory of this machine. Projects keep their own translations. This cannot be undone.",
+    "memory_forgotten": "Memory cleared for {source} → {target}"
   },
   "provider_config": {
     "title": "Translation providers",
@@ -93,7 +110,16 @@
     "llm_connection_ok": "Connection OK",
     "verbose_logging_label": "Verbose logging",
     "verbose_logging_hint": "Prints detailed connection info to the console — useful when a provider isn't working.",
-    "keyring_unavailable": "Could not save the API key: no system keyring is available on this machine."
+    "keyring_unavailable": "Could not save the API key: no system keyring is available on this machine.",
+    "status_error": "Error",
+    "status_unconfigured": "Not configured",
+    "key_saved_placeholder": "Key saved — type to replace it",
+    "key_remove": "Remove the key",
+    "key_remove_title": "Remove the {provider} key?",
+    "key_remove_message": "The key is deleted from the system keyring. You will need to enter it again to use this provider.",
+    "key_stored": "Stored in the system keyring, never in the project.",
+    "default_label": "Default provider",
+    "saved": "Provider settings saved"
   },
   "translation": {
     "translate_with": "Translate with",
@@ -147,7 +173,17 @@
     "detected_count": "{n} character(s) detected",
     "notes_saved": "Notes saved",
     "back": "Back to review",
-    "deleted_one": "Character “{name}” deleted"
+    "deleted_one": "Character “{name}” deleted",
+    "intro": "These sheets go into the context sent to the automatic translators. To translate a name, write Name -> Translation in the notes.",
+    "empty_hint": "Run the auto-detect to list the speakers of the game, or add them by hand.",
+    "found_by_detection": "Found by auto-detect · to complete",
+    "unnamed": "(unnamed)",
+    "notes_placeholder": "Gender, register, forms of address…",
+    "delete_label": "Delete {name}",
+    "add_title": "Add a character",
+    "variable_hint": "The Ren'Py variable used in the script, for example e.",
+    "add_submit": "Add",
+    "variable_exists": "A character already uses this variable."
   },
   "universe": {
     "title": "Universe summary",
@@ -170,7 +206,9 @@
     "purpose_names": "It says which proper nouns stay as they are and which ones get translated.",
     "purpose_terms": "It supplies the game's own vocabulary (places, items, factions), which the model cannot guess.",
     "generate_title": "Draft it with AI",
-    "generate_desc": "A sample of the game's dialogue is sent to the chosen provider, which drafts a first version. The text replaces the field below; nothing is stored until you click Save."
+    "generate_desc": "A sample of the game's dialogue is sent to the chosen provider, which drafts a first version. The text replaces the field below; nothing is stored until you click Save.",
+    "intro": "Summary, tone and vocabulary specific to the game. Added to the context of every automatic translation.",
+    "unsaved_generated": "Generated text, not saved yet."
   },
   "project_setup": {
     "title": "Project setup",
@@ -181,10 +219,10 @@
     "step_done": "Step completed",
     "step_back_to": "Back to: {step}",
     "step_go_to": "Go to: {step}",
-    "game_folder": "GAME FOLDER",
+    "game_folder": "Game folder",
     "no_folder": "No folder selected",
-    "source_lang": "SOURCE LANGUAGE",
-    "target_lang": "TARGET LANGUAGE",
+    "source_lang": "Source language",
+    "target_lang": "Target language",
     "target_hint": "Used as the generated translation folder name.",
     "target_placeholder": "Select a language",
     "sdk_title": "Ren'Py SDK",
@@ -224,12 +262,18 @@
     "existing_tl_title": "Existing translation found",
     "existing_tl_desc": "The \"{language}\" translation folder already contains files. What do you want to do?",
     "existing_keep_title": "Resume the translation",
-    "existing_keep_desc": "Keep the files as they are and pick up the lines already translated.",
+    "existing_keep_desc": "Use the translation files as they are, without running Ren'Py. The lines already translated in them are picked up; texts added by a new game version do not appear.",
     "existing_update_title": "Resume and update the files",
-    "existing_update_desc": "Keep the translations, but let the Ren'Py SDK rebuild the files: texts added by a new game version appear, and texts it removed are dropped.",
+    "existing_update_desc": "Ren'Py regenerates the files; a copy of the current ones is archived under .rts/backups first. New texts appear and removed ones are dropped. The translations stored in the project, and those already written in the files, are kept.",
     "existing_reset_title": "Start a new translation",
-    "existing_reset_desc": "Archive the current files under .rts/backups, then start from scratch. Saved translations are cleared.",
-    "archive_failed": "Could not archive the existing translation folder: another program is using it. Close the game, your editor, or any file manager or terminal pointing inside game/tl/, then try again.\n{error}"
+    "existing_reset_desc": "Ren'Py regenerates the files, and every translation stored in the project is cleared. The current files are archived under .rts/backups first. Notes and flags are kept.",
+    "archive_failed": "Could not archive the existing translation folder: another program is using it. Close the game, your editor, or any file manager or terminal pointing inside game/tl/, then try again.\n{error}",
+    "engine_found": "The game ships its own Ren'Py engine: no SDK needed.",
+    "folder_hint": "The folder that contains game/, not game/ itself.",
+    "validated_sr": "validated",
+    "delete_label": "Delete the data of {name}",
+    "delete_note": "The × deletes a project's saved translations and backups (its .rts folder) after a confirmation. The game files are never touched.",
+    "extract_hint": "From a few seconds to several minutes"
   },
   "review": {
     "files_panel_title": "Files",
@@ -314,7 +358,71 @@
     "file_menu_interchange": "Import / export",
     "file_menu_clear": "Clear translations",
     "file_menu_copied": "Path copied to the clipboard.",
-    "file_menu_reveal_failed": "Could not open the file manager on this file."
+    "file_menu_reveal_failed": "Could not open the file manager on this file.",
+    "act_translate": "Translate line {n}",
+    "act_copy": "Copy the source into the translation, line {n}",
+    "act_clear": "Clear the translation, line {n}",
+    "act_flag": "Flag line {n}",
+    "act_validate": "Validate line {n}",
+    "clear_irreversible": "This cannot be undone.",
+    "clear_n_lines": "Clear {n} lines",
+    "clear_search": "Clear the search",
+    "clear_summary": "{n} translations will be cleared.",
+    "clear_where": "Clear in",
+    "duplicates_aria": "{n} other lines share the text of line {line}. Validate it and apply the translation to them.",
+    "empty_file": "{file} has no translatable line.",
+    "empty_file_title": "No line",
+    "empty_title": "No matching line",
+    "empty_with_filter": "No line of {file} matches this filter.",
+    "empty_with_search": "No line of {file} contains “{query}” under this filter.",
+    "file_aria": "{name}, {dir}, {ok} validated out of {total}",
+    "file_matches": "{n} matching",
+    "file_opened": "File {name}",
+    "file_root": "game root",
+    "files_count": "{n} files",
+    "filter_label": "Filter the lines",
+    "hint_leave": "leave the field",
+    "hint_validate": "validate and move to the next line",
+    "job_failures": "failures",
+    "job_finished_title": "Automatic translation finished",
+    "job_log": "Log",
+    "job_log_empty": "Nothing logged yet.",
+    "job_log_label": "Job log",
+    "job_reassurance": "Validated lines are never touched. The review stays usable during the job.",
+    "job_running_title": "Automatic translation in progress",
+    "line_n": "line {n}",
+    "lines_label": "Lines {from} to {to} of {file}",
+    "lines_range": "Lines {from}–{to} of {total}",
+    "live_updated": "{n} line(s) updated by the assistant",
+    "more_actions": "More actions",
+    "narration": "Narration",
+    "no_project_action": "Go to project setup",
+    "no_project_message": "Open a project to review its translations.",
+    "no_project_title": "No project open",
+    "not_translated_yet": "Not translated yet",
+    "note_label": "Note on line {n}",
+    "page_next": "Next",
+    "page_opened": "Page {n} of {total}",
+    "page_prev": "Previous",
+    "page_title": "Review",
+    "page_word": "Page",
+    "pagination_label": "Pagination",
+    "progress_lines": "{done} / {total} lines",
+    "project_validated": "Project validated",
+    "row_label": "Line {n}, status: {status}",
+    "scope_filter_hint": "The lines the current filter selects, validated ones excluded.",
+    "search_label": "Search in the source and the translation",
+    "search_placeholder": "Search…",
+    "shortcuts_button": "Keyboard shortcuts",
+    "show_all": "Show all lines",
+    "skip_files": "Skip to the files",
+    "skip_lines": "Skip to the lines",
+    "status_group": "Status",
+    "translation_of": "Translation of line {n}",
+    "untranslated_lines": "untranslated lines",
+    "updated_by_assistant": "Modified by the assistant",
+    "validation_refused": "Validation refused.",
+    "write_rpy": "Write to .rpy"
   },
   "interchange": {
     "label": "Import / export",
@@ -348,7 +456,7 @@
     "title": "Export translation",
     "subtitle": "Review the result then generate your archive.",
     "blocks_extracted": "translation blocks extracted",
-    "game_name_label": "GAME NAME",
+    "game_name_label": "Game name",
     "export_btn": "Export zip",
     "generating": "Generating...",
     "success_title": "Archive exported successfully.",
@@ -362,7 +470,13 @@
     "sync_never_saved": "No translation has ever been written to the files: the archive will only contain the source language.",
     "sync_unsaved_units": "{n} translation(s) have not been written to the files and will be missing from the archive.",
     "sync_external_edit": "The tl/ files were modified outside the application since the last save. Those changes will be lost on the next save.",
-    "sync_export_anyway": "Export anyway"
+    "sync_export_anyway": "Export anyway",
+    "description": "Packs the translation files written in the game into a zip archive to distribute.",
+    "summary": "{total} lines · {untranslated} not translated",
+    "write_rpy": "Write to the .rpy files",
+    "written": "{n} lines written to the .rpy files",
+    "game_name_help": "Proposed from the game, editable.",
+    "zip_name_label": "Archive name"
   },
   "job_events": {
     "translation_rejected_identical": "Translation ignored ({block_id}): identical to source text",
@@ -397,7 +511,8 @@
   },
   "themes": {
     "dark": "Dark",
-    "light": "Light"
+    "light": "Light",
+    "system": "Same as the system"
   },
   "languages": {
     "english": "English",
@@ -440,5 +555,25 @@
       "invalid_language": "The target language is not a valid folder name.",
       "busy": "An extraction is already running."
     }
+  },
+  "nav": {
+    "skip_to_content": "Skip to the content",
+    "steps": "Project steps",
+    "tools": "Project tools",
+    "characters": "Characters",
+    "universe": "Universe",
+    "providers": "Providers",
+    "unavailable_no_project": "open a project first",
+    "unavailable_during_job": "unavailable during automatic translation"
+  },
+  "status": {
+    "not_translated": "Not translated",
+    "draft": "Draft",
+    "imported": "Imported",
+    "ai_suggested": "AI suggestion",
+    "human_validated": "Validated",
+    "flag": "Flagged",
+    "error": "Error",
+    "warning": "Warning"
   }
 }

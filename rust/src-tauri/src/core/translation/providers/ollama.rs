@@ -272,11 +272,22 @@ impl OllamaProvider {
         if let Some(num_ctx) = self.num_ctx {
             return Ok(num_ctx);
         }
-        let num_ctx = self.resolve_num_ctx().await.map_err(|_| {
-            ProviderError::Message(format!(
+        // A 404 on /api/show means the server answered but has no such
+        // model: saying it is unreachable would send the user looking at
+        // the wrong thing.
+        let num_ctx = self.resolve_num_ctx().await.map_err(|error| match error {
+            ProviderError::Network(e) if e.status() == Some(reqwest::StatusCode::NOT_FOUND) => {
+                ProviderError::Message(format!(
+                    "The Ollama model {model} is not installed on {endpoint} \
+                     (ollama pull {model})",
+                    model = self.model,
+                    endpoint = self.endpoint
+                ))
+            }
+            _ => ProviderError::Message(format!(
                 "Cannot reach the Ollama server ({})",
                 self.endpoint
-            ))
+            )),
         })?;
         self.num_ctx = Some(num_ctx);
         Ok(num_ctx)
@@ -892,7 +903,29 @@ mod tests {
             .translate_batch(&[unit("a", "Hi.")], "english", "french")
             .await;
 
-        assert!(result.is_err());
+        let message = result.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(message.contains("not installed"), "{message}");
+        assert!(message.contains("ollama pull gemma3:1b"), "{message}");
+    }
+
+    #[tokio::test]
+    async fn translate_batch_says_unreachable_when_nothing_listens() {
+        // A port just released: wiremock pools its servers, so dropping
+        // a MockServer would leave something answering 404 there.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .and_then(|listener| listener.local_addr())
+            .map(|address| address.port())
+            .unwrap();
+        let endpoint = format!("http://127.0.0.1:{port}");
+
+        let mut provider =
+            OllamaProvider::new(&endpoint, "gemma3:1b".to_string(), None, vec![], None);
+        let result = provider
+            .translate_batch(&[unit("a", "Hi.")], "english", "french")
+            .await;
+
+        let message = result.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(message.contains("Cannot reach"), "{message}");
     }
 
     #[tokio::test]

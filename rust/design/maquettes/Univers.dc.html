@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Univers</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;1,7..72,400&amp;display=swap">
+<style>
+body{margin:0}
+.rts{--bg:#F3F3F0;--panel:#FFFFFF;--sunken:#EAEAE5;--hover:#F8F8F5;--line:#E0E0D9;--line2:#C9C9C0;--ink:#1A1B1E;--ink2:#43464C;--ink3:#62656C;--acc:#2B55C6;--accInk:#FFFFFF;--s-ok:#277A49;font-family:'Archivo',system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:13px;line-height:1.4}
+.rts *{box-sizing:border-box}
+.rts button,.rts textarea{font:inherit;color:inherit}
+.rts :focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.rts .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.rts .btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--line2);background:var(--panel);border-radius:6px;cursor:pointer;white-space:nowrap;font-size:13px;text-decoration:none;color:var(--ink)}
+.rts .btn:hover{background:var(--hover)}
+.rts .btn.ghost{border-color:transparent;background:transparent;color:var(--ink2)}
+.rts .btn.ghost:hover{background:var(--sunken)}
+.rts .ico{width:16px;height:16px;flex:none}
+.rts .kbd{font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:16px;padding:0 5px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;color:var(--ink3);background:var(--panel)}
+.rts .doc{width:100%;flex:1;min-height:440px;resize:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:20px 24px;font-family:'Literata',Georgia,serif;font-size:15px;line-height:1.65;color:var(--ink)}
+.rts .doc:focus{outline:0;border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+/* RenZip v2 : violet, Archivo, rayons 6/9/14 */
+.rts{--bg:#F4F2F8;--surf:#EFECF5;--panel:#FDFCFE;--sunken:#ECE9F2;--hover:#F7F5FB;--line:#E3E0EA;--line2:#CFCBD8;--ink:#1E1B26;--ink2:#46424F;--ink3:#625E6B;--acc:#7F56E0;--acc7:#6440BD;--accInk:#FFFFFF;--accWeak:#F3EEFF;--accLine:#BB9EF8}
+.rts h1,.rts h2{font-weight:700!important;letter-spacing:-.01em}
+.rts header{height:56px!important;background:var(--panel)!important}
+.rts header>div:first-child>svg rect{fill:var(--acc)}
+.rts header>div:first-child>svg path{stroke:var(--accInk)}
+.rts header>div:first-child>span:nth-of-type(1){font-weight:700;font-size:14.5px}
+.rts header>div:first-child>span:nth-of-type(2){color:var(--ink3)}
+.rts header a[aria-current=page]{background:var(--accWeak)!important;color:var(--acc7)!important;font-weight:600}
+.rts .btn{border-radius:9px}
+.rts .doc{border-radius:14px;padding:24px 28px}
+.rts :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.rts .skip{position:absolute;left:12px;top:-60px;z-index:10;padding:8px 14px;border-radius:8px;background:var(--acc);color:var(--accInk);font-weight:600;text-decoration:none}
+.rts .skip:focus{top:10px}
+</style>
+</helmet>
+<div class="rts" style="position: relative; min-height: 100vh; display: flex; flex-direction: column">
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header style="display: flex; align-items: center; gap: 16px; height: 46px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); background: var(--panel)">
+<div style="display: flex; align-items: center; gap: 10px; flex: 1 1 0; min-width: 0">
+<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" style="flex: none"><rect x="1" y="1" width="18" height="18" rx="5" fill="var(--ink)"></rect><path d="M5.5 7.5h9M5.5 11.5h5.5" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round"></path></svg>
+<span style="font-weight: 600; white-space: nowrap">Les Lanternes de Kerhaven</span>
+<span class="mono" style="font-size: 11.5px; color: var(--ink3)">EN → FR</span>
+</div>
+<nav aria-label="Outils du projet" style="display: flex; justify-content: flex-end; gap: 2px">
+<a class="btn ghost" href="Personnages.dc.html">Personnages</a>
+<a class="btn ghost" href="Univers.dc.html" aria-current="page" style="background: var(--sunken); color: var(--ink)">Univers</a>
+<a class="btn ghost" href="Fournisseurs.dc.html">Fournisseurs</a>
+</nav>
+</header>
+
+<main id="contenu" style="flex: 1; width: 100%; max-width: 860px; margin: 0 auto; padding: 20px 28px 28px; display: flex; flex-direction: column; gap: 16px">
+<a href="Main.dc.html" class="btn ghost" style="align-self: flex-start; margin-left: -10px"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M10 3.5L5.5 8 10 12.5"></path></svg>Révision<span class="kbd">Échap</span></a>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px">
+<div style="max-width: 560px">
+<h1 style="margin: 0 0 6px; font-size: 20px; font-weight: 600"><label for="univers">Univers</label></h1>
+<p style="margin: 0; color: var(--ink2); font-size: 13.5px; line-height: 1.5">Résumé, ton et lexique propre au jeu. Joint au contexte de chaque traduction automatique.</p>
+</div>
+<button class="btn"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5L9.6 6.4 14.5 8 9.6 9.6 8 14.5 6.4 9.6 1.5 8 6.4 6.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path></svg>Générer avec l’IA…</button>
+</div>
+<textarea id="univers" class="doc" defaultValue="{{text}}"></textarea>
+<div style="display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--ink3)">
+<span style="display: inline-flex; align-items: center; gap: 6px"><svg class="ico" style="width: 14px; height: 14px; color: var(--s-ok)" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"></path></svg>Enregistré automatiquement</span>
+<span class="mono">1 214 caractères</span>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      text: 'RÉSUMÉ\nKerhaven, petit port de pêche breton imaginaire, années 1920. Le joueur revient au village après la disparition de son père, gardien du phare. Avec Mira et Elias, il enquête sur les lanternes qui s’éteignent une à une chaque nuit de brouillard.\n\nTON\nMélancolique, retenu, quelques touches d’humour sec. Narration au passé simple. Dialogues courts, oraux sans être vulgaires.\n\nLEXIQUE\nthe Lamps -> les Lanternes (toujours avec majuscule)\nthe Keeper -> le Gardien\nfog-night -> nuit de brume\nthe Drowned Bell -> la Cloche noyée\n\nÀ NE PAS TRADUIRE\nKerhaven, Penmarc’h, the Saint-Yves (nom du bateau)'
+    };
+  }
+}
+</script>
+</body>
+</html>

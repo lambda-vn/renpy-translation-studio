@@ -19,7 +19,7 @@
 //! provider (Ollama) splits that into at most a handful of its own
 //! requests internally. Revisit if real use shows this matters.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -178,6 +178,11 @@ pub fn spread_to_followers(
 /// translations that are largely correct and quick for a human to
 /// touch up, so these are kept, with a warning event instead.
 ///
+/// Only the units of `chunk` are answered, each once: a small model
+/// pads its output by repeating an entry or inventing an identifier, and
+/// counting those would push the progress past the total, while writing
+/// a stray one would put text on a line nobody sent.
+///
 /// Returns the result with implausible translations moved from
 /// `translations` to `failed_ids`, plus one message per rejection or
 /// warning.
@@ -192,12 +197,15 @@ fn verify_quality(
     let mut verified = Vec::new();
     let mut rejected = Vec::new();
     let mut events = Vec::new();
+    let mut answered: HashSet<String> = HashSet::new();
 
     for translation in result.translations {
-        let source = source_by_id
-            .get(translation.block_id.as_str())
-            .copied()
-            .unwrap_or("");
+        let Some(&source) = source_by_id.get(translation.block_id.as_str()) else {
+            continue;
+        };
+        if !answered.insert(translation.block_id.clone()) {
+            continue;
+        }
 
         if !source.is_empty() && translation.translated_text.trim() == source.trim() {
             events.push(format!(
@@ -239,7 +247,11 @@ fn verify_quality(
         verified.push(translation);
     }
 
-    let mut failed_ids = result.failed_ids;
+    let mut failed_ids: Vec<String> = result
+        .failed_ids
+        .into_iter()
+        .filter(|id| source_by_id.contains_key(id.as_str()) && answered.insert(id.clone()))
+        .collect();
     failed_ids.extend(rejected);
     (
         TranslateBatchResult {
@@ -546,6 +558,41 @@ mod tests {
             .collect();
         assert_eq!(ids, vec!["a", "c", "d"]);
         assert_eq!(spread.failed_ids, vec!["b".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn stray_and_repeated_ids_from_the_provider_are_not_counted() {
+        let units = vec![unit("a", "Hello."), unit("b", "Bye.")];
+        let mut provider = ScriptedProvider::new(vec![ok(&[
+            ("a", "Bonjour."),
+            ("a", "Salut."),
+            ("zzz", "Hors du lot."),
+            ("b", "Au revoir."),
+        ])]);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let progress = run_job(
+            &units,
+            &mut provider,
+            "english",
+            "french",
+            CancelToken::new(),
+            tx,
+        )
+        .await;
+
+        assert_eq!(progress.done, 2);
+        assert_eq!(progress.failed, 0);
+        let written: Vec<String> = drain(&mut rx)
+            .into_iter()
+            .filter_map(|event| match event {
+                JobEvent::Chunk(chunk) => Some(chunk.translations),
+                _ => None,
+            })
+            .flatten()
+            .map(|t| t.block_id)
+            .collect();
+        assert_eq!(written, vec!["a".to_string(), "b".to_string()]);
     }
 
     #[tokio::test]

@@ -6,6 +6,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
+use crate::core::project_actions;
 use crate::core::storage::{recent_projects, repositories, Database};
 use crate::mcp_server::session::{self, ProjectSession};
 
@@ -38,9 +39,42 @@ pub async fn list_recent_projects() -> Result<Vec<ProjectEntry>, String> {
                 name,
                 path: path.display().to_string(),
                 ready,
+                resume: project_actions::read_resume_info(&path).map(Into::into),
             }
         })
         .collect())
+}
+
+/// Drop a game from the recent list without touching it: no file of the
+/// game and nothing under its `.rts/` is deleted.
+#[tauri::command]
+pub async fn forget_project(path: String) -> Result<(), String> {
+    recent_projects::remove(
+        &recent_projects::default_path(),
+        std::path::Path::new(&path),
+    );
+    Ok(())
+}
+
+/// What the cross on a recent-project card does in 1.0.0, after its
+/// confirmation: delete the project's `.rts/` folder (saved translations,
+/// backups) and forget the entry. The game's own files are not touched.
+/// Closes the project first when it is the one open. Irreversible; the
+/// caller owns the confirmation.
+#[tauri::command]
+pub async fn delete_project_data(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    let target = std::path::Path::new(&path);
+    {
+        let mut current = state.current.lock().await;
+        if current
+            .as_ref()
+            .is_some_and(|s| recent_projects::resolve(&s.path) == recent_projects::resolve(target))
+        {
+            *current = None;
+        }
+    }
+    project_actions::delete_project_data(&recent_projects::default_path(), target)
+        .map_err(|e| format!("Could not delete the saved data: {e}"))
 }
 
 /// Open a project already extracted (by this app or another 1.x/2.x

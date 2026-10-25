@@ -26,9 +26,9 @@ pub(crate) fn require_unit(
     session: &ProjectSession,
     block_id: &str,
 ) -> Result<repositories::TranslationUnit, String> {
-    repositories::get_all(session.conn(), None, None)
+    repositories::get_many(session.conn(), &[block_id.to_string()])
         .map_err(|e| e.to_string())?
         .into_iter()
-        .find(|u| u.block_id == block_id)
+        .next()
         .ok_or_else(|| format!("Unknown block_id: {block_id}"))
 }

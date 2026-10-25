@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Révision — route_b.rpy — Ren'Py Translation Studio</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;1,7..72,400&amp;display=swap">
+<style>
+body{margin:0}
+.rts{--bg:#F6F5F9;--panel:#FFFFFF;--sunken:#EEECF3;--hover:#F9F8FC;--line:#E8E6EE;--line2:#D3D0DB;--ink:#1E1B26;--ink2:#4A4653;--ink3:#67636F;--acc:#7F56E0;--acc7:#6440BD;--accInk:#FFFFFF;--accWeak:#F4F0FE;--accRing:rgba(127,86,224,.18);--s-none:#86838F;--s-draft:#A3650E;--s-imp:#3A68B0;--s-ai:#0B7A80;--s-ok:#277A49;--flag:#BE3E0B;--flagWeak:#FDF3EC;--err:#B32222;--errWeak:#FCEFEF;--warn:#7F5600;--mcp:#0B6E73;--mcpWeak:#EEF8F8;--tag:#55525E;--tagBg:#EFEDF3;--var:#6440BD;--varBg:#F2EDFF;font-family:'Archivo',system-ui,sans-serif;color:var(--ink);background:var(--panel);font-size:13.5px;line-height:1.45}
+.rts.dark{--bg:#17151D;--panel:#1E1C25;--sunken:#14121A;--hover:#232029;--line:#2C2934;--line2:#423E4D;--ink:#ECEAF1;--ink2:#C3BFCC;--ink3:#A09CAB;--acc:#A788F6;--acc7:#C2A9FA;--accInk:#160F2B;--accWeak:#241E36;--accRing:rgba(167,136,246,.25);--s-none:#85828E;--s-draft:#E2AA4E;--s-imp:#7FA7E8;--s-ai:#4CC3C9;--s-ok:#62C28A;--flag:#F2894A;--flagWeak:#2E211B;--err:#F27373;--errWeak:#341D20;--warn:#E5BC5A;--mcp:#4CC3C9;--mcpWeak:#182B2C;--tag:#B3B0BC;--tagBg:#2C2934;--var:#C9B4FA;--varBg:#2B2442}
+.rts *{box-sizing:border-box}
+.rts button,.rts input,.rts select,.rts textarea{font:inherit;color:inherit}
+.rts :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.rts .sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.rts .skip{position:absolute;left:12px;top:-60px;z-index:10;padding:8px 14px;border-radius:8px;background:var(--acc);color:var(--accInk);font-weight:600;text-decoration:none}
+.rts .skip:focus{top:10px}
+.rts .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.rts .btn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border:1px solid var(--line2);background:var(--panel);border-radius:9px;cursor:pointer;white-space:nowrap;font-size:13.5px;font-weight:500;text-decoration:none;color:var(--ink)}
+.rts .btn:hover{background:var(--hover);border-color:var(--ink3)}
+.rts .btn.ghost{border-color:transparent;background:transparent;color:var(--ink2)}
+.rts .btn.ghost:hover{background:var(--sunken);color:var(--ink)}
+.rts .btn.primary{background:var(--acc);border-color:var(--acc);color:var(--accInk);font-weight:600}
+.rts .btn.primary:hover{background:var(--acc7);border-color:var(--acc7)}
+.rts .btn.icon{width:34px;padding:0;justify-content:center}
+.rts .btn[disabled]{opacity:.45;cursor:not-allowed}
+.rts .ico{width:16px;height:16px;flex:none}
+.rts .kbd{font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:16px;padding:0 5px;border:1px solid var(--line2);border-radius:4px;color:var(--ink3);font-weight:400}
+.rts .btn.primary .kbd{color:var(--accInk);border-color:currentColor;opacity:.8}
+.rts .field{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border:1px solid var(--line2);border-radius:9px;background:var(--panel);color:var(--ink3)}
+.rts .field.pill{border-radius:999px}
+.rts .field input,.rts .field select{border:0;outline:0;background:transparent;min-width:0;flex:1;font-size:13.5px;color:var(--ink)}
+.rts .field:focus-within{border-color:var(--acc);box-shadow:0 0 0 3px var(--accRing)}
+.rts .flt{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;border-radius:8px;background:transparent;cursor:pointer;font-size:13px;color:var(--ink2)}
+.rts .flt:hover{background:var(--sunken)}
+.rts .flt[aria-pressed=true]{background:var(--accWeak);color:var(--acc7);font-weight:600}
+.rts .flt .n{font-family:'IBM Plex Mono',monospace;font-size:12px}
+.rts .g{width:14px;height:14px;flex:none;display:block}
+.rts .txt{font-family:'Literata',Georgia,serif;font-size:15px;line-height:1.6;color:var(--ink);text-wrap:pretty;overflow-wrap:anywhere;margin:0}
+.rts .tk{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--tag);background:var(--tagBg);border-radius:4px;padding:1px 4px}
+.rts .tv{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--var);background:var(--varBg);border-radius:4px;padding:1px 4px}
+.rts .row{display:grid;grid-template-columns:22px minmax(0,1fr) minmax(0,1fr);column-gap:24px;row-gap:6px;padding:16px 16px 20px;margin:0 -16px;border-bottom:1px solid var(--line)}
+.rts .row:hover{background:var(--hover)}
+.rts .row .acts{opacity:0;display:flex;gap:2px;margin-left:auto}
+.rts .row:hover .acts,.rts .row:focus-within .acts{opacity:1}
+.rts .row.active{background:var(--accWeak);border-radius:12px;border-bottom-color:transparent}
+.rts .row.mcp{background:var(--mcpWeak)}
+.rts .ab{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;background:transparent;color:var(--ink3);cursor:pointer;padding:0}
+.rts .ab:hover{background:var(--sunken);color:var(--ink)}
+.rts .ab.flag[aria-pressed=true]{color:var(--flag)}
+.rts .ab.ok[aria-pressed=true]{color:var(--s-ok)}
+.rts .ta{display:block;width:100%;min-height:76px;resize:none;border:1px solid var(--acc);border-radius:9px;padding:8px 11px;background:var(--panel);font-family:'Literata',Georgia,serif;font-size:15px;line-height:1.6;box-shadow:0 0 0 3px var(--accRing);outline:0;color:var(--ink)}
+.rts .msg{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0;font-size:13px;line-height:1.5;color:var(--ink2)}
+.rts .msg.box{padding:8px 11px;border-radius:8px;color:var(--ink)}
+.rts .file{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 10px;width:100%;text-align:left;padding:8px 10px;border:0;background:transparent;cursor:pointer;border-radius:8px;color:var(--ink)}
+.rts .file:hover{background:var(--sunken)}
+.rts .file[aria-current=true]{background:var(--accWeak)}
+.rts .file[aria-current=true] .fn{color:var(--acc7);font-weight:600}
+.rts .fn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13.5px}
+.rts .dir{grid-column:1 / -1;font-size:12px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rts .steps{display:flex;align-items:center;gap:2px;list-style:none;margin:0;padding:0}
+.rts .step{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:999px;font-size:13px;color:var(--ink2);text-decoration:none}
+.rts a.step:hover{background:var(--sunken)}
+.rts .step[aria-current=step]{background:var(--accWeak);color:var(--acc7);font-weight:600}
+.rts .step[aria-disabled=true]{color:var(--ink3);cursor:not-allowed}
+.rts .num{display:inline-flex;width:18px;height:18px;border-radius:9px;border:1px solid currentColor;font-size:10.5px;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace}
+.rts progress{-webkit-appearance:none;appearance:none;display:block;width:100%;height:6px;border:0;border-radius:999px;background:var(--panel);overflow:hidden}
+.rts progress::-webkit-progress-bar{background:var(--panel);border-radius:999px}
+.rts progress::-webkit-progress-value{background:var(--acc);border-radius:999px}
+.rts progress::-moz-progress-bar{background:var(--acc);border-radius:999px}
+.rts progress.ok{height:4px;background:var(--sunken)}
+.rts progress.ok::-webkit-progress-bar{background:var(--sunken)}
+.rts progress.ok::-webkit-progress-value{background:var(--s-ok)}
+.rts progress.ok::-moz-progress-bar{background:var(--s-ok)}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="position: relative; height: 100vh; min-height: 600px; display: flex; flex-direction: column; overflow: hidden">
+<a class="skip" href="#lignes">Aller aux lignes</a>
+<a class="skip" href="#fichiers">Aller aux fichiers</a>
+
+<header style="display: flex; align-items: center; gap: 20px; height: 56px; padding: 0 14px 0 20px; border-bottom: 1px solid var(--line); background: var(--panel); flex: none">
+<div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 0">
+<svg width="22" height="22" viewBox="0 0 20 20" aria-hidden="true" style="flex: none"><rect x="1" y="1" width="18" height="18" rx="6" fill="var(--acc)"></rect><path d="M5.5 7.5h9M5.5 11.5h5.5" stroke="var(--accInk)" stroke-width="1.7" stroke-linecap="round"></path></svg>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 10px; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Les Lanternes de Kerhaven</span><span style="font-size: 12.5px; color: var(--ink3); white-space: nowrap"><abbr title="anglais" style="text-decoration: none">EN</abbr> → <abbr title="français" style="text-decoration: none">FR</abbr></span></p>
+</div>
+<nav aria-label="Étapes du projet" style="flex: none">
+<ol class="steps">
+<li><a class="step" href="Projets.dc.html"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"></path></svg>Configuration<span class="sr"> (terminée)</span></a></li>
+<li aria-hidden="true"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="var(--line2)" stroke-width="1.5" stroke-linecap="round"><path d="M6 3.5L10.5 8 6 12.5"></path></svg></li>
+<li><span class="step" aria-current="step"><span class="num" aria-hidden="true">2</span>Révision</span></li>
+<li aria-hidden="true"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="var(--line2)" stroke-width="1.5" stroke-linecap="round"><path d="M6 3.5L10.5 8 6 12.5"></path></svg></li>
+<li>
+<sc-if value="{{jobOn}}" hint-placeholder-val="{{ true }}"><span class="step" aria-disabled="true"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"></path></svg>Export<span class="sr"> (indisponible pendant la traduction automatique)</span></span></sc-if>
+<sc-if value="{{jobOff}}" hint-placeholder-val="{{ false }}"><a class="step" href="Export.dc.html"><span class="num" aria-hidden="true">3</span>Export</a></sc-if>
+</li>
+</ol>
+</nav>
+<nav aria-label="Outils du projet" style="display: flex; justify-content: flex-end; align-items: center; gap: 2px; flex: 1 1 0">
+<a class="btn ghost" href="Personnages.dc.html">Personnages</a>
+<a class="btn ghost" href="Univers.dc.html">Univers</a>
+<a class="btn ghost" href="Fournisseurs.dc.html">Fournisseurs</a>
+<button class="btn ghost icon" type="button" aria-label="Paramètres"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4.5h7M12.5 4.5h1M2.5 11.5h1M6.5 11.5h7"></path><circle cx="11" cy="4.5" r="1.5"></circle><circle cx="5" cy="11.5" r="1.5"></circle></svg></button>
+</nav>
+</header>
+
+<div style="display: flex; flex: 1; min-height: 0">
+
+<aside id="fichiers" aria-labelledby="h-fichiers" style="width: 256px; flex: none; border-right: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0">
+<div style="padding: 20px 18px 14px">
+<h2 id="h-fichiers" style="margin: 0 0 14px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3)">Fichiers</h2>
+<label for="prog-projet" style="display: flex; justify-content: space-between; font-size: 13px; color: var(--ink2); margin-bottom: 7px"><span>Projet validé</span><span class="mono">56 %</span></label>
+<progress id="prog-projet" class="ok" value="1107" max="1981"></progress>
+<p style="margin: 7px 0 0; font-size: 12px; color: var(--ink3)"><span class="mono">1 107 / 1 981</span> lignes</p>
+</div>
+<ul style="list-style: none; margin: 0; padding: 4px 8px 16px; overflow: auto; flex: 1; display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{files}}" as="f" hint-placeholder-count="9">
+<li><button class="file" type="button" aria-current="{{f.cur}}" aria-label="{{f.aria}}" title="{{f.path}}"><span class="fn">{{f.name}}</span><span class="mono" style="font-size: 12px; color: var(--ink3)">{{f.ok}}/{{f.total}}</span><span class="dir">{{f.dirShown}}</span></button></li>
+</sc-for>
+</ul>
+</aside>
+
+<main id="contenu" style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--panel)">
+
+<div style="padding: 22px 28px 14px; display: flex; flex-direction: column; gap: 18px; flex: none">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px">
+<div style="flex: 1 1 240px; min-width: 0">
+<h1 style="margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">route_b.rpy</h1>
+<p style="margin: 4px 0 0; font-size: 13px; color: var(--ink3)">chapter3/scenes · <span class="mono">26 / 77</span> validées</p>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<button class="btn" type="button"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M9 1.8L3.8 9h4l-1 5.2L12.2 7h-4z"></path></svg>Traduction automatique…</button>
+<button class="btn" type="button" aria-haspopup="menu" aria-expanded="false">Plus d’actions<svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6.5L8 10.5 12 6.5"></path></svg></button>
+<span aria-hidden="true" style="width: 1px; height: 22px; background: var(--line); margin: 0 6px"></span>
+<p id="non-ecrites" style="margin: 0; font-size: 13px; color: var(--warn); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap"><svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><circle cx="4" cy="4" r="4" fill="currentColor"></circle></svg><span><span class="mono">72</span> lignes non écrites</span></p>
+<button class="btn primary" type="button" aria-describedby="non-ecrites"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5h7.8l2.7 2.7v8.3H3z"></path><path d="M5.5 2.5v3h4.5v-3M5 13.5v-4h6v4"></path></svg>Écrire dans les .rpy<kbd class="kbd">Ctrl+S</kbd></button>
+</div>
+</div>
+
+<form role="search" aria-label="Filtrer les lignes" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 0">
+<label class="field pill" style="flex: 0 1 280px; min-width: 200px"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.25"></circle><path d="M10.2 10.2L13.5 13.5"></path></svg><span class="sr">Rechercher dans la source et la traduction</span><input type="search" placeholder="Rechercher…" defaultValue="{{search}}"><kbd class="kbd">Ctrl+F</kbd></label>
+<div role="group" aria-label="Statut" style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px">
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="8">
+<sc-if value="{{c.sep}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width: 1px; height: 18px; background: var(--line); margin: 0 6px"></span></sc-if>
+<button class="flt" type="button" aria-pressed="{{c.pressed}}" title="{{c.label}}">
+<sc-if value="{{c.isAll}}" hint-placeholder-val="{{ false }}"><span>Tous</span></sc-if>
+<sc-if value="{{c.isNone}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--s-none)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle></svg></sc-if>
+<sc-if value="{{c.isDraft}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--s-draft)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle><path d="M8 2.5a5.5 5.5 0 0 0 0 11z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{c.isImp}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--s-imp)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2L14 8 8 14 2 8z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{c.isAi}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--s-ai)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5L9.6 6.4 14.5 8 9.6 9.6 8 14.5 6.4 9.6 1.5 8 6.4 6.4z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{c.isOk}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--s-ok)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="currentColor"></circle><path d="M5 8.2l2 2 4-4.2" fill="none" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<sc-if value="{{c.isFlag}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--flag)" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14.5V2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><path d="M4 2.5h8l-1.8 3 1.8 3H4z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{c.isErr}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--err)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8L14.8 13.8H1.2z" fill="currentColor"></path><path d="M8 6.3v3.4M8 11.6v.1" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round"></path></svg></sc-if>
+<sc-if value="{{c.notAll}}" hint-placeholder-val="{{ true }}"><span class="sr">{{c.label}}</span></sc-if>
+<span class="n">{{c.n}}</span>
+</button>
+</sc-for>
+</div>
+<label class="field" style="flex: 0 0 auto"><span style="font-size: 13px">Locuteur</span><select><option>Tous</option><option>Mira</option><option>Elias</option><option>Holt</option><option>Narration</option></select></label>
+</form>
+</div>
+
+<sc-if value="{{jobOn}}" hint-placeholder-val="{{ true }}">
+<section aria-labelledby="job-titre" style="margin: 0 28px 6px; padding: 12px 16px; border-radius: 12px; background: var(--accWeak); flex: none">
+<div style="display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap">
+<svg class="ico" style="color: var(--acc); width: 18px; height: 18px" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke-opacity=".25"></circle><path d="M8 2a6 6 0 0 1 6 6"></path></svg>
+<h2 id="job-titre" style="margin: 0; font-size: 13.5px; font-weight: 600">Traduction automatique en cours</h2>
+<span style="font-size: 13px; color: var(--ink2)">DeepL · projet entier</span>
+<div style="flex: 1 1 180px; min-width: 160px; display: flex; align-items: center; gap: 10px">
+<progress value="212" max="334" aria-labelledby="job-titre" style="flex: 1"></progress>
+<span class="mono" style="font-size: 12.5px; color: var(--ink2); white-space: nowrap">212 / 334</span>
+</div>
+<span style="font-size: 13px; color: var(--err)"><span class="mono">3</span> échecs</span>
+<button class="btn ghost" type="button" aria-expanded="{{logExp}}" aria-controls="job-journal" onClick="{{toggleLog}}">Journal</button>
+<button class="btn" type="button">Annuler</button>
+</div>
+<sc-if value="{{logOpen}}" hint-placeholder-val="{{ false }}">
+<ol id="job-journal" class="mono" aria-label="Journal du job" style="list-style: none; margin: 10px 0 0; padding: 8px 12px; background: var(--panel); border-radius: 8px; font-size: 12px; line-height: 1.8; color: var(--ink2)">
+<li><time>14:31:07</time> · route_a.rpy · lot 52 terminé, 40 lignes</li>
+<li style="color: var(--err)"><time>14:30:51</time> · route_a.rpy ligne 212 · échec : délai dépassé (HTTP 504)</li>
+<li><time>14:30:12</time> · lighthouse.rpy · lot 51 terminé, 40 lignes</li>
+</ol>
+</sc-if>
+</section>
+</sc-if>
+
+<sc-if value="{{hasLines}}" hint-placeholder-val="{{ true }}">
+<ol id="lignes" tabindex="-1" aria-label="Lignes 1 à 50 de route_b.rpy" style="list-style: none; margin: 0; padding: 4px 28px 24px; flex: 1; overflow: auto; min-height: 0; outline: 0">
+<sc-for list="{{lines}}" as="l" hint-placeholder-count="8">
+<li class="{{l.cls}}">
+<div style="grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 6px; align-items: center; padding-top: 7px">
+<span class="sr">{{l.label}}</span>
+<sc-if value="{{l.isNone}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--s-none)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle></svg></sc-if>
+<sc-if value="{{l.isDraft}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--s-draft)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle><path d="M8 2.5a5.5 5.5 0 0 0 0 11z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{l.isImp}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--s-imp)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2L14 8 8 14 2 8z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{l.isAi}}" hint-placeholder-val="{{ true }}"><svg class="g" style="color: var(--s-ai)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5L9.6 6.4 14.5 8 9.6 9.6 8 14.5 6.4 9.6 1.5 8 6.4 6.4z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{l.isOk}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--s-ok)" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="currentColor"></circle><path d="M5 8.2l2 2 4-4.2" fill="none" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<sc-if value="{{l.flag}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--flag)" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14.5V2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><path d="M4 2.5h8l-1.8 3 1.8 3H4z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{l.hasErr}}" hint-placeholder-val="{{ false }}"><svg class="g" style="color: var(--err)" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8L14.8 13.8H1.2z" fill="currentColor"></path><path d="M8 6.3v3.4M8 11.6v.1" stroke="var(--panel)" stroke-width="1.7" stroke-linecap="round"></path></svg></sc-if>
+</div>
+<div style="grid-column: 2 / 4; grid-row: 1; display: flex; align-items: center; gap: 10px; min-height: 30px">
+<sc-if value="{{l.hasSp}}" hint-placeholder-val="{{ true }}"><span style="font-size: 13px; font-weight: 600; color: var(--ink2)">{{l.sp}}</span></sc-if>
+<sc-if value="{{l.noSp}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px; font-style: italic; color: var(--ink3)">Narration</span></sc-if>
+<span class="mono" style="font-size: 11.5px; color: var(--ink3)">ligne {{l.n}}</span>
+<div class="acts">
+<button class="ab" type="button" aria-label="{{l.aTr}}" title="Traduire cette ligne"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h6M5.5 2v1.5M7.5 3.5c-.6 2.6-2.4 4.7-5 5.7M4.2 5.6c.8 1.4 2 2.5 3.5 3.1M8.5 14l2.75-6.5L14 14M9.4 12h3.7"></path></svg></button>
+<button class="ab" type="button" aria-label="{{l.aCopy}}" title="Copier la source · Ctrl+D"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"></rect><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"></path></svg></button>
+<button class="ab" type="button" aria-label="{{l.aClear}}" title="Effacer la traduction"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.2 3.5H13.5v9H6.2L2.5 8z"></path><path d="M8.3 6.3l3.2 3.4M11.5 6.3L8.3 9.7"></path></svg></button>
+<button class="ab flag" type="button" aria-pressed="{{l.flagP}}" aria-label="{{l.aFlag}}" title="Signaler · Ctrl+M"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 14V2.5M3.5 3h8.5l-2 3 2 3H3.5"></path></svg></button>
+<button class="ab ok" type="button" aria-pressed="{{l.okP}}" aria-label="{{l.aOk}}" title="Valider · Ctrl+Entrée"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"></path></svg></button>
+</div>
+</div>
+<p class="txt" lang="en" style="grid-column: 2; grid-row: 2"><sc-for list="{{l.src}}" as="s"><sc-if value="{{s.isTag}}"><span class="tk">{{s.t}}</span></sc-if><sc-if value="{{s.isVar}}"><span class="tv">{{s.t}}</span></sc-if><sc-if value="{{s.isTxt}}"><span>{{s.t}}</span></sc-if></sc-for></p>
+<div style="grid-column: 3; grid-row: 2; min-width: 0">
+<sc-if value="{{l.active}}" hint-placeholder-val="{{ false }}"><label class="sr" for="{{l.taId}}">{{l.taLabel}}</label><textarea id="{{l.taId}}" class="ta" rows="2" defaultValue="{{l.t}}" aria-describedby="{{l.descId}}"></textarea></sc-if>
+<sc-if value="{{l.passive}}" hint-placeholder-val="{{ true }}"><p class="txt"><sc-for list="{{l.trs}}" as="s"><sc-if value="{{s.isTag}}"><span class="tk">{{s.t}}</span></sc-if><sc-if value="{{s.isVar}}"><span class="tv">{{s.t}}</span></sc-if><sc-if value="{{s.isTxt}}"><span>{{s.t}}</span></sc-if></sc-for></p></sc-if>
+<sc-if value="{{l.empty}}" hint-placeholder-val="{{ false }}"><p style="margin: 0; font-size: 13.5px; font-style: italic; color: var(--ink3); padding-top: 3px">Pas encore traduite</p></sc-if>
+<sc-if value="{{l.hasWarn}}" hint-placeholder-val="{{ false }}"><p class="msg" id="{{l.descId}}" style="color: var(--warn)"><svg class="g" viewBox="0 0 16 16" aria-hidden="true" style="margin-top: 2px"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"></circle><path d="M8 4.8v3.8M8 11v.1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg><span><span class="sr">Avertissement : </span>{{l.warn}}</span></p></sc-if>
+<sc-if value="{{l.active}}" hint-placeholder-val="{{ false }}"><p class="msg" style="flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--ink3)"><span style="display: inline-flex; gap: 6px; align-items: center"><kbd class="kbd">Ctrl+Entrée</kbd>valider et passer à la suivante</span><span style="display: inline-flex; gap: 6px; align-items: center"><kbd class="kbd">Échap</kbd>quitter le champ</span></p></sc-if>
+<sc-if value="{{l.hasErr}}" hint-placeholder-val="{{ false }}"><p class="msg box" role="alert" style="background: var(--errWeak)"><svg class="g" style="color: var(--err); margin-top: 2px" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8L14.8 13.8H1.2z" fill="currentColor"></path><path d="M8 6.3v3.4M8 11.6v.1" stroke="var(--errWeak)" stroke-width="1.7" stroke-linecap="round"></path></svg><span><strong style="font-weight: 600">Validation refusée.</strong> {{l.err}}</span></p></sc-if>
+<sc-if value="{{l.hasNote}}" hint-placeholder-val="{{ false }}"><p class="msg box" style="background: var(--flagWeak)"><svg class="g" style="color: var(--flag); margin-top: 2px" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14.5V2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><path d="M4 2.5h8l-1.8 3 1.8 3H4z" fill="currentColor"></path></svg><span><span class="sr">Note : </span>{{l.note}}</span></p></sc-if>
+<sc-if value="{{l.isMcp}}" hint-placeholder-val="{{ false }}"><p class="msg" style="font-size: 12.5px; color: var(--mcp)"><svg class="g" viewBox="0 0 16 16" aria-hidden="true" style="margin-top: 2px"><path d="M8 1.5L9.6 6.4 14.5 8 9.6 9.6 8 14.5 6.4 9.6 1.5 8 6.4 6.4z" fill="currentColor"></path></svg><span>Modifiée par l’assistant (MCP) il y a 4 s</span></p></sc-if>
+</div>
+</li>
+</sc-for>
+</ol>
+</sc-if>
+
+<sc-if value="{{isEmpty}}" hint-placeholder-val="{{ false }}">
+<div id="lignes" tabindex="-1" style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 28px; outline: 0">
+<div style="max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="var(--ink3)" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="17" cy="17" r="10"></circle><path d="M25 25l8 8M13 17h8"></path></svg>
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Aucune ligne ne correspond</h2>
+<p style="margin: 0; color: var(--ink2); font-size: 13.5px; line-height: 1.55">Aucune ligne signalée de route_b.rpy ne contient « lanterne ».</p>
+<div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 6px">
+<button class="btn" type="button">Vider la recherche<kbd class="kbd">Échap</kbd></button>
+<button class="btn ghost" type="button">Afficher tous les statuts</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<footer style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-height: 52px; padding: 8px 28px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink2); flex: none">
+<p style="margin: 0">Lignes <span class="mono">{{range}}</span> sur <span class="mono">77</span></p>
+<nav aria-label="Pagination">
+<ul style="list-style: none; display: flex; gap: 2px; margin: 0; padding: 0">
+<li><button class="btn ghost" type="button" disabled>Précédente</button></li>
+<li><button class="btn ghost" type="button" aria-current="page" style="background: var(--accWeak); color: var(--acc7); font-weight: 600; width: 34px; justify-content: center; padding: 0"><span class="sr">Page </span>1</button></li>
+<li><button class="btn ghost" type="button" style="width: 34px; justify-content: center; padding: 0"><span class="sr">Page </span>2</button></li>
+<li><button class="btn ghost" type="button">Suivante</button></li>
+</ul>
+</nav>
+<span style="flex: 1"></span>
+<button class="btn ghost" type="button"><kbd class="kbd">F1</kbd>Raccourcis clavier</button>
+</footer>
+</main>
+</div>
+<div class="sr" aria-live="polite">{{live}}</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"scenario":{"editor":"enum","options":["edition","vide"],"default":"edition"},"job":{"editor":"enum","options":["replie","deplie","aucun"],"default":"replie"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.dark ?? false;
+    const scenario = this.props.scenario ?? 'edition';
+    const job = this.props.job ?? 'replie';
+    const st = this.state || {};
+    const logOpen = st.logOpen !== undefined ? st.logOpen : (job === 'deplie');
+    const jobOn = job !== 'aucun';
+    const isEmpty = scenario === 'vide';
+    const L = { none: 'Non traduit', draft: 'Brouillon', imp: 'Importé', ai: 'Suggestion IA', ok: 'Validé' };
+    const seg = (s) => (s || '').split(/(\{[^}]*\}|\[[^\]]*\])/g).filter((x) => x !== '').map((t) => ({ t: t, isTag: t[0] === '{', isVar: t[0] === '[', isTxt: t[0] !== '{' && t[0] !== '[' }));
+
+    const raw = [
+      { n: 19, sp: 'Mira', st: 'ok', s: 'You’re late again.', t: 'Encore en retard.' },
+      { n: 20, st: 'ok', s: 'The fog had rolled in from the harbour, swallowing the lamps one by one until only the lighthouse remained, blinking like a tired eye.', t: 'Le brouillard était monté du port, avalant les lanternes une à une jusqu’à ce qu’il ne reste plus que le phare, clignant comme un œil fatigué.' },
+      { n: 21, sp: 'Elias', st: 'ai', s: '{i}Nobody{/i} goes up there after dark, [player_name].', t: '{i}Personne{/i} ne monte là-haut après la tombée de la nuit, [player_name].' },
+      { n: 22, sp: 'Mira', st: 'ai', active: true, s: 'Then we leave before nightfall.', t: 'Alors on part avant la tombée de la nuit.', warn: 'Traduction 32 % plus longue que la source' },
+      { n: 23, sp: 'Holt', st: 'imp', flag: true, s: 'You’d do well to listen to the girl, son.', t: 'Tu ferais bien d’écouter la petite, fiston.', note: 'Holt vouvoie le joueur partout ailleurs. Tutoiement voulu ici ?' },
+      { n: 24, st: 'ai', mcp: true, s: 'Holt turned away and spat into the water.', t: 'Holt se détourna et cracha dans l’eau.' },
+      { n: 25, sp: 'Mira', st: 'none', s: '...', t: '' },
+      { n: 26, sp: 'Holt', st: 'draft', s: 'Go home, [player_name]. {color=#f00}Now.{/color}', t: 'Rentre chez toi. {color=#f00}Tout de suite.{/color}', err: 'La variable [player_name] a disparu de la traduction.' },
+      { n: 27, sp: 'Elias', st: 'none', s: 'I don’t think he’s telling us everything. Did you see his hands? They were shaking, and not from the cold.', t: '' },
+      { n: 28, sp: 'Mira', st: 'ok', s: 'Yes.', t: 'Oui.' },
+      { n: 29, st: 'draft', s: 'Somewhere below, a bell began to toll.', t: 'Quelque part en contrebas, une cloche se mit à sonner.' }
+    ];
+    const lines = isEmpty ? [] : raw.map((l) => {
+      const active = !!l.active;
+      return Object.assign({}, l, {
+        sp: l.sp || '', hasSp: !!l.sp, noSp: !l.sp,
+        label: 'Ligne ' + l.n + ', statut : ' + L[l.st] + (l.flag ? ', signalée' : '') + (l.err ? ', en erreur' : ''),
+        isNone: l.st === 'none', isDraft: l.st === 'draft', isImp: l.st === 'imp', isAi: l.st === 'ai', isOk: l.st === 'ok',
+        flag: !!l.flag, flagP: l.flag ? 'true' : 'false', okP: l.st === 'ok' ? 'true' : 'false',
+        src: seg(l.s), trs: seg(l.t),
+        active: active, passive: !active && !!l.t, empty: !active && !l.t,
+        cls: 'row' + (active ? ' active' : '') + (l.mcp ? ' mcp' : ''),
+        hasNote: !!l.note, hasErr: !!l.err, hasWarn: !!l.warn, isMcp: !!l.mcp,
+        note: l.note || '', err: l.err || '', warn: l.warn || '',
+        taId: 'tr-' + l.n, descId: 'desc-' + l.n, taLabel: 'Traduction de la ligne ' + l.n,
+        aTr: 'Traduire la ligne ' + l.n, aCopy: 'Copier la source dans la traduction, ligne ' + l.n,
+        aClear: 'Effacer la traduction, ligne ' + l.n, aFlag: 'Signaler la ligne ' + l.n, aOk: 'Valider la ligne ' + l.n
+      });
+    });
+
+    const pressedKey = isEmpty ? 'flag' : 'all';
+    const chipDefs = [
+      { k: 'all', label: 'Tous les statuts', n: 77 },
+      { k: 'none', label: 'Non traduit', n: 9 },
+      { k: 'draft', label: 'Brouillon', n: 4 },
+      { k: 'imp', label: 'Importé', n: 6 },
+      { k: 'ai', label: 'Suggestion IA', n: 32 },
+      { k: 'ok', label: 'Validé', n: 26 },
+      { k: 'flag', label: 'Signalées', n: 3, sep: true },
+      { k: 'err', label: 'En erreur', n: 1 }
+    ];
+    const chips = chipDefs.map((c) => ({
+      label: c.label, n: c.n, sep: !!c.sep, pressed: c.k === pressedKey ? 'true' : 'false',
+      isAll: c.k === 'all', notAll: c.k !== 'all',
+      isNone: c.k === 'none', isDraft: c.k === 'draft', isImp: c.k === 'imp', isAi: c.k === 'ai', isOk: c.k === 'ok', isFlag: c.k === 'flag', isErr: c.k === 'err'
+    }));
+
+    const fileDefs = [
+      { name: 'prologue.rpy', dir: '', ok: 184, total: 184 },
+      { name: 'arrival.rpy', dir: 'chapter1', ok: 301, total: 322 },
+      { name: 'tavern.rpy', dir: 'chapter1', ok: 260, total: 297 },
+      { name: 'lighthouse.rpy', dir: 'chapter2', ok: 140, total: 356 },
+      { name: 'route_a.rpy', dir: 'chapter3/scenes', ok: 88, total: 402 },
+      { name: 'route_b.rpy', dir: 'chapter3/scenes', ok: 26, total: 77, cur: true },
+      { name: 'epilogue_good_ending_extended.rpy', dir: 'chapter3/scenes', ok: 0, total: 211 },
+      { name: 'screens.rpy', dir: '', ok: 96, total: 118 },
+      { name: 'options.rpy', dir: '', ok: 12, total: 14 }
+    ];
+    const files = fileDefs.map((f) => Object.assign({}, f, {
+      path: (f.dir ? f.dir + '/' : '') + f.name,
+      dirShown: f.dir || 'racine du jeu',
+      cur: f.cur ? 'true' : 'false',
+      aria: f.name + ', ' + (f.dir || 'racine du jeu') + ', ' + f.ok + ' validées sur ' + f.total
+    }));
+
+    return {
+      rootClass: 'rts' + (dark ? ' dark' : ''),
+      lines: lines, hasLines: !isEmpty, isEmpty: isEmpty,
+      chips: chips, files: files,
+      search: isEmpty ? 'lanterne' : '',
+      range: isEmpty ? '0' : '1–50',
+      jobOn: jobOn, jobOff: !jobOn,
+      logOpen: logOpen, logExp: logOpen ? 'true' : 'false',
+      toggleLog: () => this.setState({ logOpen: !logOpen }),
+      live: isEmpty ? 'Aucune ligne ne correspond aux filtres.' : 'Ligne 24 modifiée par l’assistant.'
+    };
+  }
+}
+</script>
+</body>
+</html>
