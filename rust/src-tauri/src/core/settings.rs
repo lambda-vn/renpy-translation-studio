@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+#[cfg(not(test))]
 use keyring::Entry;
 
 pub const APP_NAME: &str = "renpy-translation-studio";
@@ -38,6 +39,7 @@ pub enum SettingsError {
     #[error("unknown setting key: {0}")]
     UnknownKey(String),
     #[error("no OS keyring backend available to store '{0}'")]
+    #[cfg_attr(test, allow(dead_code))]
     KeyringUnavailable(String),
 }
 
@@ -46,6 +48,10 @@ pub struct Settings {
     config_file: PathBuf,
     data: HashMap<String, Option<String>>,
     keyring_available: bool,
+    /// Stands in for the OS keyring in tests: a test must never read or
+    /// overwrite the API keys of the person running it.
+    #[cfg(test)]
+    test_keyring: HashMap<String, String>,
 }
 
 impl Settings {
@@ -68,6 +74,8 @@ impl Settings {
                 .map(|(k, v)| (k.to_string(), v.map(str::to_string)))
                 .collect(),
             keyring_available: true,
+            #[cfg(test)]
+            test_keyring: HashMap::new(),
         };
         settings.reload();
         settings
@@ -112,6 +120,43 @@ impl Settings {
         }
     }
 
+    #[cfg(test)]
+    fn keyring_set(&mut self, key: &str, value: Option<&str>) -> Result<(), SettingsError> {
+        match value {
+            Some(v) if !v.is_empty() => {
+                self.test_keyring.insert(key.to_string(), v.to_string());
+            }
+            _ => {
+                self.test_keyring.remove(key);
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn keyring_get(&mut self, key: &str) -> Option<String> {
+        self.test_keyring.get(key).cloned()
+    }
+
+    #[cfg(not(test))]
+    fn keyring_get(&mut self, key: &str) -> Option<String> {
+        if !self.keyring_available {
+            return None;
+        }
+        let Ok(entry) = Entry::new(APP_NAME, key) else {
+            return None;
+        };
+        match entry.get_password() {
+            Ok(v) => Some(v),
+            Err(keyring::Error::NoEntry) => None,
+            Err(_) => {
+                self.keyring_available = false;
+                None
+            }
+        }
+    }
+
+    #[cfg(not(test))]
     fn keyring_set(&mut self, key: &str, value: Option<&str>) -> Result<(), SettingsError> {
         let entry = Entry::new(APP_NAME, key)
             .map_err(|_| SettingsError::KeyringUnavailable(key.to_string()))?;
@@ -137,20 +182,7 @@ impl Settings {
     /// Return the value for the given key, or `None` if not set.
     pub fn get(&mut self, key: &str) -> Option<String> {
         if KEYRING_KEYS.contains(&key) {
-            if !self.keyring_available {
-                return None;
-            }
-            let Ok(entry) = Entry::new(APP_NAME, key) else {
-                return None;
-            };
-            return match entry.get_password() {
-                Ok(v) => Some(v),
-                Err(keyring::Error::NoEntry) => None,
-                Err(_) => {
-                    self.keyring_available = false;
-                    None
-                }
-            };
+            return self.keyring_get(key);
         }
         self.data.get(key).cloned().flatten()
     }

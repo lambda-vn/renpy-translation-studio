@@ -11,12 +11,16 @@ avec le code Python (`../src/`) le temps du chantier.
 
 ## En cours : `2.0.0-rc.3`
 
-L'interface, refaite dans le design livré par Claude Design
-([`design/`](design/HANDOFF.md) : maquettes et passation). La check-list
-[`PARITY.md`](PARITY.md) passe à 36 ✅ · 4 🟡 · 0 ❌ : plus aucune fonction
-n'est absente. DeepL, LibreTranslate et le trousseau ont été exercés contre les
-vrais services ; avec `gemma3:4b`, Ollama décale des traductions dans un lot
-(enquête en cours, voir P3).
+L'interface, refaite dans le design livré par Claude Design (couleurs,
+polices, glyphes et composants vivent maintenant dans `src/lib/styles/` et
+`src/lib/components/`). La check-list [`PARITY.md`](PARITY.md) passe à
+37 ✅ · 3 🟡 · 0 ❌ : plus aucune fonction n'est absente. DeepL, LibreTranslate
+et le trousseau ont été exercés contre les vrais services.
+
+Ollama n'envoie plus les lignes voisines avec chaque ligne : `gemma3:4b` les
+fusionnait dans la traduction (28 à 32 lignes contaminées sur 44, 0 sur 50
+sans elles). Défaut présent aussi en 1.0.0, mesuré sur les deux versions ; voir
+la doc de `add_context` dans `providers/ollama.rs`.
 
 - Fondations (`src/lib/`) : tokens clair / sombre (`styles/tokens.css`,
   réglage `theme` comme en 1.0.0), polices embarquées (`@fontsource`,

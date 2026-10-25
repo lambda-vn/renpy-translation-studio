@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Logo, game name with source > target languages, the three steps, then the tools.
+	// Game name with source > target languages, the three steps, then the tools.
 	// It has no heading: each screen owns the page's single <h1>.
 	import { t } from '$lib/i18n';
 	import { languageName, languageShort } from '$lib/languages';
@@ -12,10 +12,6 @@
 
 <header>
 	<div class="identity">
-		<svg width="22" height="22" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-			<rect x="1" y="1" width="18" height="18" rx="6" fill="var(--acc)" />
-			<path d="M5.5 7.5h9M5.5 11.5h5.5" stroke="var(--accInk)" stroke-width="1.7" stroke-linecap="round" />
-		</svg>
 		<p>
 			{#if $project}
 				<span class="sr">{APP_NAME} — </span>
@@ -62,10 +58,6 @@
 		gap: 12px;
 		min-width: 0;
 		flex: 1 1 0;
-	}
-
-	.identity svg {
-		flex: none;
 	}
 
 	p {

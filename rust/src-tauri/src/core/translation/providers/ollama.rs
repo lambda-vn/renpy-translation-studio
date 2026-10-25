@@ -146,18 +146,25 @@ fn drop_duplicate_content(
     (kept, dropped)
 }
 
-/// Enrich each unit with its immediately preceding and following source
-/// text, in file order.
+/// Turn each unit into a [`ContextualUnit`], without its neighbors' text.
+///
+/// The preceding and following source lines used to go along as
+/// `context_before` / `context_after`, and small models translate them
+/// into the line itself. Measured on gemma3:4b (The Question, 50 lines,
+/// English to German, batches of 5): with them, 28 to 32 translations of
+/// 44 carried a neighbor's sentence and 6 lines failed; without them, 0
+/// of 50 in three runs and no failure. Labelling them "do not translate"
+/// changed nothing (26 and 27). Do not send them again without a real
+/// test on a small model.
 fn add_context(units: &[TranslationUnitPayload]) -> Vec<ContextualUnit> {
     units
         .iter()
-        .enumerate()
-        .map(|(i, unit)| ContextualUnit {
+        .map(|unit| ContextualUnit {
             block_id: unit.block_id.clone(),
             source_text: unit.source_text.clone(),
             character_variable: unit.character_variable.clone(),
-            prev_text: (i > 0).then(|| units[i - 1].source_text.clone()),
-            next_text: (i + 1 < units.len()).then(|| units[i + 1].source_text.clone()),
+            prev_text: None,
+            next_text: None,
         })
         .collect()
 }
@@ -705,18 +712,22 @@ mod tests {
     }
 
     #[test]
-    fn add_context_links_neighbors_without_wrapping() {
+    fn add_context_sends_no_neighbor_text() {
         let units = vec![
             unit("a", "First."),
             unit("b", "Second."),
             unit("c", "Third."),
         ];
         let contextual = add_context(&units);
-        assert_eq!(contextual[0].prev_text, None);
-        assert_eq!(contextual[0].next_text.as_deref(), Some("Second."));
-        assert_eq!(contextual[1].prev_text.as_deref(), Some("First."));
-        assert_eq!(contextual[1].next_text.as_deref(), Some("Third."));
-        assert_eq!(contextual[2].next_text, None);
+        assert!(contextual
+            .iter()
+            .all(|u| u.prev_text.is_none() && u.next_text.is_none()));
+        let prompt = build_batch_prompt(&contextual);
+        assert!(!prompt.contains("context_"), "{prompt}");
+        assert_eq!(
+            prompt,
+            "block_id: a\nsource: First.\n\n---\n\nblock_id: b\nsource: Second.\n\n---\n\nblock_id: c\nsource: Third."
+        );
     }
 
     #[tokio::test]
