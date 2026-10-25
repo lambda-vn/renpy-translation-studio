@@ -68,7 +68,7 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 | S13 | Barre d'étapes (Setup / Review / Export), confirmation avant de revenir en arrière, navigation refusée pendant un job | ✅ | Vérifié pendant un vrai job. |
 | S14 | Dialogue de paramètres (langue de l'UI, journal détaillé, volume de la mémoire) | ✅ | Langue, thème (`system`/`light`/`dark`, déjà en 1.0.0), journal (format 1.0.0, sans effet en Rust : aucune journalisation), SDK, mémoire par paire de langues. |
 | S15 | Export zip : nom proposé affiché, avertissement d'écart avec `tl/` | ✅ | `export_sync` porté ; les trois avertissements (non écrit, non traduit, qualité) ; zip vérifié. |
-| S16 | i18n anglais + français | ✅ | Tous les écrans passent par `$t`, pluriels via `Intl.PluralRules` ; journal du job et messages qualité localisés (`JobMessage` structuré). Restent en anglais : les erreurs des fournisseurs. |
+| S16 | i18n anglais + français | ✅ | Tous les écrans passent par `$t`, pluriels via `Intl.PluralRules` ; journal du job, messages qualité et erreurs des fournisseurs localisés (`JobMessage`, `ProviderError` structurés en `{ key, params }`). |
 | S17 | Boîtes de dialogue de confirmation, toasts | ✅ | `confirmDialog` (plus aucun `window.confirm`), toasts `role=status`/`alert`. |
 
 ## Données (contrat gelé)

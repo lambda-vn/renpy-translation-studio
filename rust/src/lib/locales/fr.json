@@ -439,8 +439,7 @@
     "skip_lines": "Aller aux lignes",
     "status_group": "Statut",
     "translation_of": "Traduction de la ligne {n}",
-    "untranslated_lines": "{n} lignes n'ont aucune traduction et partiront dans la langue source.",
-    "untranslated_lines_one": "{n} ligne n'a aucune traduction et partira dans la langue source.",
+    "untranslated_lines": "lignes non traduites",
     "updated_by_assistant": "Modifiée par l'assistant",
     "validation_refused": "Validation refusée.",
     "write_rpy": "Écrire dans les .rpy"
@@ -540,6 +539,9 @@
   "providers": {
     "ollama_unreachable": "Impossible de contacter le serveur Ollama ({endpoint}). Vérifiez qu'il est démarré.",
     "ollama_request_failed": "La requête vers le serveur Ollama ({endpoint}) a échoué.",
+    "ollama_model_missing": "Le modèle Ollama {model} n'est pas installé sur {endpoint} (ollama pull {model}).",
+    "network_error": "Erreur réseau : {detail}",
+    "unknown_provider": "Fournisseur inconnu : {id}",
     "deepl_not_configured": "Clé API DeepL non configurée.",
     "ollama_not_configured": "Modèle Ollama non configuré.",
     "libretranslate_not_configured": "URL LibreTranslate non configurée."

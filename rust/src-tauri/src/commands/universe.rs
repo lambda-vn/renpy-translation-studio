@@ -9,6 +9,8 @@ use crate::core::storage::repositories;
 use crate::core::translation::providers::registry;
 use crate::core::translation::universe_generator;
 
+use super::CommandError;
+
 const UNIVERSE_SUMMARY_KEY: &str = "universe_summary";
 
 #[tauri::command]
@@ -40,7 +42,7 @@ pub async fn set_universe_summary(
 /// can take a while on a small local model, so that the rest of the
 /// application stays usable meanwhile.
 #[tauri::command]
-pub async fn generate_universe_summary(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn generate_universe_summary(state: State<'_, AppState>) -> Result<String, CommandError> {
     let (units, target_language) = {
         let guard = state.current.lock().await;
         let session = super::require_session(&guard)?;
@@ -50,13 +52,13 @@ pub async fn generate_universe_summary(state: State<'_, AppState>) -> Result<Str
         )
     };
     if units.is_empty() {
-        return Err("No extracted text to analyze: extract the game first.".to_string());
+        return Err("No extracted text to analyze: extract the game first."
+            .to_string()
+            .into());
     }
     let mut provider = {
         let mut settings = state.settings.lock().await;
         registry::ollama(&mut settings, None, Vec::new())?
     };
-    universe_generator::generate(&units, &mut provider, &target_language)
-        .await
-        .map_err(|e| e.to_string())
+    Ok(universe_generator::generate(&units, &mut provider, &target_language).await?)
 }

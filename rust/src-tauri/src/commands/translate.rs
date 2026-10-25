@@ -24,12 +24,15 @@ use crate::app_state::AppState;
 use crate::core::review_actions::{self, UnitFilter};
 use crate::core::storage::repositories;
 use crate::core::translation::job::{self, CancelToken, JobEvent, JobMessage, JobProgress};
-use crate::core::translation::providers::base::{TranslateBatchResult, TranslationUnitPayload};
+use crate::core::translation::providers::base::{
+    ProviderError, TranslateBatchResult, TranslationUnitPayload,
+};
 use crate::core::translation::providers::registry;
 use crate::core::validators::is_recognized_language;
 use crate::mcp_server::session::ProjectSession;
 
 use super::dto::{ListUnitsArgs, UnitPayload};
+use super::CommandError;
 
 const JOB_EVENT_NAME: &str = "translation-job";
 
@@ -62,7 +65,7 @@ enum JobEventPayload {
         failed: usize,
         running: bool,
         finished: bool,
-        error: Option<String>,
+        error: Option<ProviderError>,
     },
     ChunkPersisted,
     Event {
@@ -88,9 +91,9 @@ pub async fn start_translation_job(
     app: AppHandle,
     state: State<'_, AppState>,
     args: StartJobArgs,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     if state.job.lock().await.is_some() {
-        return Err("A translation job is already running.".to_string());
+        return Err("A translation job is already running.".to_string().into());
     }
 
     let (units, symbol_only, source_lang, target_lang, universe_summary, characters) = {
@@ -125,7 +128,7 @@ pub async fn start_translation_job(
     };
 
     if units.is_empty() {
-        return Err("Nothing to translate in this scope.".to_string());
+        return Err("Nothing to translate in this scope.".to_string().into());
     }
 
     let mut provider = {
@@ -274,7 +277,7 @@ pub struct UnitTranslation {
     /// it is unchanged.
     pub failed: bool,
     /// A job-level error (provider unreachable...), if any.
-    pub error: Option<String>,
+    pub error: Option<ProviderError>,
     /// What the job had to say along the way (a rejected suggestion with
     /// its reason, a retry), for the status line.
     pub events: Vec<JobMessage>,
@@ -293,14 +296,14 @@ pub async fn translate_unit(
     state: State<'_, AppState>,
     provider_id: String,
     block_id: String,
-) -> Result<UnitTranslation, String> {
+) -> Result<UnitTranslation, CommandError> {
     let (payload, source_lang, target_lang, universe_summary, characters) = {
         let guard = state.current.lock().await;
         let session = super::require_session(&guard)?;
         let unit = super::require_unit(session, &block_id)?;
         let target_lang = session.target_language();
         if !is_recognized_language(&target_lang) {
-            return Err(format!("Unsupported target language: {target_lang}"));
+            return Err(format!("Unsupported target language: {target_lang}").into());
         }
         let universe_summary = repositories::get_project_meta(session.conn(), "universe_summary")
             .map_err(|e| e.to_string())?;

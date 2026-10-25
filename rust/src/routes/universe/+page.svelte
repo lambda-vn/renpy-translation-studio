@@ -5,6 +5,7 @@
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
+	import { errorText } from '$lib/messages';
 	import { project } from '$lib/stores';
 
 	// The only LLM provider there is for now; the generation command takes none.
@@ -74,7 +75,7 @@
 			notice = $t('universe.generate_done');
 		} catch (e) {
 			notice = '';
-			error = `${$t('universe.generate_failed')} ${String(e)}`;
+			error = `${$t('universe.generate_failed')} ${errorText($t, e)}`;
 		} finally {
 			generating = false;
 		}

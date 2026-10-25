@@ -282,6 +282,7 @@ pub struct SettingsPayload {
 #[serde(rename_all = "camelCase")]
 pub struct TestConnectionResult {
     pub ok: bool,
-    pub detail: Option<String>,
+    /// DeepL only: characters left this month, when the account has a limit.
+    pub characters_left: Option<i64>,
     pub models: Vec<String>,
 }

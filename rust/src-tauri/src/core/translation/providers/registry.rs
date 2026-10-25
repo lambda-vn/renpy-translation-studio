@@ -4,11 +4,9 @@
 //! Python's registry raises `ValueError` with an `i18n.t()`-translated
 //! message; nothing under `core::` carries UI strings (see
 //! `core::translation::quality`'s own note on the same point), so these
-//! return a plain English message instead, for the caller — the Tauri
-//! command layer, which does own an i18n story — to translate or pass
-//! through as it sees fit.
+//! return a [`ProviderError`], a message key the interface translates.
 
-use super::base::TranslationProvider;
+use super::base::{ProviderError, TranslationProvider};
 use super::deepl::DeepLProvider;
 use super::libretranslate::LibreTranslateProvider;
 use super::ollama::OllamaProvider;
@@ -40,9 +38,10 @@ pub fn ollama(
     settings: &mut Settings,
     universe_summary: Option<String>,
     characters: Vec<Character>,
-) -> Result<OllamaProvider, String> {
-    let model = non_empty(settings.get("ollama_model"))
-        .ok_or_else(|| "Ollama is not configured.".to_string())?;
+) -> Result<OllamaProvider, ProviderError> {
+    let model = non_empty(settings.get("ollama_model")).ok_or(ProviderError::NotConfigured {
+        provider: OllamaProvider::ID,
+    })?;
     let endpoint = non_empty(settings.get("ollama_endpoint"))
         .unwrap_or_else(|| "http://localhost:11434".to_string());
     let batch_size = parse_ollama_batch_size(settings.get("ollama_batch_size"));
@@ -60,22 +59,29 @@ pub fn get(
     provider_id: &str,
     universe_summary: Option<String>,
     characters: Vec<Character>,
-) -> Result<Box<dyn TranslationProvider>, String> {
+) -> Result<Box<dyn TranslationProvider>, ProviderError> {
     match provider_id {
         DeepLProvider::ID => {
-            let api_key = non_empty(settings.get("deepl_api_key"))
-                .ok_or_else(|| "DeepL is not configured.".to_string())?;
+            let api_key =
+                non_empty(settings.get("deepl_api_key")).ok_or(ProviderError::NotConfigured {
+                    provider: DeepLProvider::ID,
+                })?;
             Ok(Box::new(DeepLProvider::new(api_key, &characters)))
         }
         OllamaProvider::ID => Ok(Box::new(ollama(settings, universe_summary, characters)?)),
         LibreTranslateProvider::ID => {
-            let url = non_empty(settings.get("libretranslate_url"))
-                .ok_or_else(|| "LibreTranslate is not configured.".to_string())?;
+            let url = non_empty(settings.get("libretranslate_url")).ok_or(
+                ProviderError::NotConfigured {
+                    provider: LibreTranslateProvider::ID,
+                },
+            )?;
             let api_key = non_empty(settings.get("libretranslate_api_key"));
             LibreTranslateProvider::new(&url, api_key)
                 .map(|p| Box::new(p) as Box<dyn TranslationProvider>)
         }
-        other => Err(format!("Unknown provider: {other}")),
+        other => Err(ProviderError::UnknownProvider {
+            id: other.to_string(),
+        }),
     }
 }
 
@@ -120,13 +126,40 @@ mod tests {
     #[test]
     fn unconfigured_provider_is_refused() {
         let mut settings = temp_settings();
-        assert!(get(&mut settings, "deepl", None, vec![]).is_err());
+        assert_eq!(
+            get(&mut settings, "deepl", None, vec![]).err(),
+            Some(ProviderError::NotConfigured { provider: "deepl" })
+        );
     }
 
     #[test]
     fn unknown_provider_id_is_refused() {
         let mut settings = temp_settings();
-        assert!(get(&mut settings, "mistral", None, vec![]).is_err());
+        assert_eq!(
+            get(&mut settings, "mistral", None, vec![]).err(),
+            Some(ProviderError::UnknownProvider {
+                id: "mistral".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn provider_error_serializes_as_a_catalog_key() {
+        let error = ProviderError::NotConfigured { provider: "deepl" };
+        assert_eq!(
+            serde_json::to_value(&error).unwrap(),
+            serde_json::json!({ "key": "providers.deepl_not_configured", "params": {} })
+        );
+        let error = ProviderError::OllamaUnreachable {
+            endpoint: "http://localhost:11434".to_string(),
+        };
+        assert_eq!(
+            serde_json::to_value(&error).unwrap(),
+            serde_json::json!({
+                "key": "providers.ollama_unreachable",
+                "params": { "endpoint": "http://localhost:11434" }
+            })
+        );
     }
 
     #[test]

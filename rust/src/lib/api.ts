@@ -161,7 +161,7 @@ export interface JobMessage {
 export interface UnitTranslation {
 	unit: UnitPayload;
 	failed: boolean;
-	error: string | null;
+	error: JobMessage | null;
 	events: JobMessage[];
 }
 
@@ -189,7 +189,8 @@ export interface SettingsPayload {
 
 export interface TestConnectionResult {
 	ok: boolean;
-	detail: string | null;
+	/** DeepL only: characters left this month, when the account has a limit. */
+	charactersLeft: number | null;
 	models: string[];
 }
 
@@ -212,7 +213,7 @@ export type JobEventPayload =
 			failed: number;
 			running: boolean;
 			finished: boolean;
-			error: string | null;
+			error: JobMessage | null;
 	  }
 	| { kind: 'chunkPersisted' }
 	| { kind: 'event'; message: JobMessage };

@@ -436,8 +436,7 @@
     "skip_lines": "Skip to the lines",
     "status_group": "Status",
     "translation_of": "Translation of line {n}",
-    "untranslated_lines": "{n} lines have no translation and will ship in the source language.",
-    "untranslated_lines_one": "{n} line has no translation and will ship in the source language.",
+    "untranslated_lines": "untranslated lines",
     "updated_by_assistant": "Modified by the assistant",
     "validation_refused": "Validation refused.",
     "write_rpy": "Write to .rpy"
@@ -534,6 +533,9 @@
   "providers": {
     "ollama_unreachable": "Cannot reach the Ollama server ({endpoint}). Check that it is running.",
     "ollama_request_failed": "The request to the Ollama server ({endpoint}) failed.",
+    "ollama_model_missing": "The Ollama model {model} is not installed on {endpoint} (ollama pull {model}).",
+    "network_error": "Network error: {detail}",
+    "unknown_provider": "Unknown provider: {id}",
     "deepl_not_configured": "DeepL API key not configured.",
     "ollama_not_configured": "Ollama model not configured.",
     "libretranslate_not_configured": "LibreTranslate URL not configured."

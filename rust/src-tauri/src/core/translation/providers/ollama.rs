@@ -283,18 +283,15 @@ impl OllamaProvider {
         // model: saying it is unreachable would send the user looking at
         // the wrong thing.
         let num_ctx = self.resolve_num_ctx().await.map_err(|error| match error {
-            ProviderError::Network(e) if e.status() == Some(reqwest::StatusCode::NOT_FOUND) => {
-                ProviderError::Message(format!(
-                    "The Ollama model {model} is not installed on {endpoint} \
-                     (ollama pull {model})",
-                    model = self.model,
-                    endpoint = self.endpoint
-                ))
-            }
-            _ => ProviderError::Message(format!(
-                "Cannot reach the Ollama server ({})",
-                self.endpoint
-            )),
+            ProviderError::Network {
+                status: Some(404), ..
+            } => ProviderError::OllamaModelMissing {
+                model: self.model.clone(),
+                endpoint: self.endpoint.clone(),
+            },
+            _ => ProviderError::OllamaUnreachable {
+                endpoint: self.endpoint.clone(),
+            },
         })?;
         self.num_ctx = Some(num_ctx);
         Ok(num_ctx)
@@ -386,22 +383,18 @@ impl OllamaProvider {
             .send()
             .await
             .and_then(reqwest::Response::error_for_status)
-            .map_err(|_| {
-                ProviderError::Message(format!(
-                    "The request to the Ollama server ({}) failed.",
-                    self.endpoint
-                ))
-            })?;
-        let body: Value = resp.json().await.map_err(ProviderError::Network)?;
+            .map_err(|_| self.request_failed())?;
+        let body: Value = resp.json().await.map_err(|_| self.request_failed())?;
         body["message"]["content"]
             .as_str()
             .map(String::from)
-            .ok_or_else(|| {
-                ProviderError::Message(format!(
-                    "The request to the Ollama server ({}) failed.",
-                    self.endpoint
-                ))
-            })
+            .ok_or_else(|| self.request_failed())
+    }
+
+    fn request_failed(&self) -> ProviderError {
+        ProviderError::OllamaRequestFailed {
+            endpoint: self.endpoint.clone(),
+        }
     }
 
     /// Translate all units using dynamic batching.
@@ -914,9 +907,13 @@ mod tests {
             .translate_batch(&[unit("a", "Hi.")], "english", "french")
             .await;
 
-        let message = result.err().map(|e| e.to_string()).unwrap_or_default();
-        assert!(message.contains("not installed"), "{message}");
-        assert!(message.contains("ollama pull gemma3:1b"), "{message}");
+        assert_eq!(
+            result.err(),
+            Some(ProviderError::OllamaModelMissing {
+                model: "gemma3:1b".to_string(),
+                endpoint: server.uri(),
+            })
+        );
     }
 
     #[tokio::test]
@@ -935,8 +932,10 @@ mod tests {
             .translate_batch(&[unit("a", "Hi.")], "english", "french")
             .await;
 
-        let message = result.err().map(|e| e.to_string()).unwrap_or_default();
-        assert!(message.contains("Cannot reach"), "{message}");
+        assert_eq!(
+            result.err(),
+            Some(ProviderError::OllamaUnreachable { endpoint })
+        );
     }
 
     #[tokio::test]

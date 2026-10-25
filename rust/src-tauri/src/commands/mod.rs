@@ -15,8 +15,32 @@ pub mod settings;
 pub mod translate;
 pub mod universe;
 
+use serde::Serialize;
+
 use crate::core::storage::repositories;
+use crate::core::translation::providers::base::ProviderError;
 use crate::mcp_server::session::ProjectSession;
+
+/// The failure of a command that can reach a provider: plain text, or a
+/// [`ProviderError`] the interface translates (`{ key, params }`).
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum CommandError {
+    Text(String),
+    Provider(ProviderError),
+}
+
+impl From<String> for CommandError {
+    fn from(text: String) -> Self {
+        Self::Text(text)
+    }
+}
+
+impl From<ProviderError> for CommandError {
+    fn from(error: ProviderError) -> Self {
+        Self::Provider(error)
+    }
+}
 
 pub(crate) fn require_session(guard: &Option<ProjectSession>) -> Result<&ProjectSession, String> {
     guard.as_ref().ok_or_else(|| "No project open.".to_string())

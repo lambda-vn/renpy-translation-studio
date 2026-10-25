@@ -24,7 +24,7 @@
 	import JobBanner, { type JobLogEntry } from '$lib/components/review/JobBanner.svelte';
 	import Kbd from '$lib/components/Kbd.svelte';
 	import LineRow from '$lib/components/review/LineRow.svelte';
-	import { jobMessageText } from '$lib/messages';
+	import { errorText, jobMessageText } from '$lib/messages';
 	import Pagination from '$lib/components/review/Pagination.svelte';
 	import ReviewToolbar from '$lib/components/review/ReviewToolbar.svelte';
 	import TranslateDialog from '$lib/components/review/TranslateDialog.svelte';
@@ -641,12 +641,12 @@
 		try {
 			const result = await api.translateUnit(defaultProvider, blockId);
 			patchUnit(result.unit, true);
-			if (result.failed) {
-				toast.error(`${$t('translation.unit_failed')} ${result.error ?? (result.events.length > 0 ? jobMessageText(get(t), result.events[result.events.length - 1]) : '')}`.trim());
+			if (result.failed || result.error) {
+				toast.error(`${$t('translation.unit_failed')} ${result.error ? errorText(get(t), result.error) : result.events.length > 0 ? jobMessageText(get(t), result.events[result.events.length - 1]) : ''}`.trim());
 			}
 			scheduleSide();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		} finally {
 			delete translating[blockId];
 		}
@@ -726,6 +726,18 @@
 				: args.scope === 'project'
 					? $t('translation.scope_all')
 					: $t('translation.scope_filter', { n: total });
+		// Set up before the call: a job that fails at once (provider unreachable)
+		// sends its last event before the call returns.
+		job = {
+			running: true,
+			cancelling: false,
+			summary: `${providerLabel(args.providerId)} · ${scopeText}`,
+			total: 0,
+			done: 0,
+			failed: 0,
+			error: null
+		};
+		jobRunning.set(true);
 		try {
 			await api.startTranslationJob({
 				...args,
@@ -734,18 +746,10 @@
 						? { sourceFile: file, ...filterArgs({ filter, speaker, search }) }
 						: null
 			});
-			job = {
-				running: true,
-				cancelling: false,
-				summary: `${providerLabel(args.providerId)} · ${scopeText}`,
-				total: 0,
-				done: 0,
-				failed: 0,
-				error: null
-			};
-			jobRunning.set(true);
 		} catch (e) {
-			toast.error(String(e));
+			job = null;
+			jobRunning.set(false);
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -765,9 +769,9 @@
 				job.total = payload.total;
 				job.done = payload.done;
 				job.failed = payload.failed;
-				job.error = payload.error;
+				job.error = payload.error ? errorText(get(t), payload.error) : null;
 			}
-			if (payload.error) logLine(payload.error, true);
+			if (payload.error) logLine(errorText(get(t), payload.error), true);
 			if (payload.finished) {
 				if (job) job.running = false;
 				jobRunning.set(false);

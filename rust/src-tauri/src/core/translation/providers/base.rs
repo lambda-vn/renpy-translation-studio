@@ -45,10 +45,73 @@ pub struct TranslateBatchResult {
     pub failed_ids: Vec<String>,
 }
 
-#[derive(Debug, thiserror::Error)]
+/// What can stop a provider, as a message key and its parameters rather
+/// than a sentence, so the interface can show it in its own language (the
+/// same contract as `job::JobMessage`). [`Display`](std::fmt::Display)
+/// renders the English text, for logs and tests.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ProviderError {
-    #[error("network error: {0}")]
-    Network(#[from] reqwest::Error),
-    #[error("{0}")]
-    Message(String),
+    /// A transport or HTTP failure; `status` is set when the server answered.
+    #[error("network error: {detail}")]
+    Network { status: Option<u16>, detail: String },
+    #[error("The Ollama model {model} is not installed on {endpoint} (ollama pull {model})")]
+    OllamaModelMissing { model: String, endpoint: String },
+    #[error("Cannot reach the Ollama server ({endpoint})")]
+    OllamaUnreachable { endpoint: String },
+    #[error("The request to the Ollama server ({endpoint}) failed.")]
+    OllamaRequestFailed { endpoint: String },
+    /// `provider` is a provider id: `deepl`, `ollama` or `libretranslate`.
+    #[error("{provider} is not configured.")]
+    NotConfigured { provider: &'static str },
+    #[error("Unknown provider: {id}")]
+    UnknownProvider { id: String },
+}
+
+impl From<reqwest::Error> for ProviderError {
+    fn from(error: reqwest::Error) -> Self {
+        Self::Network {
+            status: error.status().map(|s| s.as_u16()),
+            detail: error.to_string(),
+        }
+    }
+}
+
+impl ProviderError {
+    /// The `providers.*` catalog key of this error.
+    pub fn key(&self) -> String {
+        match self {
+            Self::Network { .. } => "providers.network_error".to_string(),
+            Self::OllamaModelMissing { .. } => "providers.ollama_model_missing".to_string(),
+            Self::OllamaUnreachable { .. } => "providers.ollama_unreachable".to_string(),
+            Self::OllamaRequestFailed { .. } => "providers.ollama_request_failed".to_string(),
+            Self::NotConfigured { provider } => format!("providers.{provider}_not_configured"),
+            Self::UnknownProvider { .. } => "providers.unknown_provider".to_string(),
+        }
+    }
+
+    /// The placeholders of the catalog string.
+    pub fn params(&self) -> serde_json::Value {
+        use serde_json::json;
+        match self {
+            Self::Network { detail, .. } => json!({ "detail": detail }),
+            Self::OllamaModelMissing { model, endpoint } => {
+                json!({ "model": model, "endpoint": endpoint })
+            }
+            Self::OllamaUnreachable { endpoint } | Self::OllamaRequestFailed { endpoint } => {
+                json!({ "endpoint": endpoint })
+            }
+            Self::NotConfigured { .. } => json!({}),
+            Self::UnknownProvider { id } => json!({ "id": id }),
+        }
+    }
+}
+
+impl serde::Serialize for ProviderError {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("ProviderError", 2)?;
+        state.serialize_field("key", &self.key())?;
+        state.serialize_field("params", &self.params())?;
+        state.end()
+    }
 }

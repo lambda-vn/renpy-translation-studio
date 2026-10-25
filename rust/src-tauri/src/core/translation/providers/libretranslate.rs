@@ -78,10 +78,10 @@ impl LibreTranslateProvider {
     pub const ID: &'static str = "libretranslate";
 
     /// # Errors
-    /// Returns an error message if `endpoint` is empty.
-    pub fn new(endpoint: &str, api_key: Option<String>) -> Result<Self, String> {
+    /// [`ProviderError::NotConfigured`] if `endpoint` is empty.
+    pub fn new(endpoint: &str, api_key: Option<String>) -> Result<Self, ProviderError> {
         if endpoint.is_empty() {
-            return Err("LibreTranslate endpoint URL is required.".to_string());
+            return Err(ProviderError::NotConfigured { provider: Self::ID });
         }
         Ok(Self {
             endpoint: endpoint.trim_end_matches('/').to_string(),

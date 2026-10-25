@@ -3,7 +3,8 @@
 	import { api, type TestConnectionResult } from '$lib/api';
 	import BackLink from '$lib/components/BackLink.svelte';
 	import { confirmDialog } from '$lib/confirm';
-	import { t } from '$lib/i18n';
+	import { locale, t } from '$lib/i18n';
+	import { errorText } from '$lib/messages';
 	import { toast } from '$lib/toast';
 
 	const MIN_BATCH = 1;
@@ -95,12 +96,16 @@
 			deepl = {
 				state: 'done',
 				ok: result.ok,
-				message: result.ok
-					? [$t('provider_config.llm_connection_ok'), result.detail].filter(Boolean).join(' — ')
-					: result.detail || $t('translation.connection_failed')
+				message: !result.ok
+					? $t('translation.connection_failed')
+					: result.charactersLeft === null
+						? $t('provider_config.llm_connection_ok')
+						: $t('translation.connection_ok', {
+								chars: result.charactersLeft.toLocaleString($locale)
+							})
 			};
 		} catch (e) {
-			deepl = { state: 'done', ok: false, message: String(e) };
+			deepl = { state: 'done', ok: false, message: errorText($t, e) };
 		}
 	}
 
@@ -113,7 +118,7 @@
 				ollama = {
 					state: 'done',
 					ok: false,
-					message: result.detail || $t('provider_config.ollama_connection_failed')
+					message: $t('provider_config.ollama_connection_failed')
 				};
 			} else if (result.models.length === 0) {
 				ollama = { state: 'done', ok: true, message: $t('provider_config.ollama_no_models') };
@@ -138,10 +143,10 @@
 				ok: result.ok,
 				message: result.ok
 					? $t('provider_config.llm_connection_ok')
-					: result.detail || $t('provider_config.ollama_connection_failed')
+					: $t('provider_config.ollama_connection_failed')
 			};
 		} catch (e) {
-			lt = { state: 'done', ok: false, message: String(e) };
+			lt = { state: 'done', ok: false, message: errorText($t, e) };
 		}
 	}
 

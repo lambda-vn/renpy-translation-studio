@@ -64,7 +64,7 @@ pub struct JobProgress {
     pub failed: usize,
     pub running: bool,
     pub finished: bool,
-    pub error: Option<String>,
+    pub error: Option<ProviderError>,
 }
 
 /// One occurrence of what Python's four callbacks would have reported.
@@ -518,8 +518,8 @@ pub async fn run_job(
         emit(&tx, JobEvent::Progress(progress.clone()));
     }
 
-    if let Some(err) = provider_error {
-        progress.error = Some(err.to_string());
+    if provider_error.is_some() {
+        progress.error = provider_error;
     } else if !failed_ids.is_empty() && !cancel.is_cancelled() {
         retry_failed_units(
             failed_ids,
@@ -924,9 +924,10 @@ mod tests {
     #[tokio::test]
     async fn unreachable_provider_surfaces_as_a_job_error() {
         let units = vec![unit("a", "Hello.")];
-        let mut provider = ScriptedProvider::new(vec![Err(ProviderError::Message(
-            "Cannot reach the Ollama server (http://localhost:11434)".to_string(),
-        ))]);
+        let unreachable = ProviderError::OllamaUnreachable {
+            endpoint: "http://localhost:11434".to_string(),
+        };
+        let mut provider = ScriptedProvider::new(vec![Err(unreachable.clone())]);
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
         let progress = run_job(
@@ -939,7 +940,6 @@ mod tests {
         )
         .await;
 
-        assert!(progress.error.is_some());
-        assert!(progress.error.unwrap().contains("Cannot reach"));
+        assert_eq!(progress.error, Some(unreachable));
     }
 }

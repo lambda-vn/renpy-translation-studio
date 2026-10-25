@@ -13,6 +13,7 @@ use tauri::State;
 use crate::app_state::AppState;
 use crate::core::settings::finish_onboarding;
 use crate::core::storage::translation_memory;
+use crate::core::translation::providers::base::ProviderError;
 use crate::core::translation::providers::deepl::DeepLProvider;
 use crate::core::translation::providers::libretranslate::LibreTranslateProvider;
 use crate::core::translation::providers::ollama::OllamaProvider;
@@ -20,6 +21,7 @@ use crate::core::translation::providers::registry;
 use crate::core::validators::is_valid_sdk_path;
 
 use super::dto::{MemoryPair, SettingsPayload, TestConnectionResult};
+use super::CommandError;
 
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsPayload, String> {
@@ -124,30 +126,29 @@ pub async fn forget_memory(
 pub async fn test_deepl_connection(
     state: State<'_, AppState>,
     api_key: String,
-) -> Result<TestConnectionResult, String> {
+) -> Result<TestConnectionResult, CommandError> {
     let api_key = typed_or_saved(&state, api_key, "deepl_api_key").await;
     if api_key.trim().is_empty() {
-        return Ok(TestConnectionResult {
-            ok: false,
-            detail: Some("No API key.".to_string()),
-            models: Vec::new(),
-        });
+        return Err(ProviderError::NotConfigured {
+            provider: DeepLProvider::ID,
+        }
+        .into());
     }
     let provider = DeepLProvider::new(api_key, &[]);
     if !provider.test_connection().await {
         return Ok(TestConnectionResult {
             ok: false,
-            detail: None,
+            characters_left: None,
             models: Vec::new(),
         });
     }
-    let detail = match provider.character_usage().await {
-        Ok((Some(used), Some(limit))) => Some(format!("{used}/{limit} characters used")),
+    let characters_left = match provider.character_usage().await {
+        Ok((Some(used), Some(limit))) => Some((limit - used).max(0)),
         _ => None,
     };
     Ok(TestConnectionResult {
         ok: true,
-        detail,
+        characters_left,
         models: Vec::new(),
     })
 }
@@ -163,14 +164,14 @@ pub async fn test_ollama_connection(endpoint: String) -> Result<TestConnectionRe
     if !provider.test_connection().await {
         return Ok(TestConnectionResult {
             ok: false,
-            detail: None,
+            characters_left: None,
             models: Vec::new(),
         });
     }
     let models = provider.list_models().await.unwrap_or_default();
     Ok(TestConnectionResult {
         ok: true,
-        detail: None,
+        characters_left: None,
         models,
     })
 }
@@ -180,7 +181,7 @@ pub async fn test_libretranslate_connection(
     state: State<'_, AppState>,
     url: String,
     api_key: Option<String>,
-) -> Result<TestConnectionResult, String> {
+) -> Result<TestConnectionResult, CommandError> {
     let api_key = Some(
         typed_or_saved(
             &state,
@@ -194,7 +195,7 @@ pub async fn test_libretranslate_connection(
     let ok = provider.test_connection().await;
     Ok(TestConnectionResult {
         ok,
-        detail: None,
+        characters_left: None,
         models: Vec::new(),
     })
 }

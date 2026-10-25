@@ -25,3 +25,11 @@ export function jobMessageText(t: Translate, message: JobMessage): string {
 	}
 	return t(message.key, params);
 }
+
+/** The text of a command failure: plain text, or a `{ key, params }` message (provider errors). */
+export function errorText(t: Translate, error: unknown): string {
+	if (typeof error === 'object' && error !== null && 'key' in error && 'params' in error) {
+		return jobMessageText(t, error as JobMessage);
+	}
+	return String(error);
+}
