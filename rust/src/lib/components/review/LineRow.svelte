@@ -8,6 +8,7 @@
 	import StatusGlyph from '$lib/components/StatusGlyph.svelte';
 	import TokenText from '$lib/components/TokenText.svelte';
 	import { t } from '$lib/i18n';
+	import { qualityText } from '$lib/messages';
 	import { statusDescription, type TranslationStatus } from '$lib/status';
 
 	interface Props {
@@ -264,7 +265,7 @@
 				<StatusGlyph kind="warning" />
 				<span
 					><span class="sr">{$t('status.warning')} : </span>{warnings
-						.map((w) => w.detail)
+						.map((w) => qualityText($t, w))
 						.join(' ')}</span
 				>
 			</p>
@@ -282,7 +283,7 @@
 				<StatusGlyph kind="error" cutout="var(--errWeak)" />
 				<span
 					><strong>{$t('review.validation_refused')}</strong>
-					{blocking.map((b) => b.detail).join(' ')}</span
+					{blocking.map((b) => qualityText($t, b)).join(' ')}</span
 				>
 			</p>
 		{/if}
@@ -317,8 +318,8 @@
 		display: grid;
 		grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr);
 		column-gap: 24px;
-		row-gap: 6px;
-		padding: 16px 16px 20px;
+		row-gap: 2px;
+		padding: 8px 16px 12px;
 		margin: 0 -16px;
 		border-bottom: 1px solid var(--line);
 		border-radius: 12px;
@@ -345,7 +346,7 @@
 		flex-direction: column;
 		gap: 6px;
 		align-items: center;
-		padding-top: 7px;
+		padding-top: 6px;
 	}
 
 	.head {
@@ -354,7 +355,7 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		min-height: 30px;
+		min-height: 26px;
 	}
 
 	.speaker {
@@ -405,8 +406,8 @@
 	}
 
 	.ab {
-		width: 30px;
-		height: 30px;
+		width: 26px;
+		height: 26px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;

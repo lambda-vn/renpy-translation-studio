@@ -29,7 +29,7 @@ use super::providers::base::{
     ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
     TranslationUnitPayload,
 };
-use super::quality::{check as quality_check, strip_tags};
+use super::quality::{check as quality_check, strip_tags, QualityIssue};
 
 const CHUNK_SIZE: usize = 50;
 const BLOCKING_QUALITY_KINDS: [&str; 2] = ["missing_var", "unexpected_html"];
@@ -76,9 +76,121 @@ pub enum JobEvent {
     Progress(JobProgress),
     /// The job has stopped, successfully or not.
     Complete(JobProgress),
-    /// A human-readable notable event: a rejected suggestion (with
-    /// reason), units skipped as untranslatable, a retry starting.
-    Event(String),
+    /// A notable event: a rejected suggestion (with reason), units
+    /// skipped as untranslatable, a retry starting.
+    Event(JobMessage),
+}
+
+/// What a job has to say along the way, as a message key and its
+/// parameters rather than a sentence, so the interface can show it in
+/// its own language. [`Display`](std::fmt::Display) renders the English
+/// text, for logs and tests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JobMessage {
+    RejectedIdentical {
+        block_id: String,
+    },
+    Rejected {
+        block_id: String,
+        issues: Vec<QualityIssue>,
+    },
+    AcceptedWithWarning {
+        block_id: String,
+        issues: Vec<QualityIssue>,
+    },
+    Retrying {
+        n: usize,
+    },
+    SharedSource {
+        n: usize,
+    },
+    NothingToTranslate {
+        n: usize,
+    },
+    ProviderFailed {
+        n: usize,
+    },
+}
+
+impl JobMessage {
+    /// The `job_events.*` catalog key of this message.
+    pub fn key(&self) -> &'static str {
+        match self {
+            Self::RejectedIdentical { .. } => "job_events.translation_rejected_identical",
+            Self::Rejected { .. } => "job_events.translation_rejected_reason",
+            Self::AcceptedWithWarning { .. } => "job_events.translation_accepted_with_warning",
+            Self::Retrying { .. } => "job_events.retry_in_progress",
+            Self::SharedSource { .. } => "job_events.duplicates_shared",
+            Self::NothingToTranslate { .. } => "job_events.skipped_copied",
+            Self::ProviderFailed { .. } => "job_events.provider_failed",
+        }
+    }
+
+    /// The placeholders of the catalog string. `issues` is a list of
+    /// `{kind, detail}` the interface turns into the `reason` text.
+    pub fn params(&self) -> serde_json::Value {
+        use serde_json::json;
+        match self {
+            Self::RejectedIdentical { block_id } => json!({ "block_id": block_id }),
+            Self::Rejected { block_id, issues }
+            | Self::AcceptedWithWarning { block_id, issues } => {
+                let issues: Vec<_> = issues
+                    .iter()
+                    .map(|i| json!({ "kind": i.kind, "detail": i.detail }))
+                    .collect();
+                json!({ "block_id": block_id, "issues": issues })
+            }
+            Self::Retrying { n }
+            | Self::SharedSource { n }
+            | Self::NothingToTranslate { n }
+            | Self::ProviderFailed { n } => json!({ "n": n }),
+        }
+    }
+}
+
+fn join_details(issues: &[QualityIssue]) -> String {
+    issues
+        .iter()
+        .map(|i| i.detail.as_str())
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+impl std::fmt::Display for JobMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RejectedIdentical { block_id } => write!(
+                f,
+                "Rejected the AI suggestion for {block_id}: identical to the source text."
+            ),
+            Self::Rejected { block_id, issues } => write!(
+                f,
+                "Rejected the AI suggestion for {block_id}: {}",
+                join_details(issues)
+            ),
+            Self::AcceptedWithWarning { block_id, issues } => write!(
+                f,
+                "Accepted the AI suggestion for {block_id} with a warning: {}",
+                join_details(issues)
+            ),
+            Self::Retrying { n } => write!(f, "Retrying {n} unit(s)..."),
+            Self::SharedSource { n } => {
+                write!(f, "{n} unit(s) share a source text and were not sent.")
+            }
+            Self::NothingToTranslate { n } => write!(f, "{n} unit(s) had nothing to translate."),
+            Self::ProviderFailed { n } => write!(f, "The provider failed on {n} unit(s)."),
+        }
+    }
+}
+
+impl serde::Serialize for JobMessage {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("JobMessage", 2)?;
+        state.serialize_field("key", self.key())?;
+        state.serialize_field("params", &self.params())?;
+        state.end()
+    }
 }
 
 fn emit(tx: &UnboundedSender<JobEvent>, event: JobEvent) {
@@ -189,7 +301,7 @@ pub fn spread_to_followers(
 fn verify_quality(
     chunk: &[TranslationUnitPayload],
     result: TranslateBatchResult,
-) -> (TranslateBatchResult, Vec<String>) {
+) -> (TranslateBatchResult, Vec<JobMessage>) {
     let source_by_id: HashMap<&str, &str> = chunk
         .iter()
         .map(|u| (u.block_id.as_str(), u.source_text.as_str()))
@@ -208,41 +320,31 @@ fn verify_quality(
         }
 
         if !source.is_empty() && translation.translated_text.trim() == source.trim() {
-            events.push(format!(
-                "Rejected the AI suggestion for {}: identical to the source text.",
-                translation.block_id
-            ));
+            events.push(JobMessage::RejectedIdentical {
+                block_id: translation.block_id.clone(),
+            });
             rejected.push(translation.block_id);
             continue;
         }
 
         let issues = quality_check(source, &translation.translated_text);
-        let blocking: Vec<&str> = issues
-            .iter()
-            .filter(|i| BLOCKING_QUALITY_KINDS.contains(&i.kind))
-            .map(|i| i.detail.as_str())
-            .collect();
+        let (blocking, warnings): (Vec<QualityIssue>, Vec<QualityIssue>) = issues
+            .into_iter()
+            .partition(|i| BLOCKING_QUALITY_KINDS.contains(&i.kind));
         if !blocking.is_empty() {
-            events.push(format!(
-                "Rejected the AI suggestion for {}: {}",
-                translation.block_id,
-                blocking.join("; ")
-            ));
+            events.push(JobMessage::Rejected {
+                block_id: translation.block_id.clone(),
+                issues: blocking,
+            });
             rejected.push(translation.block_id);
             continue;
         }
 
-        let warnings: Vec<&str> = issues
-            .iter()
-            .filter(|i| !BLOCKING_QUALITY_KINDS.contains(&i.kind))
-            .map(|i| i.detail.as_str())
-            .collect();
         if !warnings.is_empty() {
-            events.push(format!(
-                "Accepted the AI suggestion for {} with a warning: {}",
-                translation.block_id,
-                warnings.join("; ")
-            ));
+            events.push(JobMessage::AcceptedWithWarning {
+                block_id: translation.block_id.clone(),
+                issues: warnings,
+            });
         }
         verified.push(translation);
     }
@@ -290,7 +392,7 @@ async fn retry_failed_units(
         }
         emit(
             tx,
-            JobEvent::Event(format!("Retrying {} unit(s)...", remaining.len())),
+            JobEvent::Event(JobMessage::Retrying { n: remaining.len() }),
         );
 
         let retry_units: Vec<TranslationUnitPayload> =
@@ -357,12 +459,7 @@ pub async fn run_job(
 
     let shared: usize = followers.values().map(Vec::len).sum();
     if shared > 0 {
-        emit(
-            &tx,
-            JobEvent::Event(format!(
-                "{shared} unit(s) share a source text and were not sent."
-            )),
-        );
+        emit(&tx, JobEvent::Event(JobMessage::SharedSource { n: shared }));
     }
 
     if !skipped.is_empty() {
@@ -380,10 +477,7 @@ pub async fn run_job(
         emit(&tx, JobEvent::Chunk(spread));
         emit(
             &tx,
-            JobEvent::Event(format!(
-                "{} unit(s) had nothing to translate.",
-                skipped.len()
-            )),
+            JobEvent::Event(JobMessage::NothingToTranslate { n: skipped.len() }),
         );
         emit(&tx, JobEvent::Progress(progress.clone()));
     }
@@ -410,7 +504,7 @@ pub async fn run_job(
         if provider_failed > 0 {
             emit(
                 &tx,
-                JobEvent::Event(format!("The provider failed on {provider_failed} unit(s).")),
+                JobEvent::Event(JobMessage::ProviderFailed { n: provider_failed }),
             );
         }
         for event in events {
@@ -685,7 +779,7 @@ mod tests {
         assert_eq!(progress.failed, 1);
         let events = drain(&mut rx);
         assert!(events.iter().any(
-            |e| matches!(e, JobEvent::Event(msg) if msg.contains("identical to the source text"))
+            |e| matches!(e, JobEvent::Event(msg) if msg.to_string().contains("identical to the source text"))
         ));
     }
 
@@ -713,10 +807,10 @@ mod tests {
         let events = drain(&mut rx);
         assert!(events
             .iter()
-            .any(|e| matches!(e, JobEvent::Event(msg) if msg.contains("Rejected") && msg.contains("[name]"))));
+            .any(|e| matches!(e, JobEvent::Event(msg) if msg.to_string().contains("Rejected") && msg.to_string().contains("[name]"))));
         assert!(events
             .iter()
-            .any(|e| matches!(e, JobEvent::Event(msg) if msg.contains("warning"))));
+            .any(|e| matches!(e, JobEvent::Event(msg) if msg.to_string().contains("warning"))));
     }
 
     #[tokio::test]

@@ -23,7 +23,7 @@ use tokio::sync::Mutex;
 use crate::app_state::AppState;
 use crate::core::review_actions::{self, UnitFilter};
 use crate::core::storage::repositories;
-use crate::core::translation::job::{self, CancelToken, JobEvent, JobProgress};
+use crate::core::translation::job::{self, CancelToken, JobEvent, JobMessage, JobProgress};
 use crate::core::translation::providers::base::{TranslateBatchResult, TranslationUnitPayload};
 use crate::core::translation::providers::registry;
 use crate::core::validators::is_recognized_language;
@@ -66,7 +66,7 @@ enum JobEventPayload {
     },
     ChunkPersisted,
     Event {
-        message: String,
+        message: JobMessage,
     },
 }
 
@@ -277,7 +277,7 @@ pub struct UnitTranslation {
     pub error: Option<String>,
     /// What the job had to say along the way (a rejected suggestion with
     /// its reason, a retry), for the status line.
-    pub events: Vec<String>,
+    pub events: Vec<JobMessage>,
 }
 
 /// Translate one line with the chosen provider (the row's "Translate"

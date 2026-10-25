@@ -13,8 +13,10 @@ avec le code Python (`../src/`) le temps du chantier.
 
 L'interface, refaite dans le design livré par Claude Design
 ([`design/`](design/HANDOFF.md) : maquettes et passation). La check-list
-[`PARITY.md`](PARITY.md) passe à 33 ✅ · 7 🟡 · 0 ❌ ; les 🟡 sont des
-vérifications réelles restantes, plus aucune fonction n'est absente.
+[`PARITY.md`](PARITY.md) passe à 36 ✅ · 4 🟡 · 0 ❌ : plus aucune fonction
+n'est absente. DeepL, LibreTranslate et le trousseau ont été exercés contre les
+vrais services ; avec `gemma3:4b`, Ollama décale des traductions dans un lot
+(enquête en cours, voir P3).
 
 - Fondations (`src/lib/`) : tokens clair / sombre (`styles/tokens.css`,
   réglage `theme` comme en 1.0.0), polices embarquées (`@fontsource`,

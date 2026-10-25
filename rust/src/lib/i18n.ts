@@ -25,14 +25,32 @@ function lookup(catalog: Catalog | undefined, key: string): string | undefined {
 	return typeof node === 'string' ? node : undefined;
 }
 
-export type Translate = (key: string, params?: Record<string, string | number>) => string;
+// A count-bearing string may carry a `<key>_one` variant next to `<key>`,
+// picked by the language's own plural rule ("0 ligne" in French, "0 lines"
+// in English). Only the variant of the chosen language counts: falling back
+// on the English singular would mix rules.
+function pluralVariant(
+	language: string,
+	key: string,
+	params?: Record<string, string | number>
+): string | undefined {
+	if (typeof params?.n !== 'number') return undefined;
+	const category = new Intl.PluralRules(language).select(params.n);
+	return category === 'one' ? lookup(catalogs[language], `${key}_one`) : undefined;
+}
+
+export type Translate =(key: string, params?: Record<string, string | number>) => string;
 
 export function translate(
 	language: string,
 	key: string,
 	params?: Record<string, string | number>
 ): string {
-	const text = lookup(catalogs[language], key) ?? lookup(catalogs.en, key) ?? key;
+	const text =
+		pluralVariant(language, key, params) ??
+		lookup(catalogs[language], key) ??
+		lookup(catalogs.en, key) ??
+		key;
 	if (!params) return text;
 	return text.replace(/\{(\w+)\}/g, (match, name: string) =>
 		name in params ? String(params[name]) : match

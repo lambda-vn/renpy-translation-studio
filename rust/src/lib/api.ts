@@ -152,11 +152,17 @@ export interface MemoryPair {
 	entries: number;
 }
 
+/** A message of the backend: a catalog key and its placeholders (see `messages.ts`). */
+export interface JobMessage {
+	key: string;
+	params: Record<string, string | number | QualityIssuePayload[]>;
+}
+
 export interface UnitTranslation {
 	unit: UnitPayload;
 	failed: boolean;
 	error: string | null;
-	events: string[];
+	events: JobMessage[];
 }
 
 export interface CharacterEntry {
@@ -209,7 +215,7 @@ export type JobEventPayload =
 			error: string | null;
 	  }
 	| { kind: 'chunkPersisted' }
-	| { kind: 'event'; message: string };
+	| { kind: 'event'; message: JobMessage };
 
 export interface LanguageEntry {
 	code: string;

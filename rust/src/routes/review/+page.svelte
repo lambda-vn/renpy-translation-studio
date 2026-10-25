@@ -24,6 +24,7 @@
 	import JobBanner, { type JobLogEntry } from '$lib/components/review/JobBanner.svelte';
 	import Kbd from '$lib/components/Kbd.svelte';
 	import LineRow from '$lib/components/review/LineRow.svelte';
+	import { jobMessageText } from '$lib/messages';
 	import Pagination from '$lib/components/review/Pagination.svelte';
 	import ReviewToolbar from '$lib/components/review/ReviewToolbar.svelte';
 	import TranslateDialog from '$lib/components/review/TranslateDialog.svelte';
@@ -71,6 +72,7 @@
 	let unwritten = $state(0);
 	let speakers = $state<SpeakerEntry[]>([]);
 	let flaggedByFile = $state<Record<string, number>>({});
+	let errorsInFile = $state<number | undefined>(undefined);
 	let matchByFile = $state<Record<string, number>>({});
 	let units = $state<UnitPayload[]>([]);
 	let duplicates = $state<Record<string, DuplicateStats>>({});
@@ -137,7 +139,8 @@
 			imported: current.imported,
 			ai_suggested: current.aiSuggested,
 			human_validated: current.validated,
-			flagged: flaggedByFile[file] ?? 0
+			flagged: flaggedByFile[file] ?? 0,
+			errors: errorsInFile
 		};
 	});
 
@@ -244,7 +247,7 @@
 	/** Everything beside the lines: file counts, progress, unwritten, matches. */
 	async function refreshSide() {
 		try {
-			const [fileList, prog, count, flagged, found] = await Promise.all([
+			const [fileList, prog, count, flagged, found, errors] = await Promise.all([
 				api.listFiles(),
 				api.projectProgress(),
 				api.unwrittenCount(),
@@ -256,13 +259,20 @@
 							speaker: speaker || null,
 							needsReview: filter === 'flagged'
 						})
-					: Promise.resolve({} as Record<string, number>)
+					: Promise.resolve({} as Record<string, number>),
+				// The total of an "In error" page of one line is the file's count.
+				file
+					? api
+							.listUnits({ sourceFile: file, errorsOnly: true, page: 0, pageSize: 1 })
+							.then((result) => result.total)
+					: Promise.resolve(undefined)
 			]);
 			files = fileList;
 			progress = prog;
 			unwritten = count;
 			flaggedByFile = flagged;
 			matchByFile = found;
+			errorsInFile = errors;
 		} catch (e) {
 			toast.error(String(e));
 		}
@@ -632,7 +642,7 @@
 			const result = await api.translateUnit(defaultProvider, blockId);
 			patchUnit(result.unit, true);
 			if (result.failed) {
-				toast.error(`${$t('translation.unit_failed')} ${result.error ?? result.events.at(-1) ?? ''}`.trim());
+				toast.error(`${$t('translation.unit_failed')} ${result.error ?? (result.events.length > 0 ? jobMessageText(get(t), result.events[result.events.length - 1]) : '')}`.trim());
 			}
 			scheduleSide();
 		} catch (e) {
@@ -771,7 +781,7 @@
 		} else if (payload.kind === 'chunkPersisted') {
 			throttledRefresh();
 		} else {
-			logLine(payload.message);
+			logLine(jobMessageText(get(t), payload.message));
 		}
 	}
 

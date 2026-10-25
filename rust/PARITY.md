@@ -35,9 +35,9 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 
 | # | 1.0.0 | État | Détail |
 |---|---|---|---|
-| P1 | DeepL (+ glossaire serveur) | 🟡 | Porté et testé sur HTTP simulé. Jamais appelé contre la vraie API depuis la réécriture. |
-| P2 | LibreTranslate | 🟡 | Idem. |
-| P3 | Ollama (garde-fous petits modèles, `-cloud`) | 🟡 | Job et génération exécutés contre un vrai serveur avec `gemma3:1b` (rc.3) ; le modèle configuré chez l'utilisateur (`gemma3:4b`) non essayé. Un modèle absent est maintenant signalé comme tel (« not installed … ollama pull »), là où la 1.0.0 disait « injoignable ». |
+| P1 | DeepL (+ glossaire serveur) | ✅ | Job réel avec la clé de l'utilisateur (trousseau) dans la vraie fenêtre : 2/2 lignes, `\n` conservés. Glossaire serveur non exercé (aucun personnage noté `Nom -> Traduction`). |
+| P2 | LibreTranslate | ✅ | Job réel contre une instance locale : 6/11, les 5 refus justifiés (4 renvois identiques à la source, 1 interpolation perdue). |
+| P3 | Ollama (garde-fous petits modèles, `-cloud`) | 🟡 | Jobs réels avec `gemma3:1b` et `gemma3:4b` : tout est traduit, mais `gemma3:4b` **décale des traductions** dans un lot (identifiants justes, textes de la ligne voisine). Régression du portage ou défaut déjà en 1.0.0 : enquête en cours. Un modèle absent est signalé comme tel. |
 
 ## Serveur MCP
 
@@ -68,7 +68,7 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 | S13 | Barre d'étapes (Setup / Review / Export), confirmation avant de revenir en arrière, navigation refusée pendant un job | ✅ | Vérifié pendant un vrai job. |
 | S14 | Dialogue de paramètres (langue de l'UI, journal détaillé, volume de la mémoire) | ✅ | Langue, thème (`system`/`light`/`dark`, déjà en 1.0.0), journal (format 1.0.0, sans effet en Rust : aucune journalisation), SDK, mémoire par paire de langues. |
 | S15 | Export zip : nom proposé affiché, avertissement d'écart avec `tl/` | ✅ | `export_sync` porté ; les trois avertissements (non écrit, non traduit, qualité) ; zip vérifié. |
-| S16 | i18n anglais + français | ✅ | Tous les écrans passent par `$t` ; les messages venant du Rust (journal du job, détail des contrôles qualité) restent en anglais. |
+| S16 | i18n anglais + français | ✅ | Tous les écrans passent par `$t`, pluriels via `Intl.PluralRules` ; journal du job et messages qualité localisés (`JobMessage` structuré). Restent en anglais : les erreurs des fournisseurs. |
 | S17 | Boîtes de dialogue de confirmation, toasts | ✅ | `confirmDialog` (plus aucun `window.confirm`), toasts `role=status`/`alert`. |
 
 ## Données (contrat gelé)
@@ -78,17 +78,15 @@ retirer du périmètre est une décision à prendre ligne par ligne.
 | D1 | `translations.db` ouvrable sans migration destructive | ✅ | Fixtures produites par le tag `v1.0.0`, 8 tests + lecture de la vraie base d'Inanna (36 981 lignes). |
 | D2 | `settings.json` : clés conservées au rechargement | ✅ | |
 | D3 | `memory.db`, `projects.json` | ✅ | |
-| D4 | Clés API dans le trousseau OS | 🟡 | Porté ; jamais exercé de bout en bout avec une vraie clé. |
+| D4 | Clés API dans le trousseau OS | ✅ | Clé DeepL saisie par l'utilisateur dans l'écran des fournisseurs, relue par le job depuis le trousseau Windows. |
 
 ## Bilan
 
-- ✅ 33 · 🟡 7 · ❌ 0 sur 40 lignes (rc.3, étape 4 : l'interface refaite dans
+- ✅ 36 · 🟡 4 · ❌ 0 sur 40 lignes (rc.3, étape 4 : l'interface refaite dans
   le design de `design/`).
-- Plus aucune ligne absente. Les 🟡 restants sont des vérifications réelles,
-  pas du code : DeepL et LibreTranslate contre leurs API (P1, P2), le modèle
-  Ollama configuré (P3), le trousseau avec une vraie clé (D4), le lanceur
-  `rts-mcp` installé (M5), l'onboarding jamais affiché (S1) et Ctrl+Maj+Entrée
-  dans la vraie fenêtre (S8).
+- Plus aucune ligne absente. Les 🟡 restants : le décalage Ollama (P3, enquête en
+  cours), le lanceur `rts-mcp` installé (M5), l'onboarding jamais affiché (S1)
+  et Ctrl+Maj+Entrée dans la vraie fenêtre (S8).
 - L'étape 4 a été exercée dans la vraie fenêtre Tauri sous Windows, sur une
   copie de *The Question* : extraction, révision au clavier, menus, job Ollama
   réel, rafraîchissement par un vrai `rts-mcp`, personnages, univers,
