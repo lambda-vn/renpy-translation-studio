@@ -313,6 +313,10 @@ npm run bundle
 python scripts/mcp_handshake.py src-tauri/binaries/rts-mcp-<triple>
 ```
 
+En CI (`rust.yml`), un push ne lance que ces vérifications, sur les trois
+systèmes. Les installateurs ne sont construits que pour un tag `v2.*`,
+après le contrôle de version, ou à la main depuis l'onglet Actions.
+
 ## Prochaine étape
 
 La rc.2 : une check-list de parité contre le tableau de fonctionnalités

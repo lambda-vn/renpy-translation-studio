@@ -3,7 +3,9 @@ name: Rust
 # The 2.x rewrite on the `rust` branch, under rust/. CI covers the Python
 # code on main and Build packages it with flet; neither looks at this
 # directory, so this workflow does both jobs for it: check on every push,
-# and package on the three systems.
+# and package on the three systems when a version is tagged. A release
+# build takes ten minutes per system; a push only needs to know the code
+# is sound, so it gets the checks alone.
 #
 # Tauri does not cross-compile any more than flet did. Each system builds
 # its own installer, hence one runner per system.
@@ -57,13 +59,13 @@ jobs:
           fi
           exit "$status"
 
-  # Not on a tag: tagging a commit that was pushed to the branch first is
-  # how every release goes, and that push already built it. The tag run
-  # would repeat the three builds on the same code and add nothing but the
-  # version check above.
-  build:
+  # Lint and tests on the three systems: paths, the keyring and the
+  # engine lookup differ between them, and a test passing on one says
+  # nothing of the others. Not on a tag: the tagged commit was pushed to
+  # the branch first and already went through this.
+  check:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-    name: ${{ matrix.target }}
+    name: check-${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -128,6 +130,51 @@ jobs:
       - run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - run: npm run check
+
+  # On a tag, or by hand from the Actions tab to get installers without
+  # releasing. A tag waits for the version check, so an installer never
+  # carries a version other than the one its tag names.
+  build:
+    needs: version
+    if: ${{ !failure() && !cancelled() && (startsWith(github.ref, 'refs/tags/v2.') || github.event_name == 'workflow_dispatch') }}
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux
+            runner: ubuntu-latest
+          - target: windows
+            runner: windows-latest
+          - target: macos
+            runner: macos-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the Linux build dependencies
+        if: matrix.target == 'linux'
+        working-directory: .
+        run: |
+          sudo apt-get update --allow-releaseinfo-change
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+            libxdo-dev libssl-dev libdbus-1-dev pkg-config patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust/src-tauri
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: rust/package-lock.json
+
+      - run: npm ci
 
       - name: Build the installer
         env:
