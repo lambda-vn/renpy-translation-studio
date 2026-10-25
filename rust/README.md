@@ -9,12 +9,13 @@ compatibles avec la 1.0.0 Python, MCP sur
 `main` n'est remplacé qu'à la sortie de la 2.0.0 — cette branche coexiste
 avec le code Python (`../src/`) le temps du chantier.
 
-## En cours : `2.0.0-rc.3`
+## Actuel : `2.0.0-rc.3`
 
 L'interface, refaite dans le design livré par Claude Design (couleurs,
 polices, glyphes et composants vivent maintenant dans `src/lib/styles/` et
 `src/lib/components/`). La check-list [`PARITY.md`](PARITY.md) passe à
-37 ✅ · 3 🟡 · 0 ❌ : plus aucune fonction n'est absente. DeepL, LibreTranslate
+39 ✅ · 1 🟡 · 0 ❌ : plus aucune fonction n'est absente, seul le lanceur
+`rts-mcp` de l'application installée reste à exercer. DeepL, LibreTranslate
 et le trousseau ont été exercés contre les vrais services.
 
 Ollama n'envoie plus les lignes voisines avec chaque ligne : `gemma3:4b` les
@@ -38,10 +39,12 @@ la doc de `add_context` dans `providers/ollama.rs`.
   pouvait écrire sur une ligne non envoyée ; un modèle Ollama absent était
   annoncé comme serveur injoignable ; `save_project` n'enregistrait pas la
   date d'écriture, le compteur ne revenait jamais à zéro.
+- Pluriels : chaque message compté a sa forme `_one`, choisie par
+  `Intl.PluralRules` (« 0 ligne » en français, « 0 lines » en anglais).
 
-Vérifié dans la vraie fenêtre sous Windows (voir `PARITY.md`, Bilan). Non
-vérifié : macOS et Linux, l'onboarding affiché, un audit avec un vrai lecteur
-d'écran.
+Vérifié dans la vraie fenêtre sous Windows (voir `PARITY.md`, Bilan), premier
+lancement et Ctrl+Maj+Entrée compris. Non vérifié : macOS et Linux, un audit
+avec un vrai lecteur d'écran.
 
 ## Précédemment : `2.0.0-rc.2`
 
