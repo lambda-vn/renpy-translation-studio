@@ -19,7 +19,7 @@ use crate::core::interchange::{self, ImportPlan};
 use crate::core::project_actions;
 use crate::core::storage::{repositories, translation_memory};
 
-use super::require_session;
+use super::{require_session, CommandError};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,7 +66,7 @@ pub async fn export_interchange(
     state: State<'_, AppState>,
     path: String,
     source_file: Option<String>,
-) -> Result<usize, String> {
+) -> Result<usize, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let absolute = source_file.as_deref().map(|file| session.absolute(file));
@@ -98,7 +98,7 @@ fn plan_for(
 pub async fn plan_interchange_import(
     state: State<'_, AppState>,
     path: String,
-) -> Result<ImportPreview, String> {
+) -> Result<ImportPreview, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     Ok(ImportPreview::from(&plan_for(session, &path)?))
@@ -109,7 +109,7 @@ pub async fn plan_interchange_import(
 pub async fn apply_interchange_import(
     state: State<'_, AppState>,
     path: String,
-) -> Result<ImportOutcome, String> {
+) -> Result<ImportOutcome, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let plan = plan_for(session, &path)?;
@@ -123,7 +123,7 @@ pub async fn apply_interchange_import(
 /// Fill untranslated lines from the translation memory shared by every
 /// project on this machine. Returns the number of lines filled.
 #[tauri::command]
-pub async fn fill_from_memory(state: State<'_, AppState>) -> Result<usize, String> {
+pub async fn fill_from_memory(state: State<'_, AppState>) -> Result<usize, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     project_actions::fill_from_memory(
@@ -132,5 +132,5 @@ pub async fn fill_from_memory(state: State<'_, AppState>) -> Result<usize, Strin
         &session.source_language(),
         &session.target_language(),
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string().into())
 }

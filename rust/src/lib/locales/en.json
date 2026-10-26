@@ -612,5 +612,15 @@
     "flag": "Flagged",
     "error": "Error",
     "warning": "Warning"
+  },
+  "errors": {
+    "no_project_open": "No project open.",
+    "no_target_language": "This project has no target language set.",
+    "nothing_to_save": "Nothing to save.",
+    "nothing_extracted": "Nothing extracted in this project yet.",
+    "nothing_to_translate": "Nothing to translate in this scope.",
+    "validate_first": "Validate the line first.",
+    "unsupported_target_language": "Unsupported target language: {language}",
+    "delete_data_failed": "Could not delete the saved data: {detail}"
   }
 }

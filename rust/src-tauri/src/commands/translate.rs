@@ -93,7 +93,7 @@ pub async fn start_translation_job(
     args: StartJobArgs,
 ) -> Result<(), CommandError> {
     if state.job.lock().await.is_some() {
-        return Err("A translation job is already running.".to_string().into());
+        return Err(CommandError::message("translation.job_running"));
     }
 
     let (units, symbol_only, source_lang, target_lang, universe_summary, characters) = {
@@ -128,7 +128,7 @@ pub async fn start_translation_job(
     };
 
     if units.is_empty() {
-        return Err("Nothing to translate in this scope.".to_string().into());
+        return Err(CommandError::message("errors.nothing_to_translate"));
     }
 
     let mut provider = {
@@ -303,7 +303,10 @@ pub async fn translate_unit(
         let unit = super::require_unit(session, &block_id)?;
         let target_lang = session.target_language();
         if !is_recognized_language(&target_lang) {
-            return Err(format!("Unsupported target language: {target_lang}").into());
+            return Err(CommandError::Message {
+                key: "errors.unsupported_target_language",
+                params: serde_json::json!({ "language": target_lang }),
+            });
         }
         let universe_summary = repositories::get_project_meta(session.conn(), "universe_summary")
             .map_err(|e| e.to_string())?;

@@ -14,21 +14,24 @@ use super::CommandError;
 const UNIVERSE_SUMMARY_KEY: &str = "universe_summary";
 
 #[tauri::command]
-pub async fn get_universe_summary(state: State<'_, AppState>) -> Result<Option<String>, String> {
+pub async fn get_universe_summary(
+    state: State<'_, AppState>,
+) -> Result<Option<String>, CommandError> {
     let guard = state.current.lock().await;
     let session = super::require_session(&guard)?;
-    repositories::get_project_meta(session.conn(), UNIVERSE_SUMMARY_KEY).map_err(|e| e.to_string())
+    repositories::get_project_meta(session.conn(), UNIVERSE_SUMMARY_KEY)
+        .map_err(|e| e.to_string().into())
 }
 
 #[tauri::command]
 pub async fn set_universe_summary(
     state: State<'_, AppState>,
     summary: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let guard = state.current.lock().await;
     let session = super::require_session(&guard)?;
     repositories::set_project_meta(session.conn(), UNIVERSE_SUMMARY_KEY, &summary)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string().into())
 }
 
 /// Draft a summary from a sample of the game's dialogue.
@@ -52,9 +55,7 @@ pub async fn generate_universe_summary(state: State<'_, AppState>) -> Result<Str
         )
     };
     if units.is_empty() {
-        return Err("No extracted text to analyze: extract the game first."
-            .to_string()
-            .into());
+        return Err(CommandError::message("universe.generate_no_units"));
     }
     let mut provider = {
         let mut settings = state.settings.lock().await;

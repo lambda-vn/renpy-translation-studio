@@ -28,7 +28,10 @@ struct LiveChanged {
 /// Publish this project's endpoint and start relaying what other
 /// processes write to it as `live-changed` events.
 #[tauri::command]
-pub async fn start_live(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn start_live(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), super::CommandError> {
     let project = {
         let guard = state.current.lock().await;
         super::require_session(&guard)?.path.clone()

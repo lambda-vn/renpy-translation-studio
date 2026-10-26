@@ -194,7 +194,7 @@
 		try {
 			files = await api.listFiles();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 			return;
 		}
 		if (!files.some((f) => f.sourceFile === file)) {
@@ -234,7 +234,7 @@
 					? settings.defaultProvider
 					: (providers[0] ?? '');
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -277,7 +277,7 @@
 			matchByFile = found;
 			errorsInFile = errors;
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -330,7 +330,7 @@
 			);
 			loaded = true;
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -484,7 +484,7 @@
 			patchUnit(await api.saveDraft(blockId, drafts[blockId] ?? ''), false);
 			scheduleSide();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -513,7 +513,7 @@
 			if (result.duplicates > 0) offerSpread(blockId, result.duplicates);
 			if (advance) await advanceFrom(index);
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -531,7 +531,7 @@
 							announceSpread(ids);
 							await refreshShown(ids);
 						} catch (e) {
-							toast.error(String(e));
+							toast.error(errorText(get(t), e));
 						}
 					}
 				}
@@ -575,7 +575,7 @@
 			announceSpread(result.propagated);
 			await refreshShown(result.propagated);
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -595,7 +595,7 @@
 			scheduleSide();
 			focusField(blockId);
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -619,7 +619,7 @@
 			}
 			scheduleSide();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -631,7 +631,7 @@
 			toast.success($t('review.note_saved'));
 			scheduleSide();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -705,7 +705,7 @@
 			}
 			void refreshSide();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -762,7 +762,7 @@
 		try {
 			await api.cancelTranslationJob();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -816,9 +816,10 @@
 			const written = await api.saveProject();
 			toast.success($t('review.saved_ok', { n: written }));
 		} catch (e) {
-			const message = String(e);
-			if (message.includes('Nothing to save')) toast.info($t('review.sync_ok'));
-			else toast.error(message);
+			const nothingToSave =
+				typeof e === 'object' && e !== null && 'key' in e && e.key === 'errors.nothing_to_save';
+			if (nothingToSave) toast.info($t('review.sync_ok'));
+			else toast.error(errorText(get(t), e));
 		} finally {
 			saving = false;
 			void refreshSide();
@@ -836,7 +837,7 @@
 			toast.success(filled > 0 ? $t('review.memory_filled', { n: filled }) : $t('review.memory_none'));
 			await reloadAll();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -862,7 +863,7 @@
 			toast.success($t('review.clear_done', { n }));
 			await reloadAll();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 
@@ -885,7 +886,7 @@
 			await navigator.clipboard.writeText(entry.path);
 			toast.success($t('review.file_menu_copied'));
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(errorText(get(t), e));
 		}
 	}
 

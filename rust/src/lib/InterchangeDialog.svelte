@@ -3,6 +3,7 @@
 	import { api, type ImportPreview } from '$lib/api';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import { t } from '$lib/i18n';
+	import { errorText } from '$lib/messages';
 	import { project } from '$lib/stores';
 
 	let {
@@ -53,7 +54,7 @@
 			const count = await api.exportInterchange(path, scope === 'file' && selectedFile ? selectedFile : null);
 			ondone($t('interchange.export_done', { n: count }));
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		} finally {
 			busy = false;
 		}
@@ -75,7 +76,7 @@
 				pending = { path: picked, plan };
 			}
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		} finally {
 			busy = false;
 		}
@@ -89,7 +90,7 @@
 			const outcome = await api.applyInterchangeImport(pending.path);
 			ondone(summary(outcome.plan, outcome.applied));
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 			pending = null;
 		} finally {
 			busy = false;

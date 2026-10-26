@@ -15,6 +15,7 @@
 	import Dialog from '$lib/components/Dialog.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
+	import { errorText } from '$lib/messages';
 	import { languageName } from '$lib/languages';
 	import { ROUTES } from '$lib/navigation';
 	import { project } from '$lib/stores';
@@ -52,7 +53,7 @@
 			[recent, languages] = await Promise.all([api.listRecentProjects(), api.listLanguages()]);
 			sdkPath = (await api.getSettings()).sdkPath ?? '';
 		} catch (e) {
-			listError = String(e);
+			listError = errorText($t, e);
 		} finally {
 			recentLoaded = true;
 		}
@@ -80,7 +81,7 @@
 			$project = await api.openProject(entry.path);
 			await goto(ROUTES.review);
 		} catch (e) {
-			listError = $t('project_setup.resume_failed', { error: String(e) });
+			listError = $t('project_setup.resume_failed', { error: errorText($t, e) });
 		} finally {
 			opening = '';
 		}
@@ -100,7 +101,7 @@
 			recent = await api.listRecentProjects();
 		} catch (e) {
 			toast.error($t('project_setup.delete_failed', { name: entry.name }), {
-				action: { label: $t('common.details'), run: () => (listError = String(e)) }
+				action: { label: $t('common.details'), run: () => (listError = errorText($t, e)) }
 			});
 		}
 	}
@@ -119,7 +120,7 @@
 			}
 		} catch (e) {
 			inspection = null;
-			failure = { code: 'internal', message: String(e), detail: null, params: {} };
+			failure = { code: 'internal', message: errorText($t, e), detail: null, params: {} };
 		}
 	}
 
@@ -194,7 +195,7 @@
 			failure =
 				typeof e === 'object' && e !== null && 'code' in e
 					? (e as ExtractionFailure)
-					: { code: 'internal', message: String(e), detail: null, params: {} };
+					: { code: 'internal', message: errorText($t, e), detail: null, params: {} };
 		} finally {
 			extracting = false;
 			stage = null;

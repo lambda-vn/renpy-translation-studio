@@ -28,7 +28,7 @@
 			summary = (await api.getUniverseSummary()) ?? '';
 			llmAvailable = (await api.getSettings()).availableLlmProviders.length > 0;
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	});
 
@@ -53,7 +53,7 @@
 			status = 'saved';
 			error = '';
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 

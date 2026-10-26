@@ -618,5 +618,15 @@
     "flag": "Signalée",
     "error": "En erreur",
     "warning": "Avertissement"
+  },
+  "errors": {
+    "no_project_open": "Aucun projet ouvert.",
+    "no_target_language": "Ce projet n'a pas de langue cible.",
+    "nothing_to_save": "Rien à enregistrer.",
+    "nothing_extracted": "Rien n'a encore été extrait dans ce projet.",
+    "nothing_to_translate": "Rien à traduire dans cette sélection.",
+    "validate_first": "Validez d'abord la ligne.",
+    "unsupported_target_language": "Langue cible non prise en charge : {language}",
+    "delete_data_failed": "Impossible de supprimer les données enregistrées : {detail}"
   }
 }

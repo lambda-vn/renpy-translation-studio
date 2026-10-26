@@ -5,6 +5,7 @@
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
+	import { errorText } from '$lib/messages';
 	import { project } from '$lib/stores';
 	import { toast } from '$lib/toast';
 
@@ -31,7 +32,7 @@
 		try {
 			info = await api.exportInfo();
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 
@@ -76,7 +77,7 @@
 			toast.success($t('export.written', { n: lines }));
 			await refresh();
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		} finally {
 			writing = false;
 		}
@@ -100,7 +101,7 @@
 				filters: [{ name: 'ZIP', extensions: ['zip'] }]
 			});
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 			return;
 		}
 		if (!output) return;
@@ -110,7 +111,7 @@
 			await api.exportProject(output, gameName);
 			exportedTo = output;
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		} finally {
 			exporting = false;
 		}

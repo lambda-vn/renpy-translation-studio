@@ -11,6 +11,7 @@ use crate::core::storage::{recent_projects, repositories, Database};
 use crate::mcp_server::session::{self, ProjectSession};
 
 use super::dto::{ProjectEntry, ProjectInfo};
+use super::CommandError;
 
 pub(super) fn project_info(session: &ProjectSession) -> Result<ProjectInfo, String> {
     let by_status = repositories::count_by_status(session.conn()).map_err(|e| e.to_string())?;
@@ -62,7 +63,10 @@ pub async fn forget_project(path: String) -> Result<(), String> {
 /// Closes the project first when it is the one open. Irreversible; the
 /// caller owns the confirmation.
 #[tauri::command]
-pub async fn delete_project_data(state: State<'_, AppState>, path: String) -> Result<(), String> {
+pub async fn delete_project_data(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<(), CommandError> {
     let target = std::path::Path::new(&path);
     {
         let mut current = state.current.lock().await;
@@ -73,8 +77,12 @@ pub async fn delete_project_data(state: State<'_, AppState>, path: String) -> Re
             *current = None;
         }
     }
-    project_actions::delete_project_data(&recent_projects::default_path(), target)
-        .map_err(|e| format!("Could not delete the saved data: {e}"))
+    project_actions::delete_project_data(&recent_projects::default_path(), target).map_err(|e| {
+        CommandError::Message {
+            key: "errors.delete_data_failed",
+            params: serde_json::json!({ "detail": e.to_string() }),
+        }
+    })
 }
 
 /// Open a project already extracted (by this app or another 1.x/2.x

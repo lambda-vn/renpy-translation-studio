@@ -6,6 +6,7 @@
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
+	import { errorText } from '$lib/messages';
 	import { project } from '$lib/stores';
 	import { toast } from '$lib/toast';
 
@@ -26,7 +27,7 @@
 		try {
 			characters = await api.listCharacters();
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		} finally {
 			loaded = true;
 		}
@@ -42,7 +43,7 @@
 			detected = [...detected, ...found];
 			toast.success($t('characters.detected_count', { n: found.length }));
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		} finally {
 			detecting = false;
 		}
@@ -67,7 +68,7 @@
 			characters = await api.upsertCharacter(variable, newDisplayName.trim(), null);
 			addOpen = false;
 		} catch (e) {
-			addError = String(e);
+			addError = errorText($t, e);
 		}
 	}
 
@@ -79,7 +80,7 @@
 			characters = await api.upsertCharacter(character.variable, name, text);
 			toast.success($t('characters.notes_saved'));
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 
@@ -96,7 +97,7 @@
 			characters = await api.deleteCharacter(character.variable);
 			toast.success($t('characters.deleted_one', { name }));
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 
@@ -116,7 +117,7 @@
 			detected = [];
 			toast.success($t('characters.cleared_count', { n: count }));
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 </script>

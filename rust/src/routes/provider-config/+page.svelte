@@ -74,7 +74,7 @@
 			defaultProvider = s.defaultProvider;
 			loaded = true;
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	});
 
@@ -130,7 +130,7 @@
 				};
 			}
 		} catch (e) {
-			ollama = { state: 'done', ok: false, message: String(e) };
+			ollama = { state: 'done', ok: false, message: errorText($t, e) };
 		}
 	}
 
@@ -168,7 +168,7 @@
 				lt = idle();
 			}
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 
@@ -211,7 +211,7 @@
 			ltKey = '';
 			toast.success($t('provider_config.saved'));
 		} catch (e) {
-			const message = String(e);
+			const message = errorText($t, e);
 			error = /keyring/i.test(message) ? $t('provider_config.keyring_unavailable') : message;
 		} finally {
 			saving = false;

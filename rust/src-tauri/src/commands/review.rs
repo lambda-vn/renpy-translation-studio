@@ -16,10 +16,10 @@ use super::dto::{
     ClearArgs, DuplicatePayload, FileEntry, ListUnitsArgs, ListUnitsResult, ProgressPayload,
     PropagateResult, QualityIssuePayload, SpeakerEntry, UnitPayload, ValidateResult,
 };
-use super::require_session;
+use super::{require_session, CommandError};
 
 #[tauri::command]
-pub async fn list_files(state: State<'_, AppState>) -> Result<Vec<FileEntry>, String> {
+pub async fn list_files(state: State<'_, AppState>) -> Result<Vec<FileEntry>, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     Ok(repositories::get_files(session.conn())
@@ -44,7 +44,7 @@ pub async fn list_files(state: State<'_, AppState>) -> Result<Vec<FileEntry>, St
 pub async fn list_units(
     state: State<'_, AppState>,
     args: ListUnitsArgs,
-) -> Result<ListUnitsResult, String> {
+) -> Result<ListUnitsResult, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let source_file = session.absolute(&args.source_file);
@@ -104,7 +104,7 @@ pub async fn count_matches(
     status: Option<String>,
     speaker: Option<String>,
     needs_review: bool,
-) -> Result<HashMap<String, i64>, String> {
+) -> Result<HashMap<String, i64>, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     Ok(repositories::count_matches_by_file(
@@ -125,7 +125,7 @@ pub async fn count_matches(
 /// per file, so a speaker silent in the open file is not mistaken for one
 /// who says nothing at all; empty when no line has a speaker.
 #[tauri::command]
-pub async fn list_speakers(state: State<'_, AppState>) -> Result<Vec<SpeakerEntry>, String> {
+pub async fn list_speakers(state: State<'_, AppState>) -> Result<Vec<SpeakerEntry>, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let names: HashMap<String, String> = repositories::get_all_characters(session.conn())
@@ -149,7 +149,7 @@ pub async fn list_speakers(state: State<'_, AppState>) -> Result<Vec<SpeakerEntr
 
 /// Whole-project progress in lines and words (the bar and its tooltip).
 #[tauri::command]
-pub async fn project_progress(state: State<'_, AppState>) -> Result<ProgressPayload, String> {
+pub async fn project_progress(state: State<'_, AppState>) -> Result<ProgressPayload, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let p = repositories::project_progress(session.conn()).map_err(|e| e.to_string())?;
@@ -168,7 +168,7 @@ pub async fn get_context(
     state: State<'_, AppState>,
     block_id: String,
     radius: Option<i64>,
-) -> Result<Vec<UnitPayload>, String> {
+) -> Result<Vec<UnitPayload>, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let unit = super::require_unit(session, &block_id)?;
@@ -192,7 +192,7 @@ pub async fn get_context(
 pub async fn get_units(
     state: State<'_, AppState>,
     block_ids: Vec<String>,
-) -> Result<Vec<UnitPayload>, String> {
+) -> Result<Vec<UnitPayload>, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let units = repositories::get_many(session.conn(), &block_ids).map_err(|e| e.to_string())?;
@@ -215,7 +215,7 @@ pub async fn save_draft(
     state: State<'_, AppState>,
     block_id: String,
     translated_text: String,
-) -> Result<UnitPayload, String> {
+) -> Result<UnitPayload, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     repositories::mark_as_draft(session.conn(), &block_id, &translated_text)
@@ -233,7 +233,7 @@ pub async fn validate_unit(
     state: State<'_, AppState>,
     block_id: String,
     translated_text: String,
-) -> Result<ValidateResult, String> {
+) -> Result<ValidateResult, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let unit = super::require_unit(session, &block_id)?;
@@ -272,7 +272,7 @@ pub async fn validate_and_propagate(
     state: State<'_, AppState>,
     block_id: String,
     translated_text: String,
-) -> Result<PropagateResult, String> {
+) -> Result<PropagateResult, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let unit = super::require_unit(session, &block_id)?;
@@ -306,12 +306,12 @@ pub async fn validate_and_propagate(
 pub async fn spread_to_duplicates(
     state: State<'_, AppState>,
     block_id: String,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let unit = super::require_unit(session, &block_id)?;
     if unit.status != repositories::STATUS_HUMAN_VALIDATED {
-        return Err("Validate the line first.".to_string());
+        return Err(CommandError::message("errors.validate_first"));
     }
     review_actions::spread_to_duplicates(
         session.conn(),
@@ -319,7 +319,7 @@ pub async fn spread_to_duplicates(
         &block_id,
         &unit.translated_text,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string().into())
 }
 
 /// Reset translations to `not_translated` and empty their text, for the
@@ -331,22 +331,22 @@ pub async fn spread_to_duplicates(
 pub async fn clear_translations(
     state: State<'_, AppState>,
     args: ClearArgs,
-) -> Result<usize, String> {
+) -> Result<usize, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let statuses = review_actions::clear_statuses(args.scope.as_deref())?;
     let source_file = args.source_file.as_deref().map(|f| session.absolute(f));
     repositories::clear_translations(session.conn(), source_file.as_deref(), statuses.as_deref())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string().into())
 }
 
 /// Lines edited since the last save to the `.rpy` files (every line
 /// carrying work when never saved): the "N lines not written" counter.
 #[tauri::command]
-pub async fn unwritten_count(state: State<'_, AppState>) -> Result<i64, String> {
+pub async fn unwritten_count(state: State<'_, AppState>) -> Result<i64, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
-    crate::core::export_sync::count_unwritten(session.conn()).map_err(|e| e.to_string())
+    crate::core::export_sync::count_unwritten(session.conn()).map_err(|e| e.to_string().into())
 }
 
 /// Show a file in the desktop file manager, selected. Runs on the Rust
@@ -355,7 +355,10 @@ pub async fn unwritten_count(state: State<'_, AppState>) -> Result<i64, String> 
 /// frontend's (`FileEntry.path`), and "open" in 1.0.0 only selects the
 /// file in the panel.
 #[tauri::command]
-pub async fn reveal_file(state: State<'_, AppState>, source_file: String) -> Result<(), String> {
+pub async fn reveal_file(
+    state: State<'_, AppState>,
+    source_file: String,
+) -> Result<(), CommandError> {
     let path = {
         let guard = state.current.lock().await;
         let session = require_session(&guard)?;
@@ -365,14 +368,14 @@ pub async fn reveal_file(state: State<'_, AppState>, source_file: String) -> Res
             .iter()
             .any(|f| f.source_file == stored);
         if !known {
-            return Err(format!("Unknown file: {source_file}"));
+            return Err(format!("Unknown file: {source_file}").into());
         }
         std::path::PathBuf::from(stored)
     };
     if !path.is_file() {
-        return Err(format!("No such file: {}", path.display()));
+        return Err(format!("No such file: {}", path.display()).into());
     }
-    tauri_plugin_opener::reveal_item_in_dir(&path).map_err(|e| e.to_string())
+    tauri_plugin_opener::reveal_item_in_dir(&path).map_err(|e| e.to_string().into())
 }
 
 #[tauri::command]
@@ -380,7 +383,7 @@ pub async fn set_needs_review(
     state: State<'_, AppState>,
     block_id: String,
     needs_review: bool,
-) -> Result<UnitPayload, String> {
+) -> Result<UnitPayload, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     super::require_unit(session, &block_id)?;
@@ -394,7 +397,7 @@ pub async fn set_note(
     state: State<'_, AppState>,
     block_id: String,
     note: String,
-) -> Result<UnitPayload, String> {
+) -> Result<UnitPayload, CommandError> {
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     super::require_unit(session, &block_id)?;
@@ -427,7 +430,7 @@ fn remember(session: &ProjectSession, source_text: &str, translated: &str) {
     });
 }
 
-fn refetch(session: &ProjectSession, block_id: &str) -> Result<UnitPayload, String> {
+fn refetch(session: &ProjectSession, block_id: &str) -> Result<UnitPayload, CommandError> {
     let unit = super::require_unit(session, block_id)?;
     Ok(UnitPayload::from_unit(session, &unit))
 }

@@ -7,6 +7,7 @@
 	import { api, type MemoryPair } from '$lib/api';
 	import { confirmDialog } from '$lib/confirm';
 	import { locale, t } from '$lib/i18n';
+	import { errorText } from '$lib/messages';
 	import { languageName } from '$lib/languages';
 	import { ROUTES } from '$lib/navigation';
 	import { jobRunning, settingsOpen } from '$lib/stores';
@@ -39,7 +40,7 @@
 			setTheme(settings.theme);
 			memory = await api.memoryStats();
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 
@@ -63,7 +64,7 @@
 		try {
 			await api.revealLog();
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 
@@ -72,7 +73,7 @@
 			await api.setSetting(key, value);
 			error = '';
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 
@@ -117,7 +118,7 @@
 			memory = await api.memoryStats();
 			toast.success($t('settings.memory_forgotten', { source, target }));
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		}
 	}
 

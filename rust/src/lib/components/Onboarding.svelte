@@ -5,6 +5,7 @@
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { api } from '$lib/api';
 	import { locale, t } from '$lib/i18n';
+	import { errorText } from '$lib/messages';
 	import Kbd from './Kbd.svelte';
 
 	let { ondone }: { ondone: () => void } = $props();
@@ -56,7 +57,7 @@
 			await api.completeOnboarding($locale, sdkPath.trim() || null);
 			ondone();
 		} catch (e) {
-			error = String(e);
+			error = errorText($t, e);
 		} finally {
 			finishing = false;
 		}

@@ -22,6 +22,7 @@ use crate::core::storage::repositories;
 use crate::core::translation::quality;
 
 use super::dto::{ExportInfo, FailingFile, SyncPayload};
+use super::CommandError;
 
 fn tl_dir(
     session: &crate::mcp_server::session::ProjectSession,
@@ -34,18 +35,18 @@ fn tl_dir(
 /// save, which is what resets the "not written" counter and the export
 /// warning. Returns how many lines hold a translation.
 #[tauri::command]
-pub async fn save_project(state: State<'_, AppState>) -> Result<usize, String> {
+pub async fn save_project(state: State<'_, AppState>) -> Result<usize, CommandError> {
     let guard = state.current.lock().await;
     let session = super::require_session(&guard)?;
     let target_language = session.target_language();
     if target_language.is_empty() {
-        return Err("This project has no target language set.".to_string());
+        return Err(CommandError::message("errors.no_target_language"));
     }
 
     let units = repositories::get_all(session.conn(), None, None).map_err(|e| e.to_string())?;
     let (translations, old_to_new) = review_actions::save_maps(&units);
     if translations.is_empty() && old_to_new.is_empty() {
-        return Err("Nothing to save.".to_string());
+        return Err(CommandError::message("errors.nothing_to_save"));
     }
 
     let lang_dir = tl_dir(session, &target_language);
@@ -66,7 +67,7 @@ pub async fn save_project(state: State<'_, AppState>) -> Result<usize, String> {
 /// hold lines a quality check refuses (worst first), and the gap between
 /// the database and the `tl/` files.
 #[tauri::command]
-pub async fn export_info(state: State<'_, AppState>) -> Result<ExportInfo, String> {
+pub async fn export_info(state: State<'_, AppState>) -> Result<ExportInfo, CommandError> {
     let guard = state.current.lock().await;
     let session = super::require_session(&guard)?;
     let target_language = session.target_language();
@@ -121,7 +122,7 @@ pub async fn export_info(state: State<'_, AppState>) -> Result<ExportInfo, Strin
 pub async fn zip_file_name(
     state: State<'_, AppState>,
     game_name: String,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     let guard = state.current.lock().await;
     let session = super::require_session(&guard)?;
     Ok(exporter::zip_file_name(
@@ -138,17 +139,17 @@ pub async fn export_project(
     state: State<'_, AppState>,
     output_path: String,
     game_name: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let guard = state.current.lock().await;
     let session = super::require_session(&guard)?;
     let target_language = session.target_language();
     if target_language.is_empty() {
-        return Err("This project has no target language set.".to_string());
+        return Err(CommandError::message("errors.no_target_language"));
     }
 
     let by_status = repositories::count_by_status(session.conn()).map_err(|e| e.to_string())?;
     if by_status.values().sum::<i64>() == 0 {
-        return Err("Nothing extracted in this project yet.".to_string());
+        return Err(CommandError::message("errors.nothing_extracted"));
     }
 
     let game_name = match game_name {
