@@ -110,6 +110,12 @@ pub enum JobMessage {
     ProviderFailed {
         n: usize,
     },
+    /// The provider is loading its model before the first batch.
+    ModelLoading,
+    /// The model runs partly on the CPU: `percent` of it is off the GPU.
+    CpuOffload {
+        percent: i64,
+    },
 }
 
 impl JobMessage {
@@ -123,6 +129,8 @@ impl JobMessage {
             Self::SharedSource { .. } => "job_events.duplicates_shared",
             Self::NothingToTranslate { .. } => "job_events.skipped_copied",
             Self::ProviderFailed { .. } => "job_events.provider_failed",
+            Self::ModelLoading => "job_events.model_loading",
+            Self::CpuOffload { .. } => "job_events.cpu_offload_warning",
         }
     }
 
@@ -144,6 +152,8 @@ impl JobMessage {
             | Self::SharedSource { n }
             | Self::NothingToTranslate { n }
             | Self::ProviderFailed { n } => json!({ "n": n }),
+            Self::ModelLoading => json!({}),
+            Self::CpuOffload { percent } => json!({ "percent": percent }),
         }
     }
 }
@@ -179,6 +189,13 @@ impl std::fmt::Display for JobMessage {
             }
             Self::NothingToTranslate { n } => write!(f, "{n} unit(s) had nothing to translate."),
             Self::ProviderFailed { n } => write!(f, "The provider failed on {n} unit(s)."),
+            Self::ModelLoading => write!(f, "Loading the model..."),
+            Self::CpuOffload { percent } => {
+                write!(
+                    f,
+                    "The model runs {percent}% on the CPU: translation slowed down."
+                )
+            }
         }
     }
 }
@@ -196,7 +213,9 @@ impl serde::Serialize for JobMessage {
 fn emit(tx: &UnboundedSender<JobEvent>, event: JobEvent) {
     if let JobEvent::Event(message) = &event {
         match message {
-            JobMessage::RejectedIdentical { .. } | JobMessage::Rejected { .. } => {
+            JobMessage::RejectedIdentical { .. }
+            | JobMessage::Rejected { .. }
+            | JobMessage::CpuOffload { .. } => {
                 log::warn!("{message}");
             }
             _ => log::info!("{message}"),
@@ -501,8 +520,19 @@ pub async fn run_job(
     let mut failed_ids: Vec<String> = Vec::new();
     let mut provider_error: Option<ProviderError> = None;
 
+    if !translatable.is_empty() && !cancel.is_cancelled() {
+        let mut notify = |message: JobMessage| emit(&tx, JobEvent::Event(message));
+        match provider.warm_up(&mut notify).await {
+            Ok(()) => emit(&tx, JobEvent::Progress(progress.clone())),
+            Err(err) => {
+                log::warn!("Translation job stopped: {err}");
+                provider_error = Some(err);
+            }
+        }
+    }
+
     'main: for chunk in translatable.chunks(CHUNK_SIZE) {
-        if cancel.is_cancelled() {
+        if cancel.is_cancelled() || provider_error.is_some() {
             break;
         }
         let result = match provider
@@ -625,6 +655,50 @@ mod tests {
             self.responses
                 .pop_front()
                 .unwrap_or_else(|| Ok(TranslateBatchResult::default()))
+        }
+    }
+
+    struct ColdProvider {
+        warm_up_error: Option<ProviderError>,
+        batches: usize,
+    }
+
+    #[async_trait::async_trait]
+    impl TranslationProvider for ColdProvider {
+        fn id(&self) -> &'static str {
+            "cold"
+        }
+
+        async fn warm_up(
+            &mut self,
+            notify: &mut (dyn FnMut(JobMessage) + Send),
+        ) -> Result<(), ProviderError> {
+            match self.warm_up_error.take() {
+                Some(err) => Err(err),
+                None => {
+                    notify(JobMessage::ModelLoading);
+                    Ok(())
+                }
+            }
+        }
+
+        async fn translate_batch(
+            &mut self,
+            units: &[TranslationUnitPayload],
+            _source_lang: &str,
+            _target_lang: &str,
+        ) -> Result<TranslateBatchResult, ProviderError> {
+            self.batches += 1;
+            Ok(TranslateBatchResult {
+                translations: units
+                    .iter()
+                    .map(|u| TranslatedUnit {
+                        block_id: u.block_id.clone(),
+                        translated_text: format!("FR {}", u.source_text),
+                    })
+                    .collect(),
+                failed_ids: Vec::new(),
+            })
         }
     }
 
@@ -970,5 +1044,90 @@ mod tests {
         .await;
 
         assert_eq!(progress.error, Some(unreachable));
+    }
+
+    #[tokio::test]
+    async fn warm_up_notice_comes_before_the_first_chunk() {
+        let units = vec![unit("a", "Hello.")];
+        let mut provider = ColdProvider {
+            warm_up_error: None,
+            batches: 0,
+        };
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+        run_job(
+            &units,
+            &mut provider,
+            "english",
+            "french",
+            CancelToken::new(),
+            tx,
+        )
+        .await;
+
+        let events = drain(&mut rx);
+        let loading = events
+            .iter()
+            .position(|e| matches!(e, JobEvent::Event(JobMessage::ModelLoading)));
+        let ready = events
+            .iter()
+            .position(|e| matches!(e, JobEvent::Progress(p) if p.done == 0));
+        let chunk = events.iter().position(|e| matches!(e, JobEvent::Chunk(_)));
+        assert!(
+            loading.is_some() && loading < ready && ready < chunk,
+            "{events:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_warm_up_stops_the_job_before_any_batch() {
+        let units = vec![unit("a", "Hello.")];
+        let missing = ProviderError::OllamaModelMissing {
+            model: "absent:1b".to_string(),
+            endpoint: "http://localhost:11434".to_string(),
+        };
+        let mut provider = ColdProvider {
+            warm_up_error: Some(missing.clone()),
+            batches: 0,
+        };
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let progress = run_job(
+            &units,
+            &mut provider,
+            "english",
+            "french",
+            CancelToken::new(),
+            tx,
+        )
+        .await;
+
+        assert_eq!(progress.error, Some(missing));
+        assert_eq!(provider.batches, 0);
+    }
+
+    #[tokio::test]
+    async fn nothing_to_translate_needs_no_warm_up() {
+        let units = vec![unit("a", "...")];
+        let mut provider = ColdProvider {
+            warm_up_error: Some(ProviderError::OllamaUnreachable {
+                endpoint: "http://localhost:11434".to_string(),
+            }),
+            batches: 0,
+        };
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let progress = run_job(
+            &units,
+            &mut provider,
+            "english",
+            "french",
+            CancelToken::new(),
+            tx,
+        )
+        .await;
+
+        assert_eq!(progress.error, None);
+        assert_eq!(progress.done, 1);
     }
 }

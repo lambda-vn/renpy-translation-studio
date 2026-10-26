@@ -98,6 +98,8 @@
 		done: number;
 		failed: number;
 		error: string | null;
+		/** What the provider is doing (a model loading); `warn` ones stay to the end. */
+		notice: { text: string; warn: boolean } | null;
 	}
 	let job = $state<JobState | null>(null);
 	let jobLog = $state<JobLogEntry[]>([]);
@@ -213,7 +215,8 @@
 					total: 0,
 					done: 0,
 					failed: 0,
-					error: null
+					error: null,
+					notice: null
 				};
 				jobRunning.set(true);
 			}
@@ -735,7 +738,8 @@
 			total: 0,
 			done: 0,
 			failed: 0,
-			error: null
+			error: null,
+			notice: null
 		};
 		jobRunning.set(true);
 		try {
@@ -764,6 +768,7 @@
 
 	function handleJobEvent(event: { payload: JobEventPayload }) {
 		const payload = event.payload;
+		if (payload.kind !== 'event' && job?.notice && !job.notice.warn) job.notice = null;
 		if (payload.kind === 'progress') {
 			if (job) {
 				job.total = payload.total;
@@ -785,7 +790,13 @@
 		} else if (payload.kind === 'chunkPersisted') {
 			throttledRefresh();
 		} else {
-			logLine(jobMessageText(get(t), payload.message));
+			const text = jobMessageText(get(t), payload.message);
+			logLine(text);
+			if (job && payload.message.key === 'job_events.model_loading') {
+				job.notice = { text, warn: false };
+			} else if (job && payload.message.key === 'job_events.cpu_offload_warning') {
+				job.notice = { text, warn: true };
+			}
 		}
 	}
 
@@ -1043,6 +1054,7 @@
 					done={job.done}
 					failed={job.failed}
 					error={job.error}
+					notice={job.notice}
 					log={jobLog}
 					oncancel={cancelJob}
 					ondismiss={() => (job = null)}

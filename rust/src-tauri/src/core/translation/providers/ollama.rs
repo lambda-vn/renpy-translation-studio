@@ -14,6 +14,8 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
+use crate::core::translation::job::JobMessage;
+
 use super::base::{
     ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
     TranslationUnitPayload,
@@ -420,17 +422,7 @@ impl OllamaProvider {
         source_lang: &str,
         target_lang: &str,
     ) -> Result<TranslateBatchResult, ProviderError> {
-        let first_resolution = self.num_ctx.is_none();
         let num_ctx = self.ensure_num_ctx().await?;
-        if first_resolution {
-            log::info!("Loading {} into memory", self.model);
-            if let Some(percent) = self.preload_and_warn().await {
-                log::warn!(
-                    "{} runs {percent}% on the CPU: translation slowed down",
-                    self.model
-                );
-            }
-        }
 
         let system_prompt = build_system_prompt(
             self.universe_summary.as_deref(),
@@ -599,6 +591,20 @@ impl OllamaProvider {
 impl TranslationProvider for OllamaProvider {
     fn id(&self) -> &'static str {
         Self::ID
+    }
+
+    /// Resolve the context window, then load the model, announcing it:
+    /// without this the first batch of a cold model waits silently.
+    async fn warm_up(
+        &mut self,
+        notify: &mut (dyn FnMut(JobMessage) + Send),
+    ) -> Result<(), ProviderError> {
+        self.ensure_num_ctx().await?;
+        notify(JobMessage::ModelLoading);
+        if let Some(percent) = self.preload_and_warn().await {
+            notify(JobMessage::CpuOffload { percent });
+        }
+        Ok(())
     }
 
     async fn translate_batch(
@@ -1026,5 +1032,63 @@ mod tests {
             OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
         provider.num_ctx = Some(4096);
         assert_eq!(provider.preload_and_warn().await, None);
+    }
+
+    #[tokio::test]
+    async fn warm_up_announces_the_load_then_the_cpu_offload() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/show"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "model_info": {"general.architecture": "gemma3", "gemma3.context_length": 8192}
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"message": {"content": ""}})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/ps"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "models": [{"name": "gemma3:1b", "size": 1000, "size_vram": 100}]
+            })))
+            .mount(&server)
+            .await;
+
+        let mut provider =
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+        let mut notices = Vec::new();
+        TranslationProvider::warm_up(&mut provider, &mut |m| notices.push(m))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            notices,
+            vec![
+                JobMessage::ModelLoading,
+                JobMessage::CpuOffload { percent: 90 }
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn warm_up_says_nothing_when_the_model_is_missing() {
+        let server = MockServer::start().await;
+        // No mock for /api/show: the model is unknown (404).
+
+        let mut provider =
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+        let mut notices = Vec::new();
+        let result = TranslationProvider::warm_up(&mut provider, &mut |m| notices.push(m)).await;
+
+        assert!(matches!(
+            result,
+            Err(ProviderError::OllamaModelMissing { .. })
+        ));
+        assert!(notices.is_empty());
     }
 }

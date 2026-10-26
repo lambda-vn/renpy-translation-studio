@@ -19,13 +19,26 @@
 		done: number;
 		failed: number;
 		error: string | null;
+		/** What the provider is doing meanwhile; `warn` for a slowdown. */
+		notice: { text: string; warn: boolean } | null;
 		log: JobLogEntry[];
 		oncancel: () => void;
 		ondismiss: () => void;
 	}
 
-	let { running, cancelling, summary, total, done, failed, error, log, oncancel, ondismiss }: Props =
-		$props();
+	let {
+		running,
+		cancelling,
+		summary,
+		total,
+		done,
+		failed,
+		error,
+		notice,
+		log,
+		oncancel,
+		ondismiss
+	}: Props = $props();
 
 	let expanded = $state(false);
 </script>
@@ -72,6 +85,9 @@
 			<button type="button" class="btn" onclick={ondismiss}>{$t('common.close')}</button>
 		{/if}
 	</div>
+	{#if notice}
+		<p class="notice" class:warn={notice.warn} role="status">{notice.text}</p>
+	{/if}
 	{#if error}
 		<p class="error" role="alert">{error}</p>
 	{/if}
@@ -157,6 +173,15 @@
 
 	.error {
 		margin: 8px 0 0;
+	}
+
+	.notice {
+		margin: 8px 0 0;
+		font-size: 13px;
+		color: var(--ink2);
+	}
+	.notice.warn {
+		color: var(--warn);
 	}
 
 	ol {

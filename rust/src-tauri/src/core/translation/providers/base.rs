@@ -12,9 +12,21 @@
 //! once started. Finer-grained mid-provider cancellation is deferred —
 //! see `translation::job`'s module docs.
 
+use crate::core::translation::job::JobMessage;
+
 #[async_trait::async_trait]
 pub trait TranslationProvider: Send {
     fn id(&self) -> &'static str;
+
+    /// Get ready before the first batch of a job, saying what is going on
+    /// through `notify` (a local model loading can take half a minute).
+    /// Most providers have nothing to do.
+    async fn warm_up(
+        &mut self,
+        _notify: &mut (dyn FnMut(JobMessage) + Send),
+    ) -> Result<(), ProviderError> {
+        Ok(())
+    }
 
     async fn translate_batch(
         &mut self,
