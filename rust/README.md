@@ -9,7 +9,31 @@ compatibles avec la 1.0.0 Python, MCP sur
 `main` n'est remplacé qu'à la sortie de la 2.0.0 — cette branche coexiste
 avec le code Python (`../src/`) le temps du chantier.
 
-## Actuel : `2.0.0-rc.3`
+## Actuel : `2.0.0-rc.4`
+
+Des correctifs après la rc.3, la check-list [`PARITY.md`](PARITY.md) étant
+complète (40 ✅, le lanceur `rts-mcp` vérifié sur l'installateur rc.3).
+
+- Erreurs dans la langue de l'interface : celles des fournisseurs et celles
+  des commandes (« Aucun projet ouvert », « Rien à traduire dans cette
+  sélection »…) arrivent en `{ key, params }` et sont traduites par
+  l'interface. Restent en anglais les détails techniques (SQLite, disque).
+  Corrigés au passage : une ligne seule qui échouait côté fournisseur sans
+  aucun message, et le bandeau resté « en cours » quand un job échouait
+  aussitôt.
+- Journal détaillé écrit dans `renpy-translation-studio.log`, dans le
+  dossier de configuration (`.log.1` au-delà de 5 Mo), jamais de clé ; un
+  bouton l'ouvre depuis les paramètres.
+- Ollama : le bandeau du job annonce le chargement du modèle, puis un
+  éventuel débordement sur le processeur.
+- Serveur MCP : les compteurs sont publiés en `int64` au lieu de `uint`,
+  format inconnu des clients qui l'affichaient en avertissement.
+
+Le glossaire serveur DeepL (notes de personnage `Nom -> Traduction`) a été
+exercé contre la vraie API : appliqué, et remplacé sans s'accumuler d'un job
+à l'autre. Non vérifié : macOS et Linux.
+
+## Précédemment : `2.0.0-rc.3`
 
 L'interface, refaite dans le design livré par Claude Design (couleurs,
 polices, glyphes et composants vivent maintenant dans `src/lib/styles/` et
