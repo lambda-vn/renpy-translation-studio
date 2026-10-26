@@ -5,6 +5,10 @@
 //! Field names match `mcp_server/server.py`'s dict payloads exactly,
 //! since a client written against the Python server should read the
 //! Rust one without changes.
+//!
+//! A `usize` count is published as `i64` (`#[schemars(with = "i64")]`):
+//! schemars gives `usize` the format `uint`, which clients validating with
+//! Ajv do not know and warn about, where `int64` is a standard one.
 
 use std::collections::HashMap;
 
@@ -154,6 +158,7 @@ pub struct SubmissionRejection {
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct SubmitTranslationsResult {
+    #[schemars(with = "i64")]
     pub applied: usize,
     pub rejected: Vec<SubmissionRejection>,
 }
@@ -186,6 +191,7 @@ pub struct CharactersResult {
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct DetectCharactersResult {
     /// How many definitions the scan found.
+    #[schemars(with = "i64")]
     pub found: usize,
     pub characters: Vec<CharacterEntry>,
 }
@@ -230,10 +236,12 @@ pub struct ClearTranslationsArgs {
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct FillFromMemoryResult {
+    #[schemars(with = "i64")]
     pub filled: usize,
 }
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ClearTranslationsResult {
+    #[schemars(with = "i64")]
     pub cleared: usize,
 }

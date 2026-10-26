@@ -522,3 +522,15 @@ impl ServerHandler for RtsServer {
             .with_instructions(INSTRUCTIONS)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_schema_uses_the_nonstandard_uint_format() {
+        let tools = serde_json::to_string(&RtsServer::tool_router().list_all()).unwrap();
+        assert!(tools.contains("\"format\":\"int64\""));
+        assert!(!tools.contains("\"format\":\"uint"), "{tools}");
+    }
+}
