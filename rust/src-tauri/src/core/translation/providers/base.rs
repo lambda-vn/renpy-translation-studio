@@ -83,9 +83,23 @@ impl From<reqwest::Error> for ProviderError {
     fn from(error: reqwest::Error) -> Self {
         Self::Network {
             status: error.status().map(|s| s.as_u16()),
-            detail: error.to_string(),
+            detail: error.without_url().to_string(),
         }
     }
+}
+
+/// HTTP statuses after which retrying cannot help: rejected credentials
+/// (401, 403), DeepL's exhausted quota (456) and rate limiting (429, no
+/// provider backs off). Anything else (timeout, 5xx) may be transient.
+const FATAL_STATUSES: [u16; 4] = [401, 403, 429, 456];
+
+/// The error that must stop a job when `error` carries a fatal HTTP
+/// status, `None` for a failure that only concerns the unit(s) sent.
+pub fn fatal_status_error(error: reqwest::Error) -> Option<ProviderError> {
+    let status = error.status()?.as_u16();
+    FATAL_STATUSES
+        .contains(&status)
+        .then(|| ProviderError::from(error))
 }
 
 impl ProviderError {

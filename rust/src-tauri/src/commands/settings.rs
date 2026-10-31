@@ -54,6 +54,13 @@ pub async fn set_setting(
     key: String,
     value: Option<String>,
 ) -> Result<(), String> {
+    if key == "sdk_path" {
+        if let Some(path) = value.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+            if !is_valid_sdk_path(std::path::Path::new(path)) {
+                return Err(format!("Not a Ren'Py SDK: {path}"));
+            }
+        }
+    }
     state
         .settings
         .lock()
@@ -148,7 +155,7 @@ pub async fn test_deepl_connection(
         }
         .into());
     }
-    let provider = DeepLProvider::new(api_key, &[]);
+    let provider = DeepLProvider::new(api_key, &[])?;
     if !provider.test_connection().await {
         return Ok(TestConnectionResult {
             ok: false,
@@ -174,7 +181,8 @@ pub async fn test_ollama_connection(endpoint: String) -> Result<TestConnectionRe
     } else {
         endpoint
     };
-    let provider = OllamaProvider::new(&endpoint, String::new(), None, Vec::new(), None);
+    let provider = OllamaProvider::new(&endpoint, String::new(), None, Vec::new(), None)
+        .map_err(|error| error.to_string())?;
     if !provider.test_connection().await {
         return Ok(TestConnectionResult {
             ok: false,

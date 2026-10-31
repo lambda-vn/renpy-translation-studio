@@ -20,6 +20,10 @@ use flate2::read::ZlibDecoder;
 /// A 40 000-file game's index is a few megabytes.
 const MAX_INDEX_SIZE: usize = 64 * 1024 * 1024;
 
+/// Ceiling on the header line: `RPA-3.2 <offset> <keys>` is far below it,
+/// and `read_until` would otherwise buffer a file without any newline.
+const MAX_HEADER_SIZE: u64 = 256;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
     #[error("cannot read the archive: {0}")]
@@ -40,6 +44,8 @@ pub enum ArchiveError {
     UnsafePath(String),
     #[error("{0}")]
     Manifest(String),
+    #[error("Archive content too large to extract: {0}")]
+    ExtractionLimit(String),
 }
 
 /// Validate an archive member name and normalize its separators.
@@ -121,9 +127,17 @@ impl RpaArchive {
 fn read_index(
     file: &mut File,
 ) -> Result<(Vec<String>, HashMap<String, ArchiveMember>), ArchiveError> {
+    let file_size = file.metadata()?.len();
     let mut reader = BufReader::new(&mut *file);
     let mut header_line = Vec::new();
-    reader.read_until(b'\n', &mut header_line)?;
+    (&mut reader)
+        .take(MAX_HEADER_SIZE)
+        .read_until(b'\n', &mut header_line)?;
+    if header_line.last() != Some(&b'\n') {
+        return Err(ArchiveError::UnsupportedHeader(
+            String::from_utf8_lossy(&header_line).into_owned(),
+        ));
+    }
     while matches!(header_line.last(), Some(b'\n' | b'\r')) {
         header_line.pop();
     }
@@ -153,10 +167,8 @@ fn read_index(
 
     drop(reader);
     file.seek(SeekFrom::Start(offset))?;
-    let mut compressed = Vec::new();
-    file.read_to_end(&mut compressed)?;
     let mut decompressed = Vec::new();
-    ZlibDecoder::new(compressed.as_slice())
+    ZlibDecoder::new(BufReader::new(&mut *file))
         .take(MAX_INDEX_SIZE as u64 + 1)
         .read_to_end(&mut decompressed)
         .map_err(|e| ArchiveError::CorruptIndex(e.to_string()))?;
@@ -164,12 +176,13 @@ fn read_index(
         return Err(ArchiveError::CorruptIndex("archive index too large".into()));
     }
     let payload = pickle::load(&decompressed)?;
-    normalize_index(payload, key)
+    normalize_index(payload, key, file_size)
 }
 
 fn normalize_index(
     payload: pickle::Value,
     key: i128,
+    file_size: u64,
 ) -> Result<(Vec<String>, HashMap<String, ArchiveMember>), ArchiveError> {
     let pickle::Value::Dict(pairs) = payload else {
         return Err(ArchiveError::CorruptIndex(
@@ -210,6 +223,15 @@ fn normalize_index(
         let (Ok(offset), Ok(length)) = (u64::try_from(offset), u64::try_from(length)) else {
             return Err(malformed());
         };
+        let file_bytes = length
+            .checked_sub(prefix.len() as u64)
+            .ok_or_else(malformed)?;
+        if offset
+            .checked_add(file_bytes)
+            .is_none_or(|end| end > file_size)
+        {
+            return Err(malformed());
+        }
         let name = validate_member_name(&name)?;
         names.push(name.clone());
         index.insert(
@@ -382,7 +404,11 @@ pub mod pickle {
             index: usize,
             value: (Value, usize),
             limit: usize,
+            budget: &mut usize,
         ) -> Result<(), ArchiveError> {
+            *budget = budget
+                .checked_sub(weight(&value.0))
+                .ok_or_else(|| corrupt("pickle memo copies too large"))?;
             if index > limit {
                 return Err(corrupt("pickle memo index out of range"));
             }
@@ -607,7 +633,7 @@ pub mod pickle {
                         .parse::<usize>()
                         .map_err(|_| corrupt("bad memo index"))?;
                     let value = top(&stack, "PUT on an empty stack")?;
-                    remember(&mut memo, index, value, data.len())?;
+                    remember(&mut memo, index, value, data.len(), &mut budget)?;
                 }
                 b'q' | b'r' => {
                     let index = if opcode == b'q' {
@@ -616,12 +642,12 @@ pub mod pickle {
                         cursor.length(4)?
                     };
                     let value = top(&stack, "PUT on an empty stack")?;
-                    remember(&mut memo, index, value, data.len())?;
+                    remember(&mut memo, index, value, data.len(), &mut budget)?;
                 }
                 0x94 => {
                     let value = top(&stack, "MEMOIZE on an empty stack")?;
                     let index = memo.len();
-                    remember(&mut memo, index, value, data.len())?;
+                    remember(&mut memo, index, value, data.len(), &mut budget)?;
                 }
                 b'g' => {
                     let index = cursor
@@ -835,6 +861,52 @@ mod tests {
         assert!(matches!(
             pickle::load(&pickle),
             Err(ArchiveError::CorruptIndex(_))
+        ));
+    }
+
+    #[test]
+    fn growing_memoized_list_is_capped() {
+        let mut pickle = vec![0x80, 0x02, b']', b'q', 0];
+        for _ in 0..20_000 {
+            pickle.extend_from_slice(&[b'N', b'a', b'q', 0]);
+        }
+        pickle.push(b'.');
+        assert!(matches!(
+            pickle::load(&pickle),
+            Err(ArchiveError::CorruptIndex(_))
+        ));
+    }
+
+    #[test]
+    fn header_without_newline_within_the_ceiling_is_refused() {
+        let dir = scratch("longheader");
+        let path = dir.join("long.rpa");
+        std::fs::write(&path, vec![b'A'; 300]).unwrap();
+        assert!(matches!(
+            RpaArchive::open(&path),
+            Err(ArchiveError::UnsupportedHeader(_))
+        ));
+    }
+
+    #[test]
+    fn entries_pointing_past_the_end_of_the_file_are_refused() {
+        let payload = |offset: i128, length: i128| {
+            pickle::Value::Dict(vec![(
+                pickle::Value::Str("a.rpy".into()),
+                pickle::Value::List(vec![pickle::Value::Tuple(vec![
+                    pickle::Value::Int(offset),
+                    pickle::Value::Int(length),
+                ])]),
+            )])
+        };
+        assert!(normalize_index(payload(100, 10), 0, 110).is_ok());
+        assert!(matches!(
+            normalize_index(payload(100, 11), 0, 110),
+            Err(ArchiveError::MalformedEntry(_))
+        ));
+        assert!(matches!(
+            normalize_index(payload(i128::from(u64::MAX), 1), 0, 110),
+            Err(ArchiveError::MalformedEntry(_))
         ));
     }
 

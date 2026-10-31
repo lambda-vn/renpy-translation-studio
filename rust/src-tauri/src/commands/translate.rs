@@ -209,15 +209,23 @@ pub async fn start_translation_job(
             }
         });
 
-        job::run_job(
-            &units,
-            provider.as_mut(),
-            &source_lang,
-            &target_lang,
-            cancel,
-            tx,
-        )
-        .await;
+        // The job runs in its own task so that a panic in it or in a
+        // provider ends up in the join result instead of skipping the
+        // release of the job slot below.
+        let worker = tokio::spawn(async move {
+            job::run_job(
+                &units,
+                provider.as_mut(),
+                &source_lang,
+                &target_lang,
+                cancel,
+                tx,
+            )
+            .await;
+        });
+        if let Err(error) = worker.await {
+            log::error!("the translation job stopped abnormally: {error}");
+        }
         let _ = receiver.await;
         *job_slot.lock().await = None;
     });

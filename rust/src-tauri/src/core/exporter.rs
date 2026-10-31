@@ -7,6 +7,8 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use super::validators::validate_language_code;
+
 static GAME_NAME_SANITIZE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[^a-zA-Z0-9_\-]").unwrap());
 static BUILD_NAME: LazyLock<Regex> =
@@ -54,6 +56,10 @@ fn read_build_name(project_path: &Path) -> Option<String> {
 pub enum ExportError {
     #[error("path traversal detected: {0}")]
     PathTraversal(String),
+    #[error("invalid game name: {0}")]
+    InvalidGameName(String),
+    #[error("invalid language: {0}")]
+    InvalidLanguage(String),
     #[error("cannot walk {0}: {1}")]
     Walk(PathBuf, walkdir::Error),
     #[error("cannot read {0}: {1}")]
@@ -69,13 +75,23 @@ pub enum ExportError {
 /// The zip structure follows `<game_name>/game/tl/<language>/<file>`.
 /// `.rpyc` files are skipped, and a zip entry name with a `..`
 /// component refuses the whole export rather than let a stray symlink
-/// under `tl_dir` write outside the archive's own prefix.
+/// under `tl_dir` write outside the archive's own prefix. The game name
+/// and the language become entry-name components too, so a blank or
+/// dotted name, one holding a separator, a drive colon or a control
+/// character, and an invalid language code are refused: a player
+/// extracting the zip would otherwise be written outside the target.
 pub fn export(
     tl_dir: &Path,
     game_name: &str,
     language: &str,
     output_path: &Path,
 ) -> Result<(), ExportError> {
+    if !is_safe_game_name(game_name) {
+        return Err(ExportError::InvalidGameName(game_name.to_string()));
+    }
+    if !validate_language_code(language) {
+        return Err(ExportError::InvalidLanguage(language.to_string()));
+    }
     let mut entries: Vec<PathBuf> = Vec::new();
     for entry in walkdir::WalkDir::new(tl_dir) {
         let entry = entry.map_err(|e| ExportError::Walk(tl_dir.to_path_buf(), e))?;
@@ -113,6 +129,15 @@ pub fn export(
     }
     zip.finish()?;
     Ok(())
+}
+
+fn is_safe_game_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name
+            .chars()
+            .any(|c| c.is_control() || matches!(c, '/' | '\\' | ':'))
 }
 
 #[cfg(test)]
@@ -186,5 +211,32 @@ mod tests {
                 "My-Game/game/tl/french/script.rpy".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn export_refuses_unsafe_names_before_creating_the_zip() {
+        let tl_dir = temp_dir("unsafe-src");
+        let output = temp_dir("unsafe-out").join("x.zip");
+        for name in [
+            "", ".", "..", "../../x", "a/b", "a\\b", "C:\\x", "C:x", "a\nb",
+        ] {
+            assert!(
+                matches!(
+                    export(&tl_dir, name, "french", &output),
+                    Err(ExportError::InvalidGameName(_))
+                ),
+                "{name:?} should be refused"
+            );
+        }
+        for language in ["", "../french", "fr/en", "French"] {
+            assert!(
+                matches!(
+                    export(&tl_dir, "Game", language, &output),
+                    Err(ExportError::InvalidLanguage(_))
+                ),
+                "{language:?} should be refused"
+            );
+        }
+        assert!(!output.exists());
     }
 }

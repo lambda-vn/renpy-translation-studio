@@ -10,7 +10,7 @@ use rusqlite::Connection;
 
 use crate::core::storage::repositories::{self, TranslationUnit};
 use crate::core::translation::providers::base::TranslateBatchResult;
-use crate::core::translation::quality::{self, QualityIssue, LENGTH_WARNING_KIND};
+use crate::core::translation::quality::{self, QualityIssue};
 
 /// The statuses a bulk clear is allowed to reset, by the name the clear
 /// dialog gives them. `unvalidated` is everything a person has not signed
@@ -130,7 +130,7 @@ pub fn validate_translation(
     }
     let (blocking, warnings): (Vec<_>, Vec<_>) = quality::check(&unit.source_text, translated)
         .into_iter()
-        .partition(|i| i.kind != LENGTH_WARNING_KIND);
+        .partition(|i| i.kind.blocks_validation());
     if !blocking.is_empty() {
         return Ok(Validation {
             blocking,
@@ -174,7 +174,7 @@ pub fn spread_to_duplicates(
             )
         })
         .collect();
-    repositories::update_translations(conn, &entries)?;
+    repositories::update_translations_unvalidated(conn, &entries)?;
     Ok(block_ids)
 }
 

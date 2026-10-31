@@ -89,10 +89,21 @@
 			: { cls: '', text: $t('provider_config.status_unconfigured') };
 	}
 
+	const probeTokens: Record<ProviderId, number> = { deepl: 0, ollama: 0, libretranslate: 0 };
+
+	function resetProbe(provider: ProviderId) {
+		probeTokens[provider]++;
+		if (provider === 'deepl') deepl = idle();
+		else if (provider === 'ollama') ollama = idle();
+		else lt = idle();
+	}
+
 	async function testDeepl() {
+		const id = ++probeTokens.deepl;
 		deepl = { state: 'testing', ok: false, message: $t('provider_config.testing') };
 		try {
 			const result = await api.testDeeplConnection(deeplKey.trim());
+			if (id !== probeTokens.deepl) return;
 			deepl = {
 				state: 'done',
 				ok: result.ok,
@@ -105,14 +116,17 @@
 							})
 			};
 		} catch (e) {
+			if (id !== probeTokens.deepl) return;
 			deepl = { state: 'done', ok: false, message: errorText($t, e) };
 		}
 	}
 
 	async function testOllama() {
+		const id = ++probeTokens.ollama;
 		ollama = { state: 'testing', ok: false, message: $t('provider_config.testing') };
 		try {
 			const result: TestConnectionResult = await api.testOllamaConnection(ollamaEndpoint.trim());
+			if (id !== probeTokens.ollama) return;
 			ollamaModels = result.models;
 			if (!result.ok) {
 				ollama = {
@@ -130,14 +144,17 @@
 				};
 			}
 		} catch (e) {
+			if (id !== probeTokens.ollama) return;
 			ollama = { state: 'done', ok: false, message: errorText($t, e) };
 		}
 	}
 
 	async function testLibretranslate() {
+		const id = ++probeTokens.libretranslate;
 		lt = { state: 'testing', ok: false, message: $t('provider_config.testing') };
 		try {
 			const result = await api.testLibretranslateConnection(ltUrl.trim(), ltKey.trim() || null);
+			if (id !== probeTokens.libretranslate) return;
 			lt = {
 				state: 'done',
 				ok: result.ok,
@@ -146,6 +163,7 @@
 					: $t('provider_config.ollama_connection_failed')
 			};
 		} catch (e) {
+			if (id !== probeTokens.libretranslate) return;
 			lt = { state: 'done', ok: false, message: errorText($t, e) };
 		}
 	}
@@ -162,10 +180,10 @@
 			await api.setSetting(setting, null);
 			if (setting === 'deepl_api_key') {
 				deeplHadKey = false;
-				deepl = idle();
+				resetProbe('deepl');
 			} else {
 				ltHadKey = false;
-				lt = idle();
+				resetProbe('libretranslate');
 			}
 		} catch (e) {
 			error = errorText($t, e);
@@ -274,7 +292,7 @@
 								? $t('provider_config.key_saved_placeholder')
 								: $t('provider_config.api_key_hint')}
 							bind:value={deeplKey}
-							oninput={() => (deepl = idle())}
+							oninput={() => resetProbe('deepl')}
 						/>
 						{#if deeplHadKey}
 							<button type="button" class="btn" onclick={() => removeKey('deepl_api_key', 'DeepL')}>
@@ -310,7 +328,7 @@
 				<div class="grid">
 					<div>
 						<label class="lbl" for="ol-url">{$t('provider_config.ollama_endpoint_label')}</label>
-						<input id="ol-url" class="mono" bind:value={ollamaEndpoint} oninput={() => (ollama = idle())} />
+						<input id="ol-url" class="mono" bind:value={ollamaEndpoint} oninput={() => resetProbe('ollama')} />
 					</div>
 					<div>
 						<label class="lbl" for="ol-model">{$t('provider_config.ollama_model_label')}</label>
@@ -367,7 +385,7 @@
 							class="mono"
 							placeholder={$t('provider_config.libretranslate_url_hint')}
 							bind:value={ltUrl}
-							oninput={() => (lt = idle())}
+							oninput={() => resetProbe('libretranslate')}
 						/>
 					</div>
 					<div>
@@ -383,7 +401,7 @@
 								autocomplete="off"
 								placeholder={ltHadKey ? $t('provider_config.key_saved_placeholder') : ''}
 								bind:value={ltKey}
-								oninput={() => (lt = idle())}
+								oninput={() => resetProbe('libretranslate')}
 							/>
 							{#if ltHadKey}
 								<button type="button" class="btn" onclick={() => removeKey('libretranslate_api_key', 'LibreTranslate')}>

@@ -234,30 +234,35 @@ pub async fn validate_unit(
     block_id: String,
     translated_text: String,
 ) -> Result<ValidateResult, CommandError> {
-    let guard = state.current.lock().await;
-    let session = require_session(&guard)?;
-    let unit = super::require_unit(session, &block_id)?;
-    let outcome = review_actions::validate_translation(session.conn(), &unit, &translated_text)?;
+    let guard = state.current.clone().lock_owned().await;
+    tokio::task::spawn_blocking(move || -> Result<ValidateResult, CommandError> {
+        let session = require_session(&guard)?;
+        let unit = super::require_unit(session, &block_id)?;
+        let outcome =
+            review_actions::validate_translation(session.conn(), &unit, &translated_text)?;
 
-    let Some(stored) = outcome.stored else {
-        return Ok(ValidateResult {
-            unit: None,
-            blocking_issues: issues_payload(outcome.blocking),
+        let Some(stored) = outcome.stored else {
+            return Ok(ValidateResult {
+                unit: None,
+                blocking_issues: issues_payload(outcome.blocking),
+                warnings: issues_payload(outcome.warnings),
+                duplicates: 0,
+            });
+        };
+        remember(session, &unit.source_text, &stored);
+        let duplicates =
+            repositories::find_duplicate_block_ids(session.conn(), &unit.source_text, &block_id)
+                .map_err(|e| e.to_string())?
+                .len();
+        Ok(ValidateResult {
+            unit: Some(refetch(session, &block_id)?),
+            blocking_issues: Vec::new(),
             warnings: issues_payload(outcome.warnings),
-            duplicates: 0,
-        });
-    };
-    remember(session, &unit.source_text, &stored);
-    let duplicates =
-        repositories::find_duplicate_block_ids(session.conn(), &unit.source_text, &block_id)
-            .map_err(|e| e.to_string())?
-            .len();
-    Ok(ValidateResult {
-        unit: Some(refetch(session, &block_id)?),
-        blocking_issues: Vec::new(),
-        warnings: issues_payload(outcome.warnings),
-        duplicates,
+            duplicates,
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Validate a line, then hand its translation to every other line with an
@@ -273,29 +278,38 @@ pub async fn validate_and_propagate(
     block_id: String,
     translated_text: String,
 ) -> Result<PropagateResult, CommandError> {
-    let guard = state.current.lock().await;
-    let session = require_session(&guard)?;
-    let unit = super::require_unit(session, &block_id)?;
-    let outcome = review_actions::validate_translation(session.conn(), &unit, &translated_text)?;
+    let guard = state.current.clone().lock_owned().await;
+    tokio::task::spawn_blocking(move || -> Result<PropagateResult, CommandError> {
+        let session = require_session(&guard)?;
+        let unit = super::require_unit(session, &block_id)?;
+        let outcome =
+            review_actions::validate_translation(session.conn(), &unit, &translated_text)?;
 
-    let Some(stored) = outcome.stored else {
-        return Ok(PropagateResult {
-            unit: None,
-            blocking_issues: issues_payload(outcome.blocking),
+        let Some(stored) = outcome.stored else {
+            return Ok(PropagateResult {
+                unit: None,
+                blocking_issues: issues_payload(outcome.blocking),
+                warnings: issues_payload(outcome.warnings),
+                propagated: Vec::new(),
+            });
+        };
+        remember(session, &unit.source_text, &stored);
+        let propagated = review_actions::spread_to_duplicates(
+            session.conn(),
+            &unit.source_text,
+            &block_id,
+            &stored,
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(PropagateResult {
+            unit: Some(refetch(session, &block_id)?),
+            blocking_issues: Vec::new(),
             warnings: issues_payload(outcome.warnings),
-            propagated: Vec::new(),
-        });
-    };
-    remember(session, &unit.source_text, &stored);
-    let propagated =
-        review_actions::spread_to_duplicates(session.conn(), &unit.source_text, &block_id, &stored)
-            .map_err(|e| e.to_string())?;
-    Ok(PropagateResult {
-        unit: Some(refetch(session, &block_id)?),
-        blocking_issues: Vec::new(),
-        warnings: issues_payload(outcome.warnings),
-        propagated,
+            propagated,
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Apply an already validated line's translation to the other lines
@@ -411,7 +425,7 @@ fn issues_payload(issues: Vec<quality::QualityIssue>) -> Vec<QualityIssuePayload
     issues
         .into_iter()
         .map(|i| QualityIssuePayload {
-            kind: i.kind,
+            kind: i.kind.as_str(),
             detail: i.detail,
         })
         .collect()
@@ -420,14 +434,18 @@ fn issues_payload(issues: Vec<quality::QualityIssue>) -> Vec<QualityIssuePayload
 /// The shared memory is a convenience, never a reason to refuse a
 /// validation: a machine where it cannot be written still translates.
 fn remember(session: &ProjectSession, source_text: &str, translated: &str) {
-    let _ = translation_memory::open(&translation_memory::default_path()).and_then(|memory| {
-        translation_memory::remember(
-            &memory,
-            &[(source_text.to_string(), translated.to_string())],
-            &session.source_language(),
-            &session.target_language(),
-        )
-    });
+    let outcome =
+        translation_memory::open(&translation_memory::default_path()).and_then(|memory| {
+            translation_memory::remember(
+                &memory,
+                &[(source_text.to_string(), translated.to_string())],
+                &session.source_language(),
+                &session.target_language(),
+            )
+        });
+    if let Err(error) = outcome {
+        log::warn!("could not remember the translation: {error}");
+    }
 }
 
 fn refetch(session: &ProjectSession, block_id: &str) -> Result<UnitPayload, CommandError> {

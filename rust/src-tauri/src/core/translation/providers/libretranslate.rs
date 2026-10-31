@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use super::base::{
-    ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
+    fatal_status_error, ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
     TranslationUnitPayload,
 };
 use crate::core::languages::get_language;
@@ -104,12 +104,17 @@ impl LibreTranslateProvider {
     /// Translate texts one API call per unit (a LibreTranslate
     /// limitation). A unit that fails reports its own block_id as
     /// failed; the rest of the batch still proceeds.
+    ///
+    /// # Errors
+    /// [`ProviderError::Network`] on a status retrying cannot fix
+    /// (rejected key, rate limit): the job must stop instead of
+    /// replaying the batch in ever smaller chunks.
     pub async fn translate_batch(
         &self,
         units: &[TranslationUnitPayload],
         source_lang: &str,
         target_lang: &str,
-    ) -> TranslateBatchResult {
+    ) -> Result<TranslateBatchResult, ProviderError> {
         let source = resolve_libretranslate_lang(source_lang);
         let target = resolve_libretranslate_lang(target_lang);
         let mut result = TranslateBatchResult::default();
@@ -156,12 +161,15 @@ impl LibreTranslateProvider {
                 },
                 Err(error) => {
                     log::warn!("LibreTranslate failed on {}: {error}", unit.block_id);
+                    if let Some(fatal) = fatal_status_error(error) {
+                        return Err(fatal);
+                    }
                     result.failed_ids.push(unit.block_id.clone());
                 }
             }
         }
 
-        result
+        Ok(result)
     }
 }
 
@@ -177,7 +185,7 @@ impl TranslationProvider for LibreTranslateProvider {
         source_lang: &str,
         target_lang: &str,
     ) -> Result<TranslateBatchResult, ProviderError> {
-        Ok(LibreTranslateProvider::translate_batch(self, units, source_lang, target_lang).await)
+        LibreTranslateProvider::translate_batch(self, units, source_lang, target_lang).await
     }
 }
 
@@ -234,7 +242,10 @@ mod tests {
 
         let provider = LibreTranslateProvider::new(&server.uri(), None).unwrap();
         let units = vec![unit("a", "Hello."), unit("b", "Hi.")];
-        let result = provider.translate_batch(&units, "english", "french").await;
+        let result = provider
+            .translate_batch(&units, "english", "french")
+            .await
+            .unwrap();
 
         assert_eq!(result.translations.len(), 2);
         assert_eq!(result.translations[0].translated_text, "Bonjour.");
@@ -252,10 +263,36 @@ mod tests {
 
         let provider = LibreTranslateProvider::new(&server.uri(), None).unwrap();
         let units = vec![unit("a", "Hello.")];
-        let result = provider.translate_batch(&units, "english", "french").await;
+        let result = provider
+            .translate_batch(&units, "english", "french")
+            .await
+            .unwrap();
 
         assert!(result.translations.is_empty());
         assert_eq!(result.failed_ids, vec!["a".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn fatal_status_stops_the_batch_with_an_error() {
+        for status in [403, 429] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/translate"))
+                .respond_with(ResponseTemplate::new(status))
+                .mount(&server)
+                .await;
+
+            let provider = LibreTranslateProvider::new(&server.uri(), None).unwrap();
+            let error = provider
+                .translate_batch(&[unit("a", "Hello.")], "english", "french")
+                .await
+                .unwrap_err();
+
+            assert!(matches!(
+                error,
+                ProviderError::Network { status: Some(code), .. } if code == status
+            ));
+        }
     }
 
     #[tokio::test]

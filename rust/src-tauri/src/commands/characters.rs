@@ -34,11 +34,15 @@ pub async fn list_characters(
 pub async fn detect_characters(
     state: State<'_, AppState>,
 ) -> Result<Vec<CharacterEntry>, CommandError> {
-    let guard = state.current.lock().await;
-    let session = super::require_session(&guard)?;
-    crate::core::project_actions::detect_and_store_characters(session.conn(), &session.path)
-        .map_err(|e| e.to_string())?;
-    characters(session)
+    let guard = state.current.clone().lock_owned().await;
+    tokio::task::spawn_blocking(move || {
+        let session = super::require_session(&guard)?;
+        crate::core::project_actions::detect_and_store_characters(session.conn(), &session.path)
+            .map_err(|e| e.to_string())?;
+        characters(session)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

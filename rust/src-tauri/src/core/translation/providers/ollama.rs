@@ -17,7 +17,7 @@ use serde_json::{json, Value};
 use crate::core::translation::job::JobMessage;
 
 use super::base::{
-    ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
+    fatal_status_error, ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
     TranslationUnitPayload,
 };
 use crate::core::storage::repositories::Character;
@@ -191,8 +191,8 @@ impl OllamaProvider {
         universe_summary: Option<String>,
         characters: Vec<Character>,
         batch_size: Option<usize>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, ProviderError> {
+        Ok(Self {
             endpoint: endpoint.trim_end_matches('/').to_string(),
             model,
             universe_summary,
@@ -201,9 +201,8 @@ impl OllamaProvider {
             num_ctx: None,
             client: reqwest::Client::builder()
                 .timeout(REQUEST_TIMEOUT)
-                .build()
-                .unwrap(),
-        }
+                .build()?,
+        })
     }
 
     pub async fn test_connection(&self) -> bool {
@@ -413,10 +412,12 @@ impl OllamaProvider {
 
     /// Translate all units using dynamic batching.
     ///
-    /// Errs only when the server cannot be reached to determine the
-    /// model's context length — a hard precondition, checked once. A
-    /// batch that fails once context is resolved reports its own
-    /// block_ids as failed instead of aborting the rest.
+    /// Errs when the server cannot be reached to determine the model's
+    /// context length — a hard precondition, checked once — or when it
+    /// answers a batch with a status retrying cannot fix (rejected
+    /// credentials of a cloud model, rate limit). A batch that otherwise
+    /// fails reports its own block_ids as failed instead of aborting the
+    /// rest.
     pub async fn translate_batch(
         &mut self,
         units: &[TranslationUnitPayload],
@@ -448,7 +449,8 @@ impl OllamaProvider {
         );
         let mut result = TranslateBatchResult::default();
         for batch in batches {
-            let (translations, failed) = self.translate_single_batch(&batch, &system_prompt).await;
+            let (translations, failed) =
+                self.translate_single_batch(&batch, &system_prompt).await?;
             result.translations.extend(translations);
             result.failed_ids.extend(failed);
         }
@@ -474,12 +476,12 @@ impl OllamaProvider {
     /// genuine content but still has to fill every slot.
     ///
     /// On any failure the whole batch is reported as failed rather than
-    /// partially parsed.
+    /// partially parsed, except a fatal HTTP status, which is an error.
     async fn translate_single_batch(
         &self,
         batch: &[ContextualUnit],
         system_prompt: &str,
-    ) -> (Vec<TranslatedUnit>, Vec<String>) {
+    ) -> Result<(Vec<TranslatedUnit>, Vec<String>), ProviderError> {
         let requested_ids: HashSet<&str> = batch.iter().map(|u| u.block_id.as_str()).collect();
         let source_by_id: HashMap<String, String> = batch
             .iter()
@@ -488,10 +490,10 @@ impl OllamaProvider {
         let user_prompt = build_batch_prompt(batch);
         let fail_all = |reason: &str| {
             log::warn!("Batch of {} unit(s) failed: {reason}", batch.len());
-            (
+            Ok((
                 Vec::new(),
                 batch.iter().map(|u| u.block_id.clone()).collect(),
-            )
+            ))
         };
         log::debug!(
             "Batch request ({} unit(s)):
@@ -522,7 +524,13 @@ impl OllamaProvider {
 
         let response = match response {
             Ok(response) => response,
-            Err(error) => return fail_all(&error.to_string()),
+            Err(error) => {
+                let reason = error.to_string();
+                return match fatal_status_error(error) {
+                    Some(fatal) => Err(fatal),
+                    None => fail_all(&reason),
+                };
+            }
         };
         let Ok(body) = response.json::<Value>().await else {
             return fail_all("unreadable response body");
@@ -584,7 +592,7 @@ impl OllamaProvider {
             );
         }
 
-        (translations, missing_ids)
+        Ok((translations, missing_ids))
     }
 }
 
@@ -786,7 +794,8 @@ mod tests {
             .await;
 
         let provider =
-            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
         let length = provider.get_context_length("gemma3:1b").await.unwrap();
         assert_eq!(length, 32768);
     }
@@ -801,7 +810,8 @@ mod tests {
             .await;
 
         let provider =
-            OllamaProvider::new(&server.uri(), "mystery:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "mystery:1b".to_string(), None, vec![], None)
+                .unwrap();
         let length = provider.get_context_length("mystery:1b").await.unwrap();
         assert_eq!(length, DEFAULT_CONTEXT_LENGTH);
     }
@@ -817,7 +827,8 @@ mod tests {
             .mount(&server)
             .await;
 
-        let provider = OllamaProvider::new(&server.uri(), "x:1b".to_string(), None, vec![], None);
+        let provider =
+            OllamaProvider::new(&server.uri(), "x:1b".to_string(), None, vec![], None).unwrap();
         let length = provider.get_context_length("x:1b").await.unwrap();
         assert_eq!(length, DEFAULT_CONTEXT_LENGTH);
     }
@@ -839,7 +850,8 @@ mod tests {
             None,
             vec![],
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(local.resolve_num_ctx().await.unwrap(), MAX_NUM_CTX);
 
         let cloud = OllamaProvider::new(
@@ -848,7 +860,8 @@ mod tests {
             None,
             vec![],
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(cloud.resolve_num_ctx().await.unwrap(), 131072);
     }
 
@@ -878,7 +891,8 @@ mod tests {
             .await;
 
         let mut provider =
-            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
         let units = vec![unit("a", "Hello.")];
         let result = provider
             .translate_batch(&units, "english", "french")
@@ -917,7 +931,8 @@ mod tests {
             .await;
 
         let mut provider =
-            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
         let result = provider
             .translate_batch(&[unit("a", "Hello.")], "english", "french")
             .await
@@ -949,7 +964,8 @@ mod tests {
             .await;
 
         let mut provider =
-            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
         let units = vec![unit("a", "Hello."), unit("b", "Goodbye.")];
         let result = provider
             .translate_batch(&units, "english", "french")
@@ -960,13 +976,55 @@ mod tests {
         assert_eq!(result.failed_ids, vec!["b".to_string()]);
     }
 
+    async fn translate_with_chat_status(
+        status: u16,
+    ) -> Result<TranslateBatchResult, ProviderError> {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/show"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"model_info": {}})))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(ResponseTemplate::new(status))
+            .mount(&server)
+            .await;
+
+        let mut provider =
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
+        provider
+            .translate_batch(&[unit("a", "Hello.")], "english", "french")
+            .await
+    }
+
+    #[tokio::test]
+    async fn translate_batch_errs_on_a_fatal_chat_status() {
+        let error = translate_with_chat_status(403).await.unwrap_err();
+        assert!(matches!(
+            error,
+            ProviderError::Network {
+                status: Some(403),
+                ..
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn translate_batch_reports_a_transient_chat_status_as_failed() {
+        let result = translate_with_chat_status(500).await.unwrap();
+        assert_eq!(result.failed_ids, vec!["a".to_string()]);
+    }
+
     #[tokio::test]
     async fn translate_batch_errs_when_context_length_is_unreachable() {
         let server = MockServer::start().await;
         // No mock registered for /api/show: any request 404s.
 
         let mut provider =
-            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
         let result = provider
             .translate_batch(&[unit("a", "Hi.")], "english", "french")
             .await;
@@ -991,7 +1049,7 @@ mod tests {
         let endpoint = format!("http://127.0.0.1:{port}");
 
         let mut provider =
-            OllamaProvider::new(&endpoint, "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&endpoint, "gemma3:1b".to_string(), None, vec![], None).unwrap();
         let result = provider
             .translate_batch(&[unit("a", "Hi.")], "english", "french")
             .await;
@@ -1021,7 +1079,8 @@ mod tests {
             .await;
 
         let mut provider =
-            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
         provider.num_ctx = Some(4096);
         let warning = provider.preload_and_warn().await;
         assert_eq!(warning, Some(90));
@@ -1046,7 +1105,8 @@ mod tests {
             .await;
 
         let mut provider =
-            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
         provider.num_ctx = Some(4096);
         assert_eq!(provider.preload_and_warn().await, None);
     }
@@ -1077,7 +1137,8 @@ mod tests {
             .await;
 
         let mut provider =
-            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
         let mut notices = Vec::new();
         TranslationProvider::warm_up(&mut provider, &mut |m| notices.push(m))
             .await
@@ -1098,7 +1159,8 @@ mod tests {
         // No mock for /api/show: the model is unknown (404).
 
         let mut provider =
-            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None);
+            OllamaProvider::new(&server.uri(), "gemma3:1b".to_string(), None, vec![], None)
+                .unwrap();
         let mut notices = Vec::new();
         let result = TranslationProvider::warm_up(&mut provider, &mut |m| notices.push(m)).await;
 

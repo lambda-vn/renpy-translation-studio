@@ -216,7 +216,8 @@
     "generate_title": "Draft it with AI",
     "generate_desc": "A sample of the game's dialogue is sent to the chosen provider, which drafts a first version. The text replaces the field below; nothing is stored until you click Save.",
     "intro": "Summary, tone and vocabulary specific to the game. Added to the context of every automatic translation.",
-    "unsaved_generated": "Generated text, not saved yet."
+    "unsaved_generated": "Generated text, not saved yet.",
+    "save_failed": "Not saved."
   },
   "project_setup": {
     "title": "Project setup",

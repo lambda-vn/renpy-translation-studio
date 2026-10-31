@@ -1,11 +1,11 @@
 <script lang="ts">
 	// First launch: interface language and an optional SDK path. Replaces the
 	// whole shell until finished (the layout decides, from `isFirstLaunch`).
-	import { open as pickPath } from '@tauri-apps/plugin-dialog';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { api } from '$lib/api';
 	import { locale, t } from '$lib/i18n';
 	import { errorText } from '$lib/messages';
+	import { isValidSdkPath, pickAndValidateSdk } from '$lib/sdk';
 	import Kbd from './Kbd.svelte';
 
 	let { ondone }: { ondone: () => void } = $props();
@@ -30,22 +30,21 @@
 		}
 		const id = ++checkId;
 		sdkState = 'checking';
-		let valid = false;
-		try {
-			valid = await api.validateSdkPath(path);
-		} catch {
-			valid = false;
-		}
+		const valid = await isValidSdkPath(path);
 		if (id === checkId) sdkState = valid ? 'valid' : 'invalid';
 	}
 
 	async function browse() {
-		const picked = await pickPath({
-			filters: [{ name: "Ren'Py", extensions: ['exe', 'sh', 'py'] }]
-		});
-		if (typeof picked !== 'string') return;
-		sdkPath = picked;
-		await check();
+		const picked = await pickAndValidateSdk();
+		if (!picked) return;
+		if ('error' in picked) {
+			error = errorText($t, picked.error);
+			return;
+		}
+		error = '';
+		checkId++;
+		sdkPath = picked.path;
+		sdkState = picked.valid ? 'valid' : 'invalid';
 	}
 
 	async function finish(event: SubmitEvent) {

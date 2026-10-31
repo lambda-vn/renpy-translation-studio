@@ -28,7 +28,7 @@ use serde::Serialize;
 
 use super::languages::get_language;
 use super::storage::repositories::{self, TranslationUnit};
-use super::translation::quality::{self, LENGTH_WARNING_KIND};
+use super::translation::quality;
 
 pub const XLIFF_NAMESPACE: &str = "urn:oasis:names:tc:xliff:document:1.2";
 pub const JSON_FORMAT: &str = "renpy-translation-studio";
@@ -271,7 +271,7 @@ fn must_be_drafted(unit: &InterchangeUnit, current: &TranslationUnit, status: &s
     }
     quality::check(&current.source_text, &unit.translated_text)
         .iter()
-        .any(|issue| issue.kind != LENGTH_WARNING_KIND)
+        .any(|issue| issue.kind.blocks_validation())
 }
 
 /// What status a translation coming back deserves.

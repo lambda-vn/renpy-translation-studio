@@ -3,13 +3,13 @@
 	// language, theme, verbose log, Ren'Py SDK, translation memory, and the way
 	// to the providers screen. Each change is saved as soon as it is made.
 	import { goto } from '$app/navigation';
-	import { open as pickPath } from '@tauri-apps/plugin-dialog';
 	import { api, type MemoryPair } from '$lib/api';
 	import { confirmDialog } from '$lib/confirm';
 	import { locale, t } from '$lib/i18n';
 	import { errorText } from '$lib/messages';
 	import { languageName } from '$lib/languages';
 	import { ROUTES } from '$lib/navigation';
+	import { pickAndValidateSdk } from '$lib/sdk';
 	import { jobRunning, settingsOpen } from '$lib/stores';
 	import { parseTheme, setTheme, themePreference, THEME_PREFERENCES } from '$lib/theme';
 	import { toast } from '$lib/toast';
@@ -78,23 +78,19 @@
 	}
 
 	async function browseSdk() {
-		const picked = await pickPath({
-			filters: [{ name: "Ren'Py", extensions: ['exe', 'sh', 'py'] }]
-		});
-		if (typeof picked !== 'string') return;
-		sdkError = '';
-		let valid = false;
-		try {
-			valid = await api.validateSdkPath(picked);
-		} catch {
-			valid = false;
+		const picked = await pickAndValidateSdk();
+		if (!picked) return;
+		if ('error' in picked) {
+			sdkError = errorText($t, picked.error);
+			return;
 		}
-		if (!valid) {
+		sdkError = '';
+		if (!picked.valid) {
 			sdkError = $t('onboarding.sdk_invalid');
 			return;
 		}
-		sdkPath = picked;
-		await persist('sdk_path', picked);
+		sdkPath = picked.path;
+		await persist('sdk_path', picked.path);
 	}
 
 	async function clearSdk() {

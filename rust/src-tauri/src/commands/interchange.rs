@@ -101,9 +101,13 @@ pub async fn plan_interchange_import(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<ImportPreview, CommandError> {
-    let guard = state.current.lock().await;
-    let session = require_session(&guard)?;
-    Ok(ImportPreview::from(&plan_for(session, &path)?))
+    let guard = state.current.clone().lock_owned().await;
+    tokio::task::spawn_blocking(move || {
+        let session = require_session(&guard)?;
+        Ok(ImportPreview::from(&plan_for(session, &path)?))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Import a file, as [`plan_interchange_import`] described it.
@@ -112,14 +116,18 @@ pub async fn apply_interchange_import(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<ImportOutcome, CommandError> {
-    let guard = state.current.lock().await;
-    let session = require_session(&guard)?;
-    let plan = plan_for(session, &path)?;
-    let applied = interchange::apply_plan(&plan, session.conn()).map_err(|e| e.to_string())?;
-    Ok(ImportOutcome {
-        applied,
-        plan: ImportPreview::from(&plan),
+    let guard = state.current.clone().lock_owned().await;
+    tokio::task::spawn_blocking(move || {
+        let session = require_session(&guard)?;
+        let plan = plan_for(session, &path)?;
+        let applied = interchange::apply_plan(&plan, session.conn()).map_err(|e| e.to_string())?;
+        Ok(ImportOutcome {
+            applied,
+            plan: ImportPreview::from(&plan),
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Fill untranslated lines from the translation memory shared by every

@@ -17,7 +17,9 @@
 //! connection across threads holds it behind a `Mutex`, so nothing extra
 //! is threaded through every function here.
 
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Transaction};
+use rusqlite::{
+    params, params_from_iter, Connection, OptionalExtension, Transaction, TransactionBehavior,
+};
 
 pub const STATUS_NOT_TRANSLATED: &str = "not_translated";
 pub const STATUS_DRAFT: &str = "draft";
@@ -25,6 +27,10 @@ pub const STATUS_HUMAN_VALIDATED: &str = "human_validated";
 
 const SELECT_COLUMNS: &str = "id, block_id, source_file, source_line, character_variable, \
      source_text, translated_text, status, needs_review, note";
+
+/// Most bound variables one `IN (...)` query carries, far below SQLite's
+/// own limit so that a long list is split rather than refused.
+const MAX_IN_PARAMS: usize = 500;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TranslationUnit {
@@ -121,16 +127,19 @@ pub fn get_all(
 /// ids are skipped. Answers the live-refresh channel, told exactly which
 /// `block_id`s another process just wrote.
 pub fn get_many(conn: &Connection, block_ids: &[String]) -> rusqlite::Result<Vec<TranslationUnit>> {
-    if block_ids.is_empty() {
-        return Ok(Vec::new());
+    let mut units = Vec::with_capacity(block_ids.len());
+    for slice in block_ids.chunks(MAX_IN_PARAMS) {
+        let placeholders = vec!["?"; slice.len()].join(",");
+        let query = format!(
+            "SELECT {SELECT_COLUMNS} FROM translation_units WHERE block_id IN ({placeholders})"
+        );
+        let mut stmt = conn.prepare(&query)?;
+        let rows = stmt.query_map(params_from_iter(slice), unit_from_row)?;
+        for row in rows {
+            units.push(row?);
+        }
     }
-    let placeholders = vec!["?"; block_ids.len()].join(",");
-    let query = format!(
-        "SELECT {SELECT_COLUMNS} FROM translation_units WHERE block_id IN ({placeholders})"
-    );
-    let mut stmt = conn.prepare(&query)?;
-    let rows = stmt.query_map(params_from_iter(block_ids), unit_from_row)?;
-    rows.collect()
+    Ok(units)
 }
 
 /// Escape `%`, `_` and the escape character itself so a substring search
@@ -337,16 +346,49 @@ pub fn update_translations(
     conn: &Connection,
     entries: &[(String, String, String)],
 ) -> rusqlite::Result<usize> {
+    apply_translations(
+        conn,
+        entries,
+        "UPDATE translation_units SET translated_text = ?1, status = ?2 \
+         WHERE block_id = ?3 AND (status != 'human_validated' OR ?2 = 'human_validated')",
+    )
+}
+
+/// Like [`update_translations`], but a `human_validated` unit is never
+/// touched, whatever the incoming status.
+///
+/// [`update_translations`] lets a `human_validated` entry overwrite a row
+/// already validated, which is right for a human validating a line and wrong
+/// for anything propagating or filling lines on its own (duplicates, imports,
+/// orphan transfers): they select their targets in a separate query, and a
+/// row validated in between by another process would be replaced. Here the
+/// guard lives in the `UPDATE` itself.
+///
+/// Returns the number of units actually updated.
+pub fn update_translations_unvalidated(
+    conn: &Connection,
+    entries: &[(String, String, String)],
+) -> rusqlite::Result<usize> {
+    apply_translations(
+        conn,
+        entries,
+        "UPDATE translation_units SET translated_text = ?1, status = ?2 \
+         WHERE block_id = ?3 AND status != 'human_validated'",
+    )
+}
+
+fn apply_translations(
+    conn: &Connection,
+    entries: &[(String, String, String)],
+    update: &str,
+) -> rusqlite::Result<usize> {
     if entries.is_empty() {
         return Ok(0);
     }
     let tx = begin(conn)?;
     let mut updated = 0;
     {
-        let mut stmt = conn.prepare(
-            "UPDATE translation_units SET translated_text = ?1, status = ?2 \
-             WHERE block_id = ?3 AND (status != 'human_validated' OR ?2 = 'human_validated')",
-        )?;
+        let mut stmt = conn.prepare(update)?;
         for (block_id, translated_text, status) in entries {
             updated += stmt.execute(params![translated_text, status, block_id])?;
         }
@@ -637,6 +679,7 @@ pub fn resync_sources(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<
     let parsed: std::collections::HashMap<&str, &NewUnit> =
         units.iter().map(|unit| (unit.block_id, unit)).collect();
 
+    let tx = begin_immediate(conn)?;
     let mut repairs: Vec<(&NewUnit, String)> = Vec::new();
     let mut drops: Vec<String> = Vec::new();
     let mut kept = 0;
@@ -672,7 +715,6 @@ pub fn resync_sources(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<
         return Ok(SourceResync::default());
     }
 
-    let tx = begin(conn)?;
     for (unit, block_id) in &repairs {
         conn.execute(
             "UPDATE translation_units SET source_text = ?1, character_variable = ?2 \
@@ -683,7 +725,7 @@ pub fn resync_sources(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<
     for block_id in &drops {
         conn.execute(
             "UPDATE translation_units SET translated_text = '', status = 'not_translated' \
-             WHERE block_id = ?1",
+             WHERE block_id = ?1 AND status != 'human_validated'",
             params![block_id],
         )?;
     }
@@ -719,6 +761,7 @@ pub fn transfer_orphan_translations(
     conn: &Connection,
     current_block_ids: &std::collections::HashSet<String>,
 ) -> rusqlite::Result<usize> {
+    let tx = begin_immediate(conn)?;
     let units = get_all(conn, None, None)?;
     let mut by_text: std::collections::HashMap<&str, &TranslationUnit> =
         std::collections::HashMap::new();
@@ -760,7 +803,9 @@ pub fn transfer_orphan_translations(
             ));
         }
     }
-    update_translations(conn, &entries)
+    let moved = update_translations_unvalidated(conn, &entries)?;
+    commit(tx)?;
+    Ok(moved)
 }
 
 /// The share of stored units a parse must cover before [`delete_stale`]
@@ -788,6 +833,7 @@ pub fn delete_stale(
     conn: &Connection,
     current_block_ids: &std::collections::HashSet<String>,
 ) -> rusqlite::Result<usize> {
+    let tx = begin_immediate(conn)?;
     let stored: i64 = conn.query_row("SELECT COUNT(*) FROM translation_units", [], |row| {
         row.get(0)
     })?;
@@ -806,7 +852,6 @@ pub fn delete_stale(
         }
         stale
     };
-    let tx = begin(conn)?;
     {
         let mut stmt = conn.prepare("DELETE FROM translation_units WHERE block_id = ?1")?;
         for id in &stale {
@@ -999,6 +1044,14 @@ pub fn begin(conn: &Connection) -> rusqlite::Result<Option<Transaction<'_>>> {
 /// Commit what [`begin`] opened; a no-op when the caller owns the transaction.
 pub fn commit(tx: Option<Transaction<'_>>) -> rusqlite::Result<()> {
     tx.map_or(Ok(()), Transaction::commit)
+}
+
+/// Like [`begin`], but takes the write lock at once, so that a read made
+/// before a write sees the data the write is then applied to.
+fn begin_immediate(conn: &Connection) -> rusqlite::Result<Option<Transaction<'_>>> {
+    conn.is_autocommit()
+        .then(|| Transaction::new_unchecked(conn, TransactionBehavior::Immediate))
+        .transpose()
 }
 
 #[cfg(test)]
@@ -1606,5 +1659,66 @@ mod tests {
         assert_eq!(all.len(), 2);
         let speaker = get_matching(conn, "script.rpy", None, "", Some("e"), false).unwrap();
         assert_eq!(speaker.len(), 1);
+    }
+
+    #[test]
+    fn get_many_splits_a_long_list_of_ids() {
+        let db = open_temp();
+        let conn = db.conn();
+        let names: Vec<String> = (0..1200).map(|index| format!("id{index}")).collect();
+        let units: Vec<NewUnit> = names.iter().map(|name| unit(name, "Text.")).collect();
+        bulk_insert(conn, &units).unwrap();
+
+        let mut wanted = names.clone();
+        wanted.push("missing".to_string());
+        let found = get_many(conn, &wanted).unwrap();
+
+        assert_eq!(found.len(), 1200);
+        assert!(get_many(conn, &[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_strict_update_never_touches_a_validated_unit() {
+        let db = open_temp();
+        let conn = db.conn();
+        seed(conn);
+        update_translation(conn, "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        let entries = [
+            (
+                "a".to_string(),
+                "propagated".to_string(),
+                STATUS_HUMAN_VALIDATED.to_string(),
+            ),
+            (
+                "b".to_string(),
+                "propagated".to_string(),
+                STATUS_HUMAN_VALIDATED.to_string(),
+            ),
+        ];
+
+        assert_eq!(update_translations_unvalidated(conn, &entries).unwrap(), 1);
+
+        let units = get_many(conn, &["a".to_string(), "b".to_string()]).unwrap();
+        let a = units.iter().find(|u| u.block_id == "a").unwrap();
+        let b = units.iter().find(|u| u.block_id == "b").unwrap();
+        assert_eq!(a.translated_text, "Bonjour.");
+        assert_eq!(b.translated_text, "propagated");
+        assert_eq!(update_translations(conn, &entries).unwrap(), 2);
+    }
+
+    #[test]
+    fn resync_composes_with_a_transaction_the_caller_holds() {
+        let db = open_temp();
+        let conn = db.conn();
+        bulk_insert(conn, &[unit("a", "old a")]).unwrap();
+        update_translation(conn, "a", "vieux a", "ai_suggested").unwrap();
+
+        conn.execute_batch("BEGIN").unwrap();
+        let outcome = resync_sources(conn, &[unit("a", "new a")]).unwrap();
+        conn.execute_batch("COMMIT").unwrap();
+
+        assert_eq!(outcome.dropped, 1);
+        let a = get_many(conn, &["a".to_string()]).unwrap();
+        assert_eq!(a[0].status, STATUS_NOT_TRANSLATED);
     }
 }

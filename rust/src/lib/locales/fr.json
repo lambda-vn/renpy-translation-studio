@@ -216,7 +216,8 @@
     "generate_title": "Rédiger avec l'IA",
     "generate_desc": "Un extrait des dialogues du jeu est envoyé au fournisseur choisi, qui en tire un premier jet. Le texte remplace le champ ci-dessous ; rien n'est enregistré avant que vous ne cliquiez sur Enregistrer.",
     "intro": "Résumé, ton et lexique propres au jeu. Joint au contexte de chaque traduction automatique.",
-    "unsaved_generated": "Texte généré, pas encore enregistré."
+    "unsaved_generated": "Texte généré, pas encore enregistré.",
+    "save_failed": "Non enregistré."
   },
   "project_setup": {
     "title": "Configuration du projet",

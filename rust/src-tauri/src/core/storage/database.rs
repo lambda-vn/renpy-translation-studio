@@ -136,13 +136,13 @@ fn enable_wal(conn: &Connection, db_path: &Path) {
         conn.query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0));
     match mode {
         Ok(mode) if mode.eq_ignore_ascii_case("wal") => {}
-        Ok(mode) => eprintln!(
-            "warning: could not switch {} to WAL, still in {mode}. Two processes \
+        Ok(mode) => log::warn!(
+            "could not switch {} to WAL, still in {mode}. Two processes \
              reaching this project at once may block each other.",
             db_path.display()
         ),
-        Err(e) => eprintln!(
-            "warning: could not query journal_mode for {}: {e}",
+        Err(e) => log::warn!(
+            "could not query journal_mode for {}: {e}",
             db_path.display()
         ),
     }

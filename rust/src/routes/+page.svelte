@@ -18,6 +18,7 @@
 	import { errorText } from '$lib/messages';
 	import { languageName } from '$lib/languages';
 	import { ROUTES } from '$lib/navigation';
+	import { pickAndValidateSdk } from '$lib/sdk';
 	import { project } from '$lib/stores';
 	import { toast } from '$lib/toast';
 
@@ -148,23 +149,19 @@
 
 	async function browseSdk() {
 		sdkError = '';
+		const picked = await pickAndValidateSdk();
+		if (!picked) return;
+		if ('error' in picked) {
+			sdkError = errorText($t, picked.error);
+			return;
+		}
+		if (!picked.valid) {
+			sdkError = $t('onboarding.sdk_invalid');
+			return;
+		}
 		try {
-			const picked = await pickPath({
-				filters: [{ name: "Ren'Py", extensions: ['exe', 'sh', 'py'] }]
-			});
-			if (typeof picked !== 'string') return;
-			let valid = false;
-			try {
-				valid = await api.validateSdkPath(picked);
-			} catch {
-				valid = false;
-			}
-			if (!valid) {
-				sdkError = $t('onboarding.sdk_invalid');
-				return;
-			}
-			await api.setSetting('sdk_path', picked);
-			sdkPath = picked;
+			await api.setSetting('sdk_path', picked.path);
+			sdkPath = picked.path;
 		} catch (e) {
 			sdkError = errorText($t, e);
 		}

@@ -31,7 +31,6 @@ fn parse_ollama_batch_size(value: Option<String>) -> Option<usize> {
     }
 }
 
-/// Build a configured provider instance for `provider_id`.
 /// The Ollama provider as the settings describe it. Kept apart from [`get`]
 /// for the callers that need what only an LLM does: `complete()`.
 pub fn ollama(
@@ -45,15 +44,10 @@ pub fn ollama(
     let endpoint =
         non_empty(settings.get("ollama_endpoint")).unwrap_or_else(|| DEFAULT_ENDPOINT.to_string());
     let batch_size = parse_ollama_batch_size(settings.get("ollama_batch_size"));
-    Ok(OllamaProvider::new(
-        &endpoint,
-        model,
-        universe_summary,
-        characters,
-        batch_size,
-    ))
+    OllamaProvider::new(&endpoint, model, universe_summary, characters, batch_size)
 }
 
+/// Build a configured provider instance for `provider_id`.
 pub fn get(
     settings: &mut Settings,
     provider_id: &str,
@@ -66,7 +60,7 @@ pub fn get(
                 non_empty(settings.get("deepl_api_key")).ok_or(ProviderError::NotConfigured {
                     provider: DeepLProvider::ID,
                 })?;
-            Ok(Box::new(DeepLProvider::new(api_key, &characters)))
+            Ok(Box::new(DeepLProvider::new(api_key, &characters)?))
         }
         OllamaProvider::ID => Ok(Box::new(ollama(settings, universe_summary, characters)?)),
         LibreTranslateProvider::ID => {

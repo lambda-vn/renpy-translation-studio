@@ -17,7 +17,48 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-pub const LENGTH_WARNING_KIND: &str = "length_warning";
+/// What a quality check found, serialized as its snake-case name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IssueKind {
+    MissingTag,
+    ExtraTag,
+    MissingVar,
+    ExtraVar,
+    UnexpectedHtml,
+    LengthWarning,
+}
+
+impl IssueKind {
+    /// The name the interface keys its messages on.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::MissingTag => "missing_tag",
+            Self::ExtraTag => "extra_tag",
+            Self::MissingVar => "missing_var",
+            Self::ExtraVar => "extra_var",
+            Self::UnexpectedHtml => "unexpected_html",
+            Self::LengthWarning => "length_warning",
+        }
+    }
+
+    /// Whether the issue bars a line from being validated or exported:
+    /// everything but the length warning, a suspicion rather than
+    /// something broken.
+    pub fn blocks_validation(self) -> bool {
+        self != Self::LengthWarning
+    }
+
+    /// Whether the issue makes a provider's suggestion unusable, so the
+    /// job refuses it instead of storing it for review. Narrower than
+    /// [`Self::blocks_validation`] on purpose, see
+    /// `translation::job::verify_quality`.
+    pub fn blocks_suggestion(self) -> bool {
+        matches!(
+            self,
+            Self::MissingVar | Self::ExtraVar | Self::UnexpectedHtml
+        )
+    }
+}
 
 static TAG_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{/?[a-z]+[^}]*\}").unwrap());
 static VAR_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[[^\]]+\]").unwrap());
@@ -29,7 +70,7 @@ const MIN_LENGTH_DIFF_FOR_WARNING: i64 = 15;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QualityIssue {
-    pub kind: &'static str,
+    pub kind: IssueKind,
     pub detail: String,
 }
 
@@ -51,7 +92,7 @@ pub fn strip_tags(text: &str) -> String {
 pub fn has_blocking_issue(source: &str, translation: &str) -> bool {
     check(source, translation)
         .iter()
-        .any(|issue| issue.kind != LENGTH_WARNING_KIND)
+        .any(|issue| issue.kind.blocks_validation())
 }
 
 /// Run all quality checks between source and translation.
@@ -68,13 +109,13 @@ pub fn check(source: &str, translation: &str) -> Vec<QualityIssue> {
         .collect();
     for tag in sorted(source_tags.difference(&translation_tags)) {
         issues.push(QualityIssue {
-            kind: "missing_tag",
+            kind: IssueKind::MissingTag,
             detail: tag.to_string(),
         });
     }
     for tag in sorted(translation_tags.difference(&source_tags)) {
         issues.push(QualityIssue {
-            kind: "extra_tag",
+            kind: IssueKind::ExtraTag,
             detail: tag.to_string(),
         });
     }
@@ -86,13 +127,13 @@ pub fn check(source: &str, translation: &str) -> Vec<QualityIssue> {
         .collect();
     for var in sorted(source_vars.difference(&translation_vars)) {
         issues.push(QualityIssue {
-            kind: "missing_var",
+            kind: IssueKind::MissingVar,
             detail: var.to_string(),
         });
     }
     for var in sorted(translation_vars.difference(&source_vars)) {
         issues.push(QualityIssue {
-            kind: "extra_var",
+            kind: IssueKind::ExtraVar,
             detail: var.to_string(),
         });
     }
@@ -107,7 +148,7 @@ pub fn check(source: &str, translation: &str) -> Vec<QualityIssue> {
         .collect();
     for tag in sorted(translation_html.difference(&source_html)) {
         issues.push(QualityIssue {
-            kind: "unexpected_html",
+            kind: IssueKind::UnexpectedHtml,
             detail: tag.to_string(),
         });
     }
@@ -125,7 +166,7 @@ pub fn check(source: &str, translation: &str) -> Vec<QualityIssue> {
     {
         let percent = (length_diff as f64 / source_len as f64 * 100.0).round() as i64;
         issues.push(QualityIssue {
-            kind: LENGTH_WARNING_KIND,
+            kind: IssueKind::LengthWarning,
             detail: format!("{percent}%"),
         });
     }
@@ -157,7 +198,7 @@ mod tests {
     use super::*;
 
     fn kinds(issues: &[QualityIssue]) -> Vec<&str> {
-        issues.iter().map(|i| i.kind).collect()
+        issues.iter().map(|i| i.kind.as_str()).collect()
     }
 
     #[test]
@@ -196,7 +237,7 @@ mod tests {
         let source = "Back";
         let translation = "Return to the previous screen now";
         let issues = check(source, translation);
-        assert_eq!(kinds(&issues), vec![LENGTH_WARNING_KIND]);
+        assert_eq!(kinds(&issues), vec!["length_warning"]);
         assert!(!has_blocking_issue(source, translation));
     }
 
@@ -214,7 +255,7 @@ mod tests {
         let source = "café";
         let translation = "café au lait, bien chaud";
         let issues = check(source, translation);
-        assert_eq!(kinds(&issues), vec![LENGTH_WARNING_KIND]);
+        assert_eq!(kinds(&issues), vec!["length_warning"]);
     }
 
     #[test]

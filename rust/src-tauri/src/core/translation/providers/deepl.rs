@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use super::base::{
-    ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
+    fatal_status_error, ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
     TranslationUnitPayload,
 };
 use crate::core::languages::get_language;
@@ -116,24 +116,25 @@ pub struct DeepLProvider {
 impl DeepLProvider {
     pub const ID: &'static str = "deepl";
 
-    pub fn new(api_key: String, characters: &[Character]) -> Self {
+    /// # Errors
+    /// [`ProviderError::Network`] if the HTTP client cannot be built.
+    pub fn new(api_key: String, characters: &[Character]) -> Result<Self, ProviderError> {
         let base_url = if api_key.ends_with(":fx") {
             "https://api-free.deepl.com"
         } else {
             "https://api.deepl.com"
         }
         .to_string();
-        Self {
+        Ok(Self {
             term_pairs: build_term_pairs(characters),
             api_key,
             client: reqwest::Client::builder()
                 .timeout(REQUEST_TIMEOUT)
-                .build()
-                .unwrap(),
+                .build()?,
             base_url,
             glossary_id: None,
             glossary_synced: false,
-        }
+        })
     }
 
     /// Override the API base URL — the mocked tests' only hook, since
@@ -259,12 +260,17 @@ impl DeepLProvider {
     ///
     /// A chunk that fails reports every one of its block_ids as failed
     /// rather than aborting the whole batch.
+    ///
+    /// # Errors
+    /// [`ProviderError::Network`] on a status retrying cannot fix
+    /// (rejected key, exhausted quota, rate limit): the job must stop
+    /// instead of replaying the batch in ever smaller chunks.
     pub async fn translate_batch(
         &mut self,
         units: &[TranslationUnitPayload],
         source_lang: &str,
         target_lang: &str,
-    ) -> TranslateBatchResult {
+    ) -> Result<TranslateBatchResult, ProviderError> {
         self.ensure_glossary(source_lang, target_lang).await;
 
         let source = resolve_deepl_lang(source_lang);
@@ -325,6 +331,9 @@ impl DeepLProvider {
                 },
                 Err(error) => {
                     log::warn!("DeepL chunk of {} unit(s) failed: {error}", chunk.len());
+                    if let Some(fatal) = fatal_status_error(error) {
+                        return Err(fatal);
+                    }
                     result
                         .failed_ids
                         .extend(chunk.iter().map(|u| u.block_id.clone()));
@@ -332,7 +341,7 @@ impl DeepLProvider {
             }
         }
 
-        result
+        Ok(result)
     }
 }
 
@@ -348,7 +357,7 @@ impl TranslationProvider for DeepLProvider {
         source_lang: &str,
         target_lang: &str,
     ) -> Result<TranslateBatchResult, ProviderError> {
-        Ok(self.translate_batch(units, source_lang, target_lang).await)
+        self.translate_batch(units, source_lang, target_lang).await
     }
 }
 
@@ -409,10 +418,14 @@ mod tests {
             .mount(&server)
             .await;
 
-        let mut provider =
-            DeepLProvider::new("test-key".to_string(), &[]).with_base_url(server.uri());
+        let mut provider = DeepLProvider::new("test-key".to_string(), &[])
+            .unwrap()
+            .with_base_url(server.uri());
         let units = vec![unit("a", "Hello."), unit("b", "Goodbye.")];
-        let result = provider.translate_batch(&units, "english", "french").await;
+        let result = provider
+            .translate_batch(&units, "english", "french")
+            .await
+            .unwrap();
 
         assert!(result.failed_ids.is_empty());
         assert_eq!(result.translations[0].block_id, "a");
@@ -421,21 +434,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn translate_batch_reports_chunk_as_failed_on_error() {
+    async fn translate_batch_reports_chunk_as_failed_on_transient_error() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/v2/translate"))
-            .respond_with(ResponseTemplate::new(456))
+            .respond_with(ResponseTemplate::new(500))
             .mount(&server)
             .await;
 
-        let mut provider =
-            DeepLProvider::new("test-key".to_string(), &[]).with_base_url(server.uri());
+        let mut provider = DeepLProvider::new("test-key".to_string(), &[])
+            .unwrap()
+            .with_base_url(server.uri());
         let units = vec![unit("a", "Hello.")];
-        let result = provider.translate_batch(&units, "english", "french").await;
+        let result = provider
+            .translate_batch(&units, "english", "french")
+            .await
+            .unwrap();
 
         assert!(result.translations.is_empty());
         assert_eq!(result.failed_ids, vec!["a".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn translate_batch_errs_on_fatal_statuses() {
+        for status in [403, 456] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/v2/translate"))
+                .respond_with(ResponseTemplate::new(status))
+                .mount(&server)
+                .await;
+
+            let mut provider = DeepLProvider::new("test-key".to_string(), &[])
+                .unwrap()
+                .with_base_url(server.uri());
+            let error = provider
+                .translate_batch(&[unit("a", "Hello.")], "english", "french")
+                .await
+                .unwrap_err();
+
+            assert!(matches!(
+                error,
+                ProviderError::Network { status: Some(code), .. } if code == status
+            ));
+        }
     }
 
     #[tokio::test]
@@ -449,7 +491,9 @@ mod tests {
             .mount(&server)
             .await;
 
-        let provider = DeepLProvider::new("test-key".to_string(), &[]).with_base_url(server.uri());
+        let provider = DeepLProvider::new("test-key".to_string(), &[])
+            .unwrap()
+            .with_base_url(server.uri());
         assert!(provider.test_connection().await);
     }
 
@@ -462,7 +506,9 @@ mod tests {
             .mount(&server)
             .await;
 
-        let provider = DeepLProvider::new("bad-key".to_string(), &[]).with_base_url(server.uri());
+        let provider = DeepLProvider::new("bad-key".to_string(), &[])
+            .unwrap()
+            .with_base_url(server.uri());
         assert!(!provider.test_connection().await);
     }
 
@@ -477,7 +523,9 @@ mod tests {
             .mount(&server)
             .await;
 
-        let provider = DeepLProvider::new("test-key".to_string(), &[]).with_base_url(server.uri());
+        let provider = DeepLProvider::new("test-key".to_string(), &[])
+            .unwrap()
+            .with_base_url(server.uri());
         let (used, limit) = provider.character_usage().await.unwrap();
         assert_eq!(used, Some(42));
         assert_eq!(limit, Some(500000));
@@ -511,15 +559,18 @@ mod tests {
             .await;
 
         let characters = vec![character("Eileen -> Aline")];
-        let mut provider =
-            DeepLProvider::new("test-key".to_string(), &characters).with_base_url(server.uri());
+        let mut provider = DeepLProvider::new("test-key".to_string(), &characters)
+            .unwrap()
+            .with_base_url(server.uri());
 
         provider
             .translate_batch(&[unit("a", "Hello.")], "english", "french")
-            .await;
+            .await
+            .unwrap();
         provider
             .translate_batch(&[unit("b", "Hi.")], "english", "french")
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(provider.glossary_id.as_deref(), Some("glo-1"));
     }

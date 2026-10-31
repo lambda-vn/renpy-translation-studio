@@ -32,7 +32,6 @@ use super::providers::base::{
 use super::quality::{check as quality_check, strip_tags, QualityIssue};
 
 const CHUNK_SIZE: usize = 50;
-const BLOCKING_QUALITY_KINDS: [&str; 3] = ["missing_var", "extra_var", "unexpected_html"];
 const RETRY_CHUNK_SIZES: [usize; 2] = [8, 1];
 
 /// Cooperative cancellation flag, cheap to clone and share with the
@@ -144,7 +143,7 @@ impl JobMessage {
             | Self::AcceptedWithWarning { block_id, issues } => {
                 let issues: Vec<_> = issues
                     .iter()
-                    .map(|i| json!({ "kind": i.kind, "detail": i.detail }))
+                    .map(|i| json!({ "kind": i.kind.as_str(), "detail": i.detail }))
                     .collect();
                 json!({ "block_id": block_id, "issues": issues })
             }
@@ -264,8 +263,8 @@ pub fn group_by_source(
             }
             Some(&leader) => {
                 followers
-                    .get_mut(leader)
-                    .unwrap()
+                    .entry(leader.to_string())
+                    .or_default()
                     .push(unit.block_id.clone());
             }
         }
@@ -308,7 +307,7 @@ pub fn spread_to_followers(
 /// variable would break the game, an added one is Python the game would
 /// run (see `quality`), and unexpected HTML markup is a
 /// reliable sign the model hallucinated instead of translating
-/// ([`BLOCKING_QUALITY_KINDS`]). Those are rejected outright, as is a
+/// ([`IssueKind::blocks_suggestion`]). Those are rejected outright, as is a
 /// translation that's simply the source text echoed back unchanged.
 ///
 /// Everything else `quality::check()` flags is real but cosmetic —
@@ -356,9 +355,8 @@ fn verify_quality(
         }
 
         let issues = quality_check(source, &translation.translated_text);
-        let (blocking, warnings): (Vec<QualityIssue>, Vec<QualityIssue>) = issues
-            .into_iter()
-            .partition(|i| BLOCKING_QUALITY_KINDS.contains(&i.kind));
+        let (blocking, warnings): (Vec<QualityIssue>, Vec<QualityIssue>) =
+            issues.into_iter().partition(|i| i.kind.blocks_suggestion());
         if !blocking.is_empty() {
             events.push(JobMessage::Rejected {
                 block_id: translation.block_id.clone(),
@@ -414,7 +412,7 @@ async fn retry_failed_units(
 ) {
     let mut remaining = failed_ids;
 
-    for &chunk_size in &RETRY_CHUNK_SIZES {
+    'passes: for &chunk_size in &RETRY_CHUNK_SIZES {
         if remaining.is_empty() || cancel.is_cancelled() {
             break;
         }
@@ -423,8 +421,10 @@ async fn retry_failed_units(
             JobEvent::Event(JobMessage::Retrying { n: remaining.len() }),
         );
 
-        let retry_units: Vec<TranslationUnitPayload> =
-            remaining.iter().map(|id| units_by_id[id].clone()).collect();
+        let retry_units: Vec<TranslationUnitPayload> = remaining
+            .iter()
+            .filter_map(|id| units_by_id.get(id).cloned())
+            .collect();
         remaining = Vec::new();
 
         for chunk in retry_units.chunks(chunk_size) {
@@ -437,11 +437,9 @@ async fn retry_failed_units(
             {
                 Ok(result) => result,
                 Err(err) => {
-                    log::warn!("Retry of {} unit(s) failed: {err}", chunk.len());
-                    TranslateBatchResult {
-                        translations: Vec::new(),
-                        failed_ids: chunk.iter().map(|u| u.block_id.clone()).collect(),
-                    }
+                    log::warn!("Retry of {} unit(s) stopped: {err}", chunk.len());
+                    progress.error = Some(err);
+                    break 'passes;
                 }
             };
             let (result, events) = verify_quality(chunk, result);
@@ -452,7 +450,7 @@ async fn retry_failed_units(
             let spread = spread_to_followers(result, followers);
             let recovered = spread.translations.len();
             progress.done += recovered;
-            progress.failed -= recovered;
+            progress.failed = progress.failed.saturating_sub(recovered);
             emit(tx, JobEvent::Chunk(spread));
             emit(tx, JobEvent::Progress(progress.clone()));
         }
@@ -977,6 +975,37 @@ mod tests {
         assert_eq!(progress.done, 0);
         assert_eq!(progress.failed, 1);
         assert_eq!(progress.total, 1);
+    }
+
+    #[tokio::test]
+    async fn fatal_error_during_a_retry_stops_the_job() {
+        let units = vec![unit("a", "Hello.")];
+        let quota = ProviderError::Network {
+            status: Some(456),
+            detail: "quota".to_string(),
+        };
+        let mut provider = ScriptedProvider::new(vec![
+            Ok(TranslateBatchResult {
+                translations: Vec::new(),
+                failed_ids: vec!["a".to_string()],
+            }),
+            Err(quota.clone()),
+        ]);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let progress = run_job(
+            &units,
+            &mut provider,
+            "english",
+            "french",
+            CancelToken::new(),
+            tx,
+        )
+        .await;
+
+        assert_eq!(progress.error, Some(quota));
+        assert_eq!(provider.calls.len(), 2);
+        assert_eq!(progress.failed, 1);
     }
 
     #[tokio::test]

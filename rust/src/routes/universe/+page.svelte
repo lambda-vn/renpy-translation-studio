@@ -7,6 +7,7 @@
 	import { t } from '$lib/i18n';
 	import { errorText } from '$lib/messages';
 	import { project } from '$lib/stores';
+	import { toast } from '$lib/toast';
 
 	// The only LLM provider there is for now; the generation command takes none.
 	const PROVIDER_LABEL = 'Ollama';
@@ -16,11 +17,12 @@
 	let error = $state('');
 	let llmAvailable = $state(false);
 	let generating = $state(false);
-	let status = $state<'saved' | 'saving' | 'unsaved_generated'>('saved');
+	let status = $state<'saved' | 'saving' | 'unsaved_generated' | 'save_failed'>('saved');
 	let notice = $state('');
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let dirty = false;
+	let version = 0;
 
 	onMount(async () => {
 		if (!$project) return;
@@ -34,11 +36,14 @@
 
 	onDestroy(() => {
 		clearTimeout(timer);
-		if (dirty && $project) void api.setUniverseSummary(summary);
+		if (dirty && $project) {
+			api.setUniverseSummary(summary).catch((e) => toast.error(errorText($t, e)));
+		}
 	});
 
 	function onInput() {
 		dirty = true;
+		version++;
 		notice = '';
 		status = 'saving';
 		clearTimeout(timer);
@@ -47,12 +52,16 @@
 
 	async function save() {
 		clearTimeout(timer);
+		const current = version;
 		try {
 			await api.setUniverseSummary(summary);
+			if (current !== version) return;
 			dirty = false;
 			status = 'saved';
 			error = '';
 		} catch (e) {
+			if (current !== version) return;
+			status = 'save_failed';
 			error = errorText($t, e);
 		}
 	}
@@ -146,9 +155,9 @@
 		></textarea>
 
 		<div class="foot">
-			{#if status === 'unsaved_generated'}
+			{#if status === 'unsaved_generated' || status === 'save_failed'}
 				<span class="state">
-					{$t('universe.unsaved_generated')}
+					{$t(`universe.${status}`)}
 					<button type="button" class="btn sm" onclick={save}>{$t('common.save')}</button>
 				</span>
 			{:else}

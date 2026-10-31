@@ -310,7 +310,7 @@ impl RtsServer {
             }
             let issues: Vec<String> = quality::check(&unit.source_text, &item.translation)
                 .into_iter()
-                .filter(|issue| issue.kind != quality::LENGTH_WARNING_KIND)
+                .filter(|issue| issue.kind.blocks_validation())
                 .map(|issue| issue.detail)
                 .collect();
             if !issues.is_empty() {

@@ -31,6 +31,12 @@ const DISABLED_SUFFIX: &str = ".disabled";
 const EXTRACTABLE_SUFFIXES: [&str; 2] = ["rpy", "rpym"];
 const SCRIPT_SUFFIXES: [&str; 4] = ["rpy", "rpym", "rpyc", "rpymc"];
 
+/// Ceilings on what one run writes to disk. Index entries may overlap and
+/// point at the same block, so a few megabytes of archive can describe far
+/// more extracted data than the archive holds.
+const MAX_EXTRACTED_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_EXTRACTED_MEMBERS: usize = 100_000;
+
 fn manifest_path(project: &Path) -> PathBuf {
     project.join(".rts").join("unpacked_sources.json")
 }
@@ -238,6 +244,24 @@ fn extract_into(
     game_dir: &Path,
     entries: &mut BTreeMap<String, UnpackedEntry>,
 ) -> Result<(), ArchiveError> {
+    extract_within(
+        game_dir,
+        entries,
+        MAX_EXTRACTED_BYTES,
+        MAX_EXTRACTED_MEMBERS,
+    )
+}
+
+/// [`extract_into`] with explicit ceilings on the total bytes written and
+/// the number of members extracted, across all archives.
+fn extract_within(
+    game_dir: &Path,
+    entries: &mut BTreeMap<String, UnpackedEntry>,
+    max_bytes: u64,
+    max_members: usize,
+) -> Result<(), ArchiveError> {
+    let mut written_bytes: u64 = 0;
+    let mut written_members: usize = 0;
     for archive_path in rpa_files(game_dir) {
         let mut archive = RpaArchive::open(&archive_path)?;
         for name in archive.names().to_vec() {
@@ -253,6 +277,13 @@ fn extract_into(
                 std::fs::create_dir_all(parent)?;
             }
             let content = archive.read(&name)?;
+            written_members += 1;
+            written_bytes = written_bytes.saturating_add(content.len() as u64);
+            if written_members > max_members || written_bytes > max_bytes {
+                return Err(ArchiveError::ExtractionLimit(
+                    archive_path.display().to_string(),
+                ));
+            }
             entries.insert(
                 name.clone(),
                 UnpackedEntry {
@@ -523,6 +554,34 @@ mod tests {
 
     fn archive_in(project: &Path, file: &str, members: &[(&str, &[u8])]) {
         write_archive(&project.join("game").join(file), members, None);
+    }
+
+    #[test]
+    fn extraction_stops_past_the_member_and_byte_ceilings() {
+        let project = game("limits");
+        archive_in(
+            &project,
+            "scripts.rpa",
+            &[("a.rpy", b"12345"), ("b.rpy", b"12345")],
+        );
+        let game_dir = project.join("game");
+
+        let mut entries = BTreeMap::new();
+        assert!(matches!(
+            extract_within(&game_dir, &mut entries, 1024, 1),
+            Err(ArchiveError::ExtractionLimit(_))
+        ));
+        assert!(entries.len() <= 1);
+
+        let project = game("limits-bytes");
+        archive_in(&project, "scripts.rpa", &[("a.rpy", b"12345")]);
+        let mut entries = BTreeMap::new();
+        assert!(matches!(
+            extract_within(&project.join("game"), &mut entries, 4, 10),
+            Err(ArchiveError::ExtractionLimit(_))
+        ));
+        assert!(entries.is_empty());
+        assert!(!project.join("game").join("a.rpy").exists());
     }
 
     #[test]

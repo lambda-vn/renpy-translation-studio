@@ -336,7 +336,12 @@ pub fn run_extraction(
         if unpacked.is_empty() && unpacker::archives_contain_compiled_scripts(request.project)? {
             return Err(ExtractionError::CompiledScriptsOnly);
         }
-        unpacker::disable_extracted_archives(request.project)?;
+        if let Err(error) = unpacker::disable_extracted_archives(request.project) {
+            if let Err(restore) = unpacker::restore_disabled_archives(request.project) {
+                log::warn!("could not restore the disabled archives: {restore}");
+            }
+            return Err(error.into());
+        }
         progress(ExtractionStage::Running);
         let outcome = translate_discarding_broken_sources(&engine, request);
         let restored = unpacker::restore_disabled_archives(request.project);
@@ -418,7 +423,7 @@ fn validate_symbol_only_units(conn: &Connection) -> rusqlite::Result<usize> {
             ));
         }
     }
-    repo::update_translations(conn, &entries)
+    repo::update_translations_unvalidated(conn, &entries)
 }
 
 /// Bring an open project database in line with a parse.

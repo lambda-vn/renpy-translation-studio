@@ -24,6 +24,7 @@
 //! database staying the one source of truth; the notification only says
 //! where to look.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,6 +32,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 pub const AUTH_HEADER: &str = "X-Rts-Token";
@@ -40,6 +42,8 @@ const NOTIFY_TIMEOUT: Duration = Duration::from_millis(500);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_HEAD: usize = 16 * 1024;
 const MAX_BODY: usize = 1024 * 1024;
+const MAX_ENDPOINT_FILE: u64 = 4 * 1024;
+const MAX_CONNECTIONS: usize = 8;
 
 /// Where a running application listens for change notifications.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,10 +80,18 @@ pub fn publish(project: &Path, endpoint: &LiveEndpoint) -> std::io::Result<()> {
 /// Where the application of a project listens, if it says.
 ///
 /// `None` when no application published one or the file cannot be
-/// understood. A stale file left by a crash reads fine and simply fails to
+/// understood, or is larger than an endpoint ever is (a downloaded game
+/// may carry its own). A stale file left by a crash reads fine and simply fails to
 /// answer later.
 pub fn read(project: &Path) -> Option<LiveEndpoint> {
-    let text = std::fs::read_to_string(endpoint_path(project)).ok()?;
+    let file = std::fs::File::open(endpoint_path(project)).ok()?;
+    let mut text = String::new();
+    file.take(MAX_ENDPOINT_FILE + 1)
+        .read_to_string(&mut text)
+        .ok()?;
+    if text.len() as u64 > MAX_ENDPOINT_FILE {
+        return None;
+    }
     serde_json::from_str(&text).ok()
 }
 
@@ -117,6 +129,7 @@ async fn post(project: &Path, payload: serde_json::Value) -> bool {
     };
     let Ok(client) = reqwest::Client::builder()
         .timeout(NOTIFY_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
         .build()
     else {
@@ -138,6 +151,7 @@ pub type OnChanged = Arc<dyn Fn(Option<Vec<String>>) + Send + Sync>;
 /// A local endpoint telling one view which lines changed under it.
 pub struct LiveServer {
     project: PathBuf,
+    port: u16,
     task: JoinHandle<()>,
 }
 
@@ -164,15 +178,20 @@ impl LiveServer {
                 token: token.clone(),
             },
         )?;
+        let connections = Arc::new(Semaphore::new(MAX_CONNECTIONS));
         let task = tokio::spawn(async move {
             loop {
                 let Ok((stream, _)) = listener.accept().await else {
                     tokio::time::sleep(Duration::from_millis(50)).await;
                     continue;
                 };
+                let Ok(permit) = Arc::clone(&connections).try_acquire_owned() else {
+                    continue;
+                };
                 let token = token.clone();
                 let on_changed = Arc::clone(&on_changed);
                 tokio::spawn(async move {
+                    let _permit = permit;
                     let _ = tokio::time::timeout(
                         REQUEST_TIMEOUT,
                         handle(stream, &token, on_changed.as_ref()),
@@ -183,23 +202,40 @@ impl LiveServer {
         });
         Ok(Self {
             project: project.to_path_buf(),
+            port,
             task,
         })
     }
 
     /// Withdraw the endpoint and shut the server down.
     pub fn stop(self) {
-        clear(&self.project);
-        self.task.abort();
+        drop(self);
     }
 }
 
-/// What a request asked for, once it has been read.
-struct Request {
+/// Shuts the server down when the value is dropped without [`LiveServer::stop`].
+///
+/// The announcement is withdrawn only if it is still this server's: a second
+/// window on the same project may have replaced it since. Never panics, as
+/// a `Drop` must not (ANSSI R25): `abort` cannot fail and the file removal
+/// ignores its errors.
+impl Drop for LiveServer {
+    fn drop(&mut self) {
+        self.task.abort();
+        if read(&self.project).is_some_and(|endpoint| endpoint.port == self.port) {
+            clear(&self.project);
+        }
+    }
+}
+
+/// The request line and headers of a request, the body still unread.
+struct Head {
     method: String,
     path: String,
     token: Option<String>,
-    body: Vec<u8>,
+    length: usize,
+    /// Body bytes that arrived in the same reads as the head.
+    leftover: Vec<u8>,
 }
 
 enum ReadError {
@@ -207,7 +243,21 @@ enum ReadError {
     Malformed,
 }
 
-async fn read_request(stream: &mut TcpStream) -> Result<Request, ReadError> {
+/// Append the next chunk from the stream; an early end is a malformed request.
+async fn fill(
+    stream: &mut TcpStream,
+    buffer: &mut Vec<u8>,
+    chunk: &mut [u8],
+) -> Result<(), ReadError> {
+    let read = stream.read(chunk).await.map_err(|_| ReadError::Malformed)?;
+    if read == 0 {
+        return Err(ReadError::Malformed);
+    }
+    buffer.extend_from_slice(&chunk[..read]);
+    Ok(())
+}
+
+async fn read_head(stream: &mut TcpStream) -> Result<Head, ReadError> {
     let mut buffer: Vec<u8> = Vec::new();
     let mut chunk = [0u8; 4096];
     let head_end = loop {
@@ -217,14 +267,7 @@ async fn read_request(stream: &mut TcpStream) -> Result<Request, ReadError> {
         if buffer.len() > MAX_HEAD {
             return Err(ReadError::TooLarge);
         }
-        let read = stream
-            .read(&mut chunk)
-            .await
-            .map_err(|_| ReadError::Malformed)?;
-        if read == 0 {
-            return Err(ReadError::Malformed);
-        }
-        buffer.extend_from_slice(&chunk[..read]);
+        fill(stream, &mut buffer, &mut chunk).await?;
     };
 
     let head = String::from_utf8_lossy(&buffer[..head_end]).into_owned();
@@ -246,28 +289,28 @@ async fn read_request(stream: &mut TcpStream) -> Result<Request, ReadError> {
             length = value.parse().map_err(|_| ReadError::Malformed)?;
         }
     }
-    if length > MAX_BODY {
-        return Err(ReadError::TooLarge);
-    }
-
-    let mut body = buffer[head_end + 4..].to_vec();
-    while body.len() < length {
-        let read = stream
-            .read(&mut chunk)
-            .await
-            .map_err(|_| ReadError::Malformed)?;
-        if read == 0 {
-            return Err(ReadError::Malformed);
-        }
-        body.extend_from_slice(&chunk[..read]);
-    }
-    body.truncate(length);
-    Ok(Request {
+    Ok(Head {
         method,
         path,
         token,
-        body,
+        length,
+        leftover: buffer[head_end + 4..].to_vec(),
     })
+}
+
+/// Read the body a head announced. Called once the sender is known to hold
+/// the token, so that nobody else makes the server buffer a megabyte.
+async fn read_body(stream: &mut TcpStream, head: Head) -> Result<Vec<u8>, ReadError> {
+    if head.length > MAX_BODY {
+        return Err(ReadError::TooLarge);
+    }
+    let mut chunk = [0u8; 4096];
+    let mut body = head.leftover;
+    while body.len() < head.length {
+        fill(stream, &mut body, &mut chunk).await?;
+    }
+    body.truncate(head.length);
+    Ok(body)
 }
 
 /// Constant-time comparison, so that the time taken says nothing about how
@@ -296,19 +339,9 @@ async fn handle(
     token: &str,
     on_changed: &(dyn Fn(Option<Vec<String>>) + Send + Sync),
 ) {
-    let request = match read_request(&mut stream).await {
+    let request = match read_head(&mut stream).await {
         Ok(request) => request,
-        Err(ReadError::TooLarge) => {
-            return respond(
-                &mut stream,
-                "413 Payload Too Large",
-                r#"{"error":"too large"}"#,
-            )
-            .await;
-        }
-        Err(ReadError::Malformed) => {
-            return respond(&mut stream, "400 Bad Request", r#"{"error":"malformed"}"#).await;
-        }
+        Err(error) => return respond_read_error(&mut stream, error).await,
     };
     if request.path != "/changed" {
         return respond(&mut stream, "404 Not Found", r#"{"error":"not found"}"#).await;
@@ -328,7 +361,11 @@ async fn handle(
     {
         return respond(&mut stream, "403 Forbidden", r#"{"error":"forbidden"}"#).await;
     }
-    let Ok(serde_json::Value::Object(payload)) = serde_json::from_slice(&request.body) else {
+    let body = match read_body(&mut stream, request).await {
+        Ok(body) => body,
+        Err(error) => return respond_read_error(&mut stream, error).await,
+    };
+    let Ok(serde_json::Value::Object(payload)) = serde_json::from_slice(&body) else {
         return respond(
             &mut stream,
             "400 Bad Request",
@@ -357,6 +394,17 @@ async fn handle(
         .collect();
     on_changed(Some(block_ids));
     respond(&mut stream, "204 No Content", "").await;
+}
+
+async fn respond_read_error(stream: &mut TcpStream, error: ReadError) {
+    match error {
+        ReadError::TooLarge => {
+            respond(stream, "413 Payload Too Large", r#"{"error":"too large"}"#).await;
+        }
+        ReadError::Malformed => {
+            respond(stream, "400 Bad Request", r#"{"error":"malformed"}"#).await;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -576,5 +624,85 @@ mod tests {
         assert!(same_token("abc", "abc"));
         assert!(!same_token("abc", "abd"));
         assert!(!same_token("abc", "abcd"));
+    }
+
+    #[test]
+    fn an_oversized_endpoint_file_is_ignored() {
+        let dir = project("big-file");
+        std::fs::create_dir_all(dir.join(".rts")).unwrap();
+        let padding = " ".repeat(MAX_ENDPOINT_FILE as usize);
+        std::fs::write(
+            endpoint_path(&dir),
+            format!(r#"{{"port": 1, "token": "t"{padding}}}"#),
+        )
+        .unwrap();
+        assert_eq!(read(&dir), None);
+    }
+
+    #[tokio::test]
+    async fn dropping_the_server_withdraws_its_endpoint() {
+        let dir = project("drop");
+        let (server, _) = serve(&dir).await;
+        assert!(read(&dir).is_some());
+        drop(server);
+        assert_eq!(read(&dir), None);
+    }
+
+    #[tokio::test]
+    async fn dropping_a_replaced_server_leaves_the_new_endpoint() {
+        let dir = project("drop-replaced");
+        let (server, _) = serve(&dir).await;
+        let (second, _) = serve(&dir).await;
+        drop(server);
+        assert!(read(&dir).is_some());
+        second.stop();
+        assert_eq!(read(&dir), None);
+    }
+
+    #[tokio::test]
+    async fn the_token_is_checked_before_the_body_is_read() {
+        let dir = project("token-first");
+        let (server, seen) = serve(&dir).await;
+        let endpoint = read(&dir).unwrap();
+        let mut stream = TcpStream::connect(("127.0.0.1", endpoint.port))
+            .await
+            .unwrap();
+        let head = format!(
+            "POST /changed HTTP/1.1\r\nX-Rts-Token: nope\r\nContent-Length: {}\r\n\r\n",
+            MAX_BODY
+        );
+        stream.write_all(head.as_bytes()).await.unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).await.unwrap();
+        assert!(response.starts_with("HTTP/1.1 403"), "{response}");
+        assert!(seen.lock().unwrap().is_empty());
+        server.stop();
+    }
+
+    #[tokio::test]
+    async fn connections_beyond_the_cap_are_dropped() {
+        let dir = project("cap");
+        let (server, _) = serve(&dir).await;
+        let endpoint = read(&dir).unwrap();
+        let mut idle = Vec::new();
+        for _ in 0..MAX_CONNECTIONS {
+            idle.push(
+                TcpStream::connect(("127.0.0.1", endpoint.port))
+                    .await
+                    .unwrap(),
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let mut stream = TcpStream::connect(("127.0.0.1", endpoint.port))
+            .await
+            .unwrap();
+        let _ = stream.write_all(b"POST /changed HTTP/1.1\r\n\r\n").await;
+        let mut refused = String::new();
+        let _ = stream.read_to_string(&mut refused).await;
+
+        assert!(refused.is_empty(), "{refused}");
+        drop(idle);
+        server.stop();
     }
 }
