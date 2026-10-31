@@ -17,7 +17,7 @@
 //! connection across threads holds it behind a `Mutex`, so nothing extra
 //! is threaded through every function here.
 
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Transaction};
 
 pub const STATUS_NOT_TRANSLATED: &str = "not_translated";
 pub const STATUS_DRAFT: &str = "draft";
@@ -68,21 +68,24 @@ pub struct NewUnit<'a> {
 /// Uses `INSERT OR IGNORE` so that re-extraction never overwrites a
 /// validated or suggested translation.
 pub fn bulk_insert(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<()> {
-    let mut stmt = conn.prepare(
-        "INSERT OR IGNORE INTO translation_units
-         (block_id, source_file, source_line, character_variable, source_text)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-    )?;
-    for unit in units {
-        stmt.execute(params![
-            unit.block_id,
-            unit.source_file,
-            unit.source_line,
-            unit.character_variable,
-            unit.source_text,
-        ])?;
+    let tx = begin(conn)?;
+    {
+        let mut stmt = conn.prepare(
+            "INSERT OR IGNORE INTO translation_units
+             (block_id, source_file, source_line, character_variable, source_text)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+        )?;
+        for unit in units {
+            stmt.execute(params![
+                unit.block_id,
+                unit.source_file,
+                unit.source_line,
+                unit.character_variable,
+                unit.source_text,
+            ])?;
+        }
     }
-    Ok(())
+    commit(tx)
 }
 
 /// Units ordered by file and line, optionally filtered by status and/or
@@ -296,28 +299,22 @@ pub fn get_neighbours(
 /// Update translation and status for a unit.
 ///
 /// A `human_validated` unit is never overwritten by anything else — this
-/// is the one invariant CLAUDE.md calls out by name.
+/// is the one invariant CLAUDE.md calls out by name. The guard lives in
+/// the `UPDATE` itself: a separate read would let another process (the
+/// MCP server) validate the row in between.
 pub fn update_translation(
     conn: &Connection,
     block_id: &str,
     translated_text: &str,
     status: &str,
 ) -> rusqlite::Result<()> {
-    let current: Option<String> = conn
-        .query_row(
-            "SELECT status FROM translation_units WHERE block_id = ?1",
-            params![block_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-
-    if current.as_deref() == Some(STATUS_HUMAN_VALIDATED) && status != STATUS_HUMAN_VALIDATED {
-        return Ok(());
-    }
-
-    conn.execute(
-        "UPDATE translation_units SET translated_text = ?1, status = ?2 WHERE block_id = ?3",
-        params![translated_text, status, block_id],
+    update_translations(
+        conn,
+        &[(
+            block_id.to_string(),
+            translated_text.to_string(),
+            status.to_string(),
+        )],
     )?;
     Ok(())
 }
@@ -339,14 +336,18 @@ pub fn update_translations(
     if entries.is_empty() {
         return Ok(0);
     }
-    let mut stmt = conn.prepare(
-        "UPDATE translation_units SET translated_text = ?1, status = ?2 \
-         WHERE block_id = ?3 AND (status != 'human_validated' OR ?2 = 'human_validated')",
-    )?;
+    let tx = begin(conn)?;
     let mut updated = 0;
-    for (block_id, translated_text, status) in entries {
-        updated += stmt.execute(params![translated_text, status, block_id])?;
+    {
+        let mut stmt = conn.prepare(
+            "UPDATE translation_units SET translated_text = ?1, status = ?2 \
+             WHERE block_id = ?3 AND (status != 'human_validated' OR ?2 = 'human_validated')",
+        )?;
+        for (block_id, translated_text, status) in entries {
+            updated += stmt.execute(params![translated_text, status, block_id])?;
+        }
     }
+    commit(tx)?;
     Ok(updated)
 }
 
@@ -667,22 +668,22 @@ pub fn resync_sources(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<
         return Ok(SourceResync::default());
     }
 
-    let tx = conn.unchecked_transaction()?;
+    let tx = begin(conn)?;
     for (unit, block_id) in &repairs {
-        tx.execute(
+        conn.execute(
             "UPDATE translation_units SET source_text = ?1, character_variable = ?2 \
              WHERE block_id = ?3",
             params![unit.source_text, unit.character_variable, block_id],
         )?;
     }
     for block_id in &drops {
-        tx.execute(
+        conn.execute(
             "UPDATE translation_units SET translated_text = '', status = 'not_translated' \
              WHERE block_id = ?1",
             params![block_id],
         )?;
     }
-    tx.commit()?;
+    commit(tx)?;
     Ok(SourceResync {
         repaired: repairs.len(),
         dropped: drops.len(),
@@ -801,14 +802,14 @@ pub fn delete_stale(
         }
         stale
     };
-    let tx = conn.unchecked_transaction()?;
+    let tx = begin(conn)?;
     {
-        let mut stmt = tx.prepare("DELETE FROM translation_units WHERE block_id = ?1")?;
+        let mut stmt = conn.prepare("DELETE FROM translation_units WHERE block_id = ?1")?;
         for id in &stale {
             stmt.execute(params![id])?;
         }
     }
-    tx.commit()?;
+    commit(tx)?;
     Ok(stale.len())
 }
 
@@ -980,6 +981,20 @@ pub fn set_project_meta(conn: &Connection, key: &str, value: &str) -> rusqlite::
         params![key, value],
     )?;
     Ok(())
+}
+
+/// Open a transaction unless the caller already holds one, so a write is
+/// atomic on its own and still composes inside a larger transaction
+/// (SQLite does not nest them).
+pub fn begin(conn: &Connection) -> rusqlite::Result<Option<Transaction<'_>>> {
+    conn.is_autocommit()
+        .then(|| conn.unchecked_transaction())
+        .transpose()
+}
+
+/// Commit what [`begin`] opened; a no-op when the caller owns the transaction.
+pub fn commit(tx: Option<Transaction<'_>>) -> rusqlite::Result<()> {
+    tx.map_or(Ok(()), Transaction::commit)
 }
 
 #[cfg(test)]

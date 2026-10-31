@@ -432,6 +432,8 @@ pub fn sync_database(
     source_language: &str,
     target_language: &str,
 ) -> rusqlite::Result<ExtractionReport> {
+    // All or nothing: a failure halfway must not leave a Reset half applied.
+    let tx = repo::begin(conn)?;
     if mode == ExtractMode::Reset {
         repo::clear_translations(conn, None, None)?;
     }
@@ -459,6 +461,7 @@ pub fn sync_database(
     validate_symbol_only_units(conn)?;
     repo::set_project_meta(conn, "target_language", target_language)?;
     repo::set_project_meta(conn, "source_language", source_language)?;
+    repo::commit(tx)?;
     Ok(ExtractionReport {
         units: units.len(),
         moved,

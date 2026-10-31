@@ -127,13 +127,20 @@ pub fn read_resume_info(project: &Path) -> Option<ResumeInfo> {
 ///
 /// This is what the 1.0.0 cross on a recent-project card does, after a
 /// confirmation. The caller closes the project first when it is open.
+///
+/// Only a folder in the registry is touched, the path coming from the
+/// front end: anything else is left alone, as if already deleted.
 pub fn delete_project_data(registry: &Path, project: &Path) -> std::io::Result<()> {
+    let project = recent_projects::resolve(project);
+    if !recent_projects::all(registry).contains(&project) {
+        return Ok(());
+    }
     match std::fs::remove_dir_all(project.join(".rts")) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e),
     }
-    recent_projects::remove(registry, project);
+    recent_projects::remove(registry, &project);
     Ok(())
 }
 
@@ -208,6 +215,17 @@ mod tests {
         assert!(project.join("game").join("script.rpy").is_file());
         assert!(recent_projects::all(&registry).is_empty());
         delete_project_data(&registry, &project).unwrap();
+    }
+
+    #[test]
+    fn an_unregistered_folder_is_never_deleted() {
+        let project = scratch_project("unregistered");
+        std::fs::create_dir_all(project.join(".rts")).unwrap();
+        let registry = temp("registry-empty").with_extension("json");
+
+        delete_project_data(&registry, &project).unwrap();
+
+        assert!(project.join(".rts").is_dir());
     }
 
     #[test]

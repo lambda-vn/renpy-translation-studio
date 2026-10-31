@@ -15,6 +15,11 @@ use std::path::{Path, PathBuf};
 
 use flate2::read::ZlibDecoder;
 
+/// Ceiling on the decompressed index, and on what the pickle memo may copy
+/// out: a few kilobytes of hostile input must not turn into gigabytes.
+/// A 40 000-file game's index is a few megabytes.
+const MAX_INDEX_SIZE: usize = 64 * 1024 * 1024;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
     #[error("cannot read the archive: {0}")]
@@ -152,8 +157,12 @@ fn read_index(
     file.read_to_end(&mut compressed)?;
     let mut decompressed = Vec::new();
     ZlibDecoder::new(compressed.as_slice())
+        .take(MAX_INDEX_SIZE as u64 + 1)
         .read_to_end(&mut decompressed)
         .map_err(|e| ArchiveError::CorruptIndex(e.to_string()))?;
+    if decompressed.len() > MAX_INDEX_SIZE {
+        return Err(ArchiveError::CorruptIndex("archive index too large".into()));
+    }
     let payload = pickle::load(&decompressed)?;
     normalize_index(payload, key)
 }
@@ -308,6 +317,7 @@ pub mod pickle {
         let mut cursor = Cursor { data, position: 0 };
         let mut stack: Vec<Slot> = Vec::new();
         let mut memo: Vec<Option<Value>> = Vec::new();
+        let mut budget = super::MAX_INDEX_SIZE;
 
         fn pop_value(stack: &mut Vec<Slot>) -> Result<Value, ArchiveError> {
             match stack.pop() {
@@ -334,18 +344,56 @@ pub mod pickle {
                 })
         }
 
-        fn remember(memo: &mut Vec<Option<Value>>, index: usize, value: Value) {
+        // A real pickle numbers its memo densely, one PUT per entry, so an
+        // index past the input size is forged to make `resize` allocate.
+        fn remember(
+            memo: &mut Vec<Option<Value>>,
+            index: usize,
+            value: Value,
+            limit: usize,
+        ) -> Result<(), ArchiveError> {
+            if index > limit {
+                return Err(corrupt("pickle memo index out of range"));
+            }
             if memo.len() <= index {
                 memo.resize(index + 1, None);
             }
             memo[index] = Some(value);
+            Ok(())
         }
 
-        fn recall(memo: &[Option<Value>], index: usize) -> Result<Value, ArchiveError> {
-            memo.get(index)
-                .cloned()
-                .flatten()
-                .ok_or_else(|| corrupt("pickle memo miss"))
+        fn weight(value: &Value) -> usize {
+            match value {
+                Value::Str(text) => 1 + text.len(),
+                Value::Bytes(bytes) => 1 + bytes.len(),
+                Value::List(items) | Value::Tuple(items) => {
+                    1 + items.iter().map(weight).sum::<usize>()
+                }
+                Value::Dict(pairs) => {
+                    1 + pairs
+                        .iter()
+                        .map(|(k, v)| weight(k) + weight(v))
+                        .sum::<usize>()
+                }
+                _ => 1,
+            }
+        }
+
+        // Each GET copies a whole value, so nesting GETs doubles the size
+        // at every level; `budget` caps what all copies may add up to.
+        fn recall(
+            memo: &[Option<Value>],
+            index: usize,
+            budget: &mut usize,
+        ) -> Result<Value, ArchiveError> {
+            let value = memo
+                .get(index)
+                .and_then(Option::as_ref)
+                .ok_or_else(|| corrupt("pickle memo miss"))?;
+            *budget = budget
+                .checked_sub(weight(value))
+                .ok_or_else(|| corrupt("pickle memo copies too large"))?;
+            Ok(value.clone())
         }
 
         fn set_items(target: &mut Value, items: Vec<Value>) -> Result<(), ArchiveError> {
@@ -517,7 +565,7 @@ pub mod pickle {
                         Some(Slot::Value(value)) => value.clone(),
                         _ => return Err(corrupt("PUT on an empty stack")),
                     };
-                    remember(&mut memo, index, value);
+                    remember(&mut memo, index, value, data.len())?;
                 }
                 b'q' | b'r' => {
                     let index = if opcode == b'q' {
@@ -529,7 +577,7 @@ pub mod pickle {
                         Some(Slot::Value(value)) => value.clone(),
                         _ => return Err(corrupt("PUT on an empty stack")),
                     };
-                    remember(&mut memo, index, value);
+                    remember(&mut memo, index, value, data.len())?;
                 }
                 0x94 => {
                     let value = match stack.last() {
@@ -537,14 +585,14 @@ pub mod pickle {
                         _ => return Err(corrupt("MEMOIZE on an empty stack")),
                     };
                     let index = memo.len();
-                    remember(&mut memo, index, value);
+                    remember(&mut memo, index, value, data.len())?;
                 }
                 b'g' => {
                     let index = cursor
                         .line()?
                         .parse::<usize>()
                         .map_err(|_| corrupt("bad memo index"))?;
-                    stack.push(Slot::Value(recall(&memo, index)?));
+                    stack.push(Slot::Value(recall(&memo, index, &mut budget)?));
                 }
                 b'h' | b'j' => {
                     let index = if opcode == b'h' {
@@ -552,7 +600,7 @@ pub mod pickle {
                     } else {
                         cursor.length(4)?
                     };
-                    stack.push(Slot::Value(recall(&memo, index)?));
+                    stack.push(Slot::Value(recall(&memo, index, &mut budget)?));
                 }
                 // GLOBAL, REDUCE, BUILD, INST, OBJ, NEWOBJ, STACK_GLOBAL,
                 // EXT*, persistent ids, ...: all of them would resolve or
@@ -743,5 +791,28 @@ mod tests {
                 ])])
             )])
         );
+    }
+
+    #[test]
+    fn a_forged_memo_index_is_refused_before_allocating() {
+        let pickle = [0x80, 0x02, b']', b'r', 0xff, 0xff, 0xff, 0xff, b'.'];
+        assert!(matches!(
+            pickle::load(&pickle),
+            Err(ArchiveError::CorruptIndex(_))
+        ));
+    }
+
+    #[test]
+    fn nested_memo_copies_are_capped() {
+        // Each round replaces memo 0 by a pair of itself: 2^64 nodes if unbounded.
+        let mut pickle = vec![0x80, 0x02, b']', b'q', 0];
+        for _ in 0..64 {
+            pickle.extend_from_slice(&[b'h', 0, b'h', 0, 0x86, b'q', 0]);
+        }
+        pickle.push(b'.');
+        assert!(matches!(
+            pickle::load(&pickle),
+            Err(ArchiveError::CorruptIndex(_))
+        ));
     }
 }

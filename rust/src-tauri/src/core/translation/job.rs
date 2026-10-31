@@ -32,7 +32,7 @@ use super::providers::base::{
 use super::quality::{check as quality_check, strip_tags, QualityIssue};
 
 const CHUNK_SIZE: usize = 50;
-const BLOCKING_QUALITY_KINDS: [&str; 2] = ["missing_var", "unexpected_html"];
+const BLOCKING_QUALITY_KINDS: [&str; 3] = ["missing_var", "extra_var", "unexpected_html"];
 const RETRY_CHUNK_SIZES: [usize; 2] = [8, 1];
 
 /// Cooperative cancellation flag, cheap to clone and share with the
@@ -305,7 +305,8 @@ pub fn spread_to_followers(
 ///
 /// A provider (especially a small local LLM) can return a translation
 /// that has nothing to do with its source — a missing interpolated
-/// variable would break the game, and unexpected HTML markup is a
+/// variable would break the game, an added one is Python the game would
+/// run (see `quality`), and unexpected HTML markup is a
 /// reliable sign the model hallucinated instead of translating
 /// ([`BLOCKING_QUALITY_KINDS`]). Those are rejected outright, as is a
 /// translation that's simply the source text echoed back unchanged.
@@ -447,11 +448,11 @@ async fn retry_failed_units(
             for event in events {
                 emit(tx, JobEvent::Event(event));
             }
+            remaining.extend(result.failed_ids.iter().cloned());
             let spread = spread_to_followers(result, followers);
             let recovered = spread.translations.len();
             progress.done += recovered;
             progress.failed -= recovered;
-            remaining.extend(spread.failed_ids.iter().cloned());
             emit(tx, JobEvent::Chunk(spread));
             emit(tx, JobEvent::Progress(progress.clone()));
         }
@@ -563,10 +564,11 @@ pub async fn run_job(
         for event in events {
             emit(&tx, JobEvent::Event(event));
         }
+        // Only representatives are retried: `units_by_id` holds no follower.
+        failed_ids.extend(result.failed_ids.iter().cloned());
         let spread = spread_to_followers(result, &followers);
         progress.done += spread.translations.len();
         progress.failed += spread.failed_ids.len();
-        failed_ids.extend(spread.failed_ids.iter().cloned());
         emit(&tx, JobEvent::Chunk(spread));
         emit(&tx, JobEvent::Progress(progress.clone()));
     }
@@ -1129,5 +1131,51 @@ mod tests {
 
         assert_eq!(progress.error, None);
         assert_eq!(progress.done, 1);
+    }
+
+    #[tokio::test]
+    async fn failed_duplicate_is_retried_through_its_representative() {
+        let units = vec![unit("a", "Continue"), unit("b", "Continue")];
+        let mut provider = ScriptedProvider::new(vec![
+            Ok(TranslateBatchResult {
+                translations: Vec::new(),
+                failed_ids: vec!["a".to_string()],
+            }),
+            ok(&[("a", "Continuer")]),
+        ]);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let progress = run_job(
+            &units,
+            &mut provider,
+            "english",
+            "french",
+            CancelToken::new(),
+            tx,
+        )
+        .await;
+
+        assert_eq!(progress.done, 2);
+        assert_eq!(progress.failed, 0);
+        assert_eq!(
+            provider.calls,
+            vec![vec!["a".to_string()], vec!["a".to_string()]]
+        );
+    }
+
+    #[test]
+    fn added_interpolation_is_rejected() {
+        let (result, _) = verify_quality(
+            &[unit("a", "Hello.")],
+            TranslateBatchResult {
+                translations: vec![TranslatedUnit {
+                    block_id: "a".to_string(),
+                    translated_text: "Bonjour [player].".to_string(),
+                }],
+                failed_ids: Vec::new(),
+            },
+        );
+        assert!(result.translations.is_empty());
+        assert_eq!(result.failed_ids, vec!["a".to_string()]);
     }
 }
