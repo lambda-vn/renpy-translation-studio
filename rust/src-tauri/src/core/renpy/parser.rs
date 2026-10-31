@@ -13,11 +13,13 @@ use super::say_line::{block_lines, find_say};
 
 static TRANSLATE_HEADER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^translate\s+\S+\s+(\w+)\s*:").unwrap());
-static STRINGS_HEADER: LazyLock<Regex> =
+/// Shared with the writer. Not anchored at the end: the writer matches
+/// lines that still carry their line ending.
+pub(crate) static STRINGS_HEADER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^translate\s+\S+\s+strings\s*:").unwrap());
-static OLD_LINE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^    old "((?:[^"\\]|\\.)*)"$"#).unwrap());
-static NEW_LINE: LazyLock<Regex> =
+pub(crate) static OLD_LINE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^    old "((?:[^"\\]|\\.)*)""#).unwrap());
+pub(crate) static NEW_LINE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^    new "((?:[^"\\]|\\.)*)""#).unwrap());
 static COMMENT_LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^    #(?: (.*))?$").unwrap());
 static SRC_MULTILINE_START: LazyLock<Regex> =

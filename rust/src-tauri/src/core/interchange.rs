@@ -34,9 +34,6 @@ pub const XLIFF_NAMESPACE: &str = "urn:oasis:names:tc:xliff:document:1.2";
 pub const JSON_FORMAT: &str = "renpy-translation-studio";
 pub const JSON_VERSION: u32 = 1;
 
-/// The extensions a file can be picked with when reading one back.
-pub const READABLE_EXTENSIONS: [&str; 4] = ["csv", "xlf", "xliff", "json"];
-
 const CSV_FIELDS: [&str; 7] = [
     "block_id",
     "source_file",
@@ -63,15 +60,6 @@ pub enum Format {
 }
 
 impl Format {
-    /// The extension a file written in this format carries.
-    pub fn extension(self) -> &'static str {
-        match self {
-            Self::Csv => "csv",
-            Self::Xliff => "xlf",
-            Self::Json => "json",
-        }
-    }
-
     /// The format a file's own extension names, whatever its case.
     pub fn of(path: &Path) -> Result<Self, InterchangeError> {
         let extension = path
@@ -311,6 +299,36 @@ fn read_status(status: &str) -> String {
     }
 }
 
+/// Whether a spreadsheet would read a cell starting like this as a formula.
+fn starts_like_formula(text: &str) -> bool {
+    matches!(
+        text.trim_start_matches('\'').chars().next(),
+        Some('=' | '+' | '-' | '@' | '\t' | '\r')
+    )
+}
+
+/// Neutralise a cell a spreadsheet would execute as a formula.
+///
+/// Game text is untrusted and a line such as `=HYPERLINK(...)` or
+/// `-- Hello` is a formula to Excel. One apostrophe is put in front, and
+/// also in front of text already starting with apostrophes before such a
+/// character, so [`unprotect_cell`] reverses it exactly.
+fn protect_cell(text: &str) -> std::borrow::Cow<'_, str> {
+    if starts_like_formula(text) {
+        std::borrow::Cow::Owned(format!("'{text}"))
+    } else {
+        std::borrow::Cow::Borrowed(text)
+    }
+}
+
+/// Undo [`protect_cell`].
+fn unprotect_cell(text: &str) -> &str {
+    match text.strip_prefix('\'') {
+        Some(rest) if starts_like_formula(rest) => rest,
+        _ => text,
+    }
+}
+
 /// UTF-8 CSV with a BOM, which is what makes spreadsheets open the file
 /// as UTF-8 instead of the system codepage, where accented translations
 /// go to die.
@@ -326,11 +344,11 @@ fn write_csv(path: &Path, units: &[TranslationUnit]) -> Result<(), InterchangeEr
         writer
             .write_record([
                 row.block_id,
-                row.source_file,
+                &protect_cell(row.source_file),
                 &row.source_line.to_string(),
-                row.character,
-                row.source_text,
-                row.translated_text,
+                &protect_cell(row.character),
+                &protect_cell(row.source_text),
+                &protect_cell(row.translated_text),
                 row.status,
             ])
             .map_err(|e| InterchangeError::Csv(e.to_string()))?;
@@ -370,8 +388,8 @@ fn read_csv(text: &str) -> Result<Vec<InterchangeUnit>, InterchangeError> {
         }
         units.push(InterchangeUnit {
             block_id: id.to_string(),
-            source_text: cell(source).to_string(),
-            translated_text: cell(translated).to_string(),
+            source_text: unprotect_cell(cell(source)).to_string(),
+            translated_text: unprotect_cell(cell(translated)).to_string(),
             status: read_status(cell(status)),
         });
     }
@@ -933,6 +951,46 @@ mod tests {
         let read = read_interchange(&export(&db, &dir, "export.csv")).unwrap();
         let unit = read.iter().find(|u| u.block_id == "start_aaa").unwrap();
         assert_eq!(unit.translated_text, text);
+    }
+
+    #[test]
+    fn csv_neutralises_formulas_and_round_trips_them() {
+        let (db, dir) = project("csv-formula");
+        bulk_insert(
+            db.conn(),
+            &[
+                NewUnit {
+                    block_id: "start_ddd",
+                    source_file: "game/script.rpy",
+                    source_line: 20,
+                    character_variable: None,
+                    source_text: "=HYPERLINK(\"x\")",
+                },
+                NewUnit {
+                    block_id: "start_eee",
+                    source_file: "game/script.rpy",
+                    source_line: 21,
+                    character_variable: None,
+                    source_text: "'=quoted",
+                },
+            ],
+        )
+        .unwrap();
+        update_translation(db.conn(), "start_ddd", "-- Bonjour", "draft").unwrap();
+        update_translation(db.conn(), "start_eee", "'+vrai", "draft").unwrap();
+        let path = export(&db, &dir, "export.csv");
+
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("\"'=HYPERLINK("));
+        assert!(raw.contains(",'-- Bonjour,"));
+
+        let read = read_interchange(&path).unwrap();
+        let first = read.iter().find(|u| u.block_id == "start_ddd").unwrap();
+        assert_eq!(first.source_text, "=HYPERLINK(\"x\")");
+        assert_eq!(first.translated_text, "-- Bonjour");
+        let second = read.iter().find(|u| u.block_id == "start_eee").unwrap();
+        assert_eq!(second.source_text, "'=quoted");
+        assert_eq!(second.translated_text, "'+vrai");
     }
 
     #[test]

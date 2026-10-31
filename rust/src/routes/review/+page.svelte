@@ -119,6 +119,7 @@
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	let sideTimer: ReturnType<typeof setTimeout> | undefined;
 	let loadToken = 0;
+	let sideToken = 0;
 	let lastRefresh = 0;
 	let ready = $state(false);
 	const unlisteners: Promise<UnlistenFn>[] = [];
@@ -172,20 +173,26 @@
 			searchText = search;
 		}
 		ready = true;
-		unlisteners.push(listen<JobEventPayload>('translation-job', handleJobEvent));
-		unlisteners.push(listen<{ blockIds: string[] | null }>('live-changed', handleLiveChange));
+		const subscribed = [
+			listen<JobEventPayload>('translation-job', handleJobEvent),
+			listen<{ blockIds: string[] | null }>('live-changed', handleLiveChange)
+		];
+		for (const off of subscribed) {
+			off.catch((e) => toast.error(errorText(get(t), e)));
+			unlisteners.push(off);
+		}
 		api.startLive().catch(() => {});
 		void init();
 	});
 
 	onDestroy(() => {
-		for (const off of unlisteners) off.then((fn) => fn());
+		for (const off of unlisteners) off.then((fn) => fn()).catch(() => {});
 		api.stopLive().catch(() => {});
 		clearTimeout(searchTimer);
 		clearTimeout(sideTimer);
 		for (const id of Object.keys(editTimers)) {
 			clearTimeout(editTimers[id]);
-			api.saveDraft(id, drafts[id] ?? '').catch(() => {});
+			api.saveDraft(id, drafts[id] ?? '').catch((e) => toast.error(errorText(get(t), e)));
 		}
 	});
 
@@ -249,6 +256,7 @@
 
 	/** Everything beside the lines: file counts, progress, unwritten, matches. */
 	async function refreshSide() {
+		const token = ++sideToken;
 		try {
 			const [fileList, prog, count, flagged, found, errors] = await Promise.all([
 				api.listFiles(),
@@ -270,6 +278,7 @@
 							.then((result) => result.total)
 					: Promise.resolve(undefined)
 			]);
+			if (token !== sideToken) return;
 			files = fileList;
 			progress = prog;
 			unwritten = count;
@@ -294,6 +303,7 @@
 
 	async function loadUnits(): Promise<void> {
 		if (!file) {
+			loadToken++;
 			units = [];
 			total = 0;
 			loaded = true;

@@ -257,6 +257,7 @@ impl OllamaProvider {
         let length = model_info
             .get(&key)
             .and_then(Value::as_i64)
+            .filter(|length| *length > 0)
             .unwrap_or(DEFAULT_CONTEXT_LENGTH);
         Ok(length)
     }
@@ -802,6 +803,22 @@ mod tests {
         let provider =
             OllamaProvider::new(&server.uri(), "mystery:1b".to_string(), None, vec![], None);
         let length = provider.get_context_length("mystery:1b").await.unwrap();
+        assert_eq!(length, DEFAULT_CONTEXT_LENGTH);
+    }
+
+    #[tokio::test]
+    async fn get_context_length_ignores_a_non_positive_value() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/show"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "model_info": {"general.architecture": "x", "x.context_length": 0}
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = OllamaProvider::new(&server.uri(), "x:1b".to_string(), None, vec![], None);
+        let length = provider.get_context_length("x:1b").await.unwrap();
         assert_eq!(length, DEFAULT_CONTEXT_LENGTH);
     }
 

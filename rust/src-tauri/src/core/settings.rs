@@ -41,12 +41,17 @@ pub enum SettingsError {
     #[error("no OS keyring backend available to store '{0}'")]
     #[cfg_attr(test, allow(dead_code))]
     KeyringUnavailable(String),
+    #[error("could not write the settings file: {0}")]
+    Write(String),
 }
 
 /// Read/write application settings from a JSON file and the OS keyring.
 pub struct Settings {
     config_file: PathBuf,
     data: HashMap<String, Option<String>>,
+    /// Keys of the file this version does not know, written back untouched:
+    /// an orphan value is ignored, never deleted from disk.
+    extra: serde_json::Map<String, serde_json::Value>,
     keyring_available: bool,
     /// Stands in for the OS keyring in tests: a test must never read or
     /// overwrite the API keys of the person running it.
@@ -73,6 +78,7 @@ impl Settings {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.map(str::to_string)))
                 .collect(),
+            extra: serde_json::Map::new(),
             keyring_available: true,
             #[cfg(test)]
             test_keyring: HashMap::new(),
@@ -88,35 +94,51 @@ impl Settings {
             .iter()
             .map(|(k, v)| (k.to_string(), v.map(str::to_string)))
             .collect();
+        self.extra = serde_json::Map::new();
         self.keyring_available = true;
 
         let Ok(contents) = fs::read_to_string(&self.config_file) else {
             return;
         };
-        let Ok(stored) = serde_json::from_str::<HashMap<String, Option<String>>>(&contents) else {
+        let Ok(serde_json::Value::Object(stored)) = serde_json::from_str(&contents) else {
             return;
         };
-        for (key, value) in &stored {
-            if DEFAULTS.iter().any(|(k, _)| k == key) {
-                self.data.insert(key.clone(), value.clone());
+        for (key, value) in stored {
+            if DEFAULTS.iter().any(|(k, _)| *k == key) {
+                match value {
+                    serde_json::Value::String(text) => {
+                        self.data.insert(key, Some(text));
+                    }
+                    serde_json::Value::Null => {
+                        self.data.insert(key, None);
+                    }
+                    _ => {}
+                }
+            } else {
+                self.extra.insert(key, value);
             }
         }
-        self.migrate_plaintext_api_keys(&stored);
+        self.migrate_plaintext_api_keys();
     }
 
     /// Move any API keys left in plaintext JSON by a pre-keyring version.
-    fn migrate_plaintext_api_keys(&mut self, stored: &HashMap<String, Option<String>>) {
+    ///
+    /// Only a key the keyring accepted leaves the file: one it refused
+    /// stays in plaintext rather than being lost.
+    fn migrate_plaintext_api_keys(&mut self) {
         let mut migrated = false;
         for key in KEYRING_KEYS {
-            let Some(Some(plaintext_value)) = stored.get(*key) else {
+            let Some(serde_json::Value::String(plaintext_value)) = self.extra.get(*key).cloned()
+            else {
                 continue;
             };
-            if self.keyring_set(key, Some(plaintext_value)).is_ok() {
+            if self.keyring_set(key, Some(&plaintext_value)).is_ok() {
+                self.extra.remove(*key);
                 migrated = true;
             }
         }
         if migrated {
-            self.save();
+            let _ = self.save();
         }
     }
 
@@ -170,13 +192,27 @@ impl Settings {
         })
     }
 
-    fn save(&self) {
-        if let Some(parent) = self.config_file.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        if let Ok(json) = serde_json::to_string_pretty(&self.data) {
-            let _ = fs::write(&self.config_file, json);
-        }
+    /// Write the file through a neighbouring temporary file and a rename,
+    /// so a crash mid-write never leaves truncated settings behind.
+    fn save(&self) -> Result<(), SettingsError> {
+        let write = || -> std::io::Result<()> {
+            if let Some(parent) = self.config_file.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let mut merged = self.extra.clone();
+            for (key, value) in &self.data {
+                merged.insert(key.clone(), serde_json::json!(value));
+            }
+            let json = serde_json::to_string_pretty(&merged)?;
+            let mut temporary = self.config_file.as_os_str().to_owned();
+            temporary.push(".tmp");
+            let temporary = PathBuf::from(temporary);
+            fs::write(&temporary, json)?;
+            fs::rename(&temporary, &self.config_file).inspect_err(|_| {
+                let _ = fs::remove_file(&temporary);
+            })
+        };
+        write().map_err(|e| SettingsError::Write(e.to_string()))
     }
 
     /// Return the value for the given key, or `None` if not set.
@@ -198,8 +234,7 @@ impl Settings {
             return Err(SettingsError::UnknownKey(key.to_string()));
         }
         self.data.insert(key.to_string(), value.map(str::to_string));
-        self.save();
-        Ok(())
+        self.save()
     }
 
     /// `true` if the settings file does not exist yet.
@@ -307,6 +342,43 @@ mod tests {
         s.reload();
         assert_eq!(s.get("locale").as_deref(), Some("fr"));
         assert_eq!(s.get("sdk_path").as_deref(), None);
+    }
+
+    #[test]
+    fn a_non_string_value_does_not_reset_the_other_settings() {
+        let mut s = temp_settings();
+        fs::write(&s.config_file, r#"{"locale":"fr","theme":42}"#).unwrap();
+        s.reload();
+        assert_eq!(s.get("locale").as_deref(), Some("fr"));
+        assert_eq!(s.get("theme").as_deref(), Some("system"));
+    }
+
+    #[test]
+    fn unknown_keys_survive_a_save() {
+        let mut s = temp_settings();
+        fs::write(&s.config_file, r#"{"locale":"fr","legacy_key":"keep"}"#).unwrap();
+        s.reload();
+        s.set("theme", Some("dark")).unwrap();
+
+        let saved: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&s.config_file).unwrap()).unwrap();
+        assert_eq!(saved["legacy_key"], "keep");
+        assert_eq!(saved["theme"], "dark");
+    }
+
+    #[test]
+    fn plaintext_api_keys_move_to_the_keyring_and_leave_the_file() {
+        let mut s = temp_settings();
+        fs::write(
+            &s.config_file,
+            r#"{"deepl_api_key":"secret","locale":"fr"}"#,
+        )
+        .unwrap();
+        s.reload();
+        assert_eq!(s.get("deepl_api_key").as_deref(), Some("secret"));
+        assert!(!fs::read_to_string(&s.config_file)
+            .unwrap()
+            .contains("secret"));
     }
 
     #[test]

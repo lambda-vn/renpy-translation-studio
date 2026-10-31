@@ -92,57 +92,71 @@ pub async fn start_translation_job(
     state: State<'_, AppState>,
     args: StartJobArgs,
 ) -> Result<(), CommandError> {
-    if state.job.lock().await.is_some() {
-        return Err(CommandError::message("translation.job_running"));
-    }
-
-    let (units, symbol_only, source_lang, target_lang, universe_summary, characters) = {
-        let guard = state.current.lock().await;
-        let session = super::require_session(&guard)?;
-        let selected = select_units(session, &args)?;
-        let symbol_only: HashSet<String> = selected
-            .iter()
-            .filter(|u| !job::needs_translation(&u.source_text))
-            .map(|u| u.block_id.clone())
-            .collect();
-        let units: Vec<TranslationUnitPayload> = selected
-            .into_iter()
-            .map(|u| TranslationUnitPayload {
-                block_id: u.block_id,
-                source_text: u.source_text,
-                character_variable: u.character_variable,
-            })
-            .collect();
-        let universe_summary = repositories::get_project_meta(session.conn(), "universe_summary")
-            .map_err(|e| e.to_string())?;
-        let characters =
-            repositories::get_all_characters(session.conn()).map_err(|e| e.to_string())?;
-        (
-            units,
-            symbol_only,
-            session.source_language(),
-            session.target_language(),
-            universe_summary,
-            characters,
-        )
-    };
-
-    if units.is_empty() {
-        return Err(CommandError::message("errors.nothing_to_translate"));
-    }
-
-    let mut provider = {
-        let mut settings = state.settings.lock().await;
-        registry::get(
-            &mut settings,
-            &args.provider_id,
-            universe_summary,
-            characters,
-        )?
-    };
-
     let cancel = CancelToken::new();
-    *state.job.lock().await = Some(cancel.clone());
+    {
+        let mut slot = state.job.lock().await;
+        if slot.is_some() {
+            return Err(CommandError::message("translation.job_running"));
+        }
+        *slot = Some(cancel.clone());
+    }
+
+    let prepared = async {
+        let (units, symbol_only, source_lang, target_lang, universe_summary, characters) = {
+            let guard = state.current.lock().await;
+            let session = super::require_session(&guard)?;
+            let selected = select_units(session, &args)?;
+            let symbol_only: HashSet<String> = selected
+                .iter()
+                .filter(|u| !job::needs_translation(&u.source_text))
+                .map(|u| u.block_id.clone())
+                .collect();
+            let units: Vec<TranslationUnitPayload> = selected
+                .into_iter()
+                .map(|u| TranslationUnitPayload {
+                    block_id: u.block_id,
+                    source_text: u.source_text,
+                    character_variable: u.character_variable,
+                })
+                .collect();
+            let universe_summary =
+                repositories::get_project_meta(session.conn(), "universe_summary")
+                    .map_err(|e| e.to_string())?;
+            let characters =
+                repositories::get_all_characters(session.conn()).map_err(|e| e.to_string())?;
+            (
+                units,
+                symbol_only,
+                session.source_language(),
+                session.target_language(),
+                universe_summary,
+                characters,
+            )
+        };
+
+        if units.is_empty() {
+            return Err(CommandError::message("errors.nothing_to_translate"));
+        }
+
+        let provider = {
+            let mut settings = state.settings.lock().await;
+            registry::get(
+                &mut settings,
+                &args.provider_id,
+                universe_summary,
+                characters,
+            )?
+        };
+        Ok::<_, CommandError>((units, symbol_only, source_lang, target_lang, provider))
+    }
+    .await;
+    let (units, symbol_only, source_lang, target_lang, mut provider) = match prepared {
+        Ok(ready) => ready,
+        Err(e) => {
+            *state.job.lock().await = None;
+            return Err(e);
+        }
+    };
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let current = state.current.clone();
@@ -155,9 +169,10 @@ pub async fn start_translation_job(
             while let Some(event) = rx.recv().await {
                 match event {
                     JobEvent::Chunk(result) => {
-                        persist_chunk(&current, &result, &symbol_only).await;
-                        let _ =
-                            app_for_events.emit(JOB_EVENT_NAME, JobEventPayload::ChunkPersisted);
+                        if persist_chunk(&current, &result, &symbol_only).await {
+                            let _ = app_for_events
+                                .emit(JOB_EVENT_NAME, JobEventPayload::ChunkPersisted);
+                        }
                     }
                     JobEvent::Progress(progress) | JobEvent::Complete(progress) => {
                         let _ =
@@ -254,17 +269,25 @@ fn select_units(
     }
 }
 
+/// Write a translated chunk to the database. Returns whether it was
+/// stored, so the caller only announces a chunk that is really there.
 async fn persist_chunk(
     current: &Arc<Mutex<Option<ProjectSession>>>,
     result: &TranslateBatchResult,
     symbol_only: &HashSet<String>,
-) {
+) -> bool {
     let guard = current.lock().await;
     let Some(session) = guard.as_ref() else {
-        return;
+        return false;
     };
     let entries = review_actions::chunk_entries(result, symbol_only);
-    let _ = repositories::update_translations(session.conn(), &entries);
+    match repositories::update_translations(session.conn(), &entries) {
+        Ok(_) => true,
+        Err(e) => {
+            log::error!("could not persist a chunk of {} units: {e}", entries.len());
+            false
+        }
+    }
 }
 
 /// What translating one line produced.
@@ -341,7 +364,9 @@ pub async fn translate_unit(
         let mut messages = Vec::new();
         while let Some(event) = rx.recv().await {
             match event {
-                JobEvent::Chunk(result) => persist_chunk(&current, &result, &symbol_only).await,
+                JobEvent::Chunk(result) => {
+                    persist_chunk(&current, &result, &symbol_only).await;
+                }
                 JobEvent::Event(message) => messages.push(message),
                 JobEvent::Progress(_) | JobEvent::Complete(_) => {}
             }

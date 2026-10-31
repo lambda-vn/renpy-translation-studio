@@ -74,17 +74,31 @@ pub fn resolve(path: &Path) -> PathBuf {
     })
 }
 
+/// Write the registry through a neighbouring temporary file and a rename,
+/// so a crash mid-write never leaves a truncated registry behind. On
+/// failure the registry keeps its previous content.
 fn save(registry: &Path, entries: &[PathBuf]) {
+    if let Err(error) = try_save(registry, entries) {
+        log::warn!("could not save {}: {error}", registry.display());
+    }
+}
+
+fn try_save(registry: &Path, entries: &[PathBuf]) -> std::io::Result<()> {
     if let Some(parent) = registry.parent() {
-        let _ = fs::create_dir_all(parent);
+        fs::create_dir_all(parent)?;
     }
     let strings: Vec<String> = entries
         .iter()
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
-    if let Ok(json) = serde_json::to_string_pretty(&strings) {
-        let _ = fs::write(registry, json);
-    }
+    let json = serde_json::to_string_pretty(&strings)?;
+    let mut temporary = registry.as_os_str().to_owned();
+    temporary.push(".tmp");
+    let temporary = PathBuf::from(temporary);
+    fs::write(&temporary, json)?;
+    fs::rename(&temporary, registry).inspect_err(|_| {
+        let _ = fs::remove_file(&temporary);
+    })
 }
 
 #[cfg(test)]

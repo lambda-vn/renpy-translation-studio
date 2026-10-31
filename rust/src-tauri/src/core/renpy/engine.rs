@@ -129,10 +129,6 @@ pub fn find_game_launcher_for(project: &Path, platform: Option<Platform>) -> Opt
     None
 }
 
-pub fn find_game_launcher(project: &Path) -> Option<PathBuf> {
-    find_game_launcher_for(project, Platform::current())
-}
-
 /// The platforms the game's bundled engine can run on, read from the names
 /// of the `lib/` subdirectories, which a build carries one of per platform
 /// it targets: a `-win` build holds `py2-windows-i686` and

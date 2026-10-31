@@ -9,7 +9,7 @@
 use super::base::{ProviderError, TranslationProvider};
 use super::deepl::DeepLProvider;
 use super::libretranslate::LibreTranslateProvider;
-use super::ollama::OllamaProvider;
+use super::ollama::{OllamaProvider, DEFAULT_ENDPOINT};
 use crate::core::settings::Settings;
 use crate::core::storage::repositories::Character;
 
@@ -42,8 +42,8 @@ pub fn ollama(
     let model = non_empty(settings.get("ollama_model")).ok_or(ProviderError::NotConfigured {
         provider: OllamaProvider::ID,
     })?;
-    let endpoint = non_empty(settings.get("ollama_endpoint"))
-        .unwrap_or_else(|| "http://localhost:11434".to_string());
+    let endpoint =
+        non_empty(settings.get("ollama_endpoint")).unwrap_or_else(|| DEFAULT_ENDPOINT.to_string());
     let batch_size = parse_ollama_batch_size(settings.get("ollama_batch_size"));
     Ok(OllamaProvider::new(
         &endpoint,

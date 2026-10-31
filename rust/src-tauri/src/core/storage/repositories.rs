@@ -210,6 +210,9 @@ pub fn get_matching(
     rows.collect()
 }
 
+/// The most units one page may hold, whatever the caller asks for.
+pub const MAX_PAGE_SIZE: i64 = 500;
+
 /// One page of a file's units plus the total matching row count, filtered
 /// like the review screen: status, a search substring across source and
 /// translation, a speaker, and the "needs another look" flag.
@@ -239,8 +242,9 @@ pub fn get_page(
         |row| row.get(0),
     )?;
 
+    let page_size = page_size.clamp(1, MAX_PAGE_SIZE);
     let mut page_params = bound;
-    let offset = page.max(0) * page_size.max(0);
+    let offset = page.max(0).saturating_mul(page_size);
     let page_size_box: Box<dyn rusqlite::ToSql> = Box::new(page_size);
     let offset_box: Box<dyn rusqlite::ToSql> = Box::new(offset);
     page_params.push(page_size_box.as_ref());
@@ -1228,6 +1232,30 @@ mod tests {
         .unwrap();
         assert_eq!(total, 1);
         assert_eq!(page[0].block_id, "c");
+    }
+
+    #[test]
+    fn get_page_bounds_its_size_and_offset() {
+        let db = open_temp();
+        seed(db.conn());
+
+        let (page, total) =
+            get_page(db.conn(), "script.rpy", 0, -1, None, "", None, false).unwrap();
+        assert_eq!(total, 2);
+        assert_eq!(page.len(), 1);
+
+        let (page, _) = get_page(
+            db.conn(),
+            "script.rpy",
+            i64::MAX,
+            i64::MAX,
+            None,
+            "",
+            None,
+            false,
+        )
+        .unwrap();
+        assert!(page.is_empty());
     }
 
     #[test]

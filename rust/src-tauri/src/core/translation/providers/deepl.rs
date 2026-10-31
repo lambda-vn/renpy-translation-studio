@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
+use std::time::Duration;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,7 @@ use crate::core::languages::get_language;
 use crate::core::storage::repositories::Character;
 
 const DEEPL_BATCH_SIZE: usize = 50;
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 static TERM_PAIR_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*(.+?)\s*(?:->|→)\s*(.+?)\s*$").unwrap());
@@ -124,7 +126,10 @@ impl DeepLProvider {
         Self {
             term_pairs: build_term_pairs(characters),
             api_key,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .build()
+                .unwrap(),
             base_url,
             glossary_id: None,
             glossary_synced: false,

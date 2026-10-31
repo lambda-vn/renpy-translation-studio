@@ -45,10 +45,12 @@
 	let discardedOpen = $state(false);
 	let extractedUnits = $state(0);
 
-	let unlisten: UnlistenFn | undefined;
+	let unlisten: Promise<UnlistenFn> | undefined;
+	let inspectToken = 0;
 
 	onMount(async () => {
-		unlisten = await listen<ExtractionStage>('extraction-stage', (e) => (stage = e.payload));
+		unlisten = listen<ExtractionStage>('extraction-stage', (e) => (stage = e.payload));
+		unlisten.catch((e) => toast.error(errorText($t, e)));
 		try {
 			[recent, languages] = await Promise.all([api.listRecentProjects(), api.listLanguages()]);
 			sdkPath = (await api.getSettings()).sdkPath ?? '';
@@ -59,7 +61,9 @@
 		}
 	});
 
-	onDestroy(() => unlisten?.());
+	onDestroy(() => {
+		unlisten?.then((off) => off()).catch(() => {});
+	});
 
 	function languageLabel(entry: LanguageEntry): string {
 		const key = `languages.${entry.code}`;
@@ -108,47 +112,62 @@
 
 	async function inspect() {
 		failure = null;
+		const token = ++inspectToken;
 		if (!folder.trim()) {
 			inspection = null;
 			return;
 		}
 		try {
-			inspection = await api.inspectGame(folder.trim(), targetLanguage);
-			if (inspection.valid && !targetLanguage && inspection.existingLanguages.length === 1) {
-				targetLanguage = inspection.existingLanguages[0];
-				inspection = await api.inspectGame(folder.trim(), targetLanguage);
+			const first = await api.inspectGame(folder.trim(), targetLanguage);
+			if (token !== inspectToken) return;
+			inspection = first;
+			if (first.valid && !targetLanguage && first.existingLanguages.length === 1) {
+				targetLanguage = first.existingLanguages[0];
+				const second = await api.inspectGame(folder.trim(), targetLanguage);
+				if (token !== inspectToken) return;
+				inspection = second;
 			}
 		} catch (e) {
+			if (token !== inspectToken) return;
 			inspection = null;
 			failure = { code: 'internal', message: errorText($t, e), detail: null, params: {} };
 		}
 	}
 
 	async function browseFolder() {
-		const picked = await pickPath({ directory: true });
-		if (typeof picked !== 'string') return;
-		folder = picked;
+		try {
+			const picked = await pickPath({ directory: true });
+			if (typeof picked !== 'string') return;
+			folder = picked;
+		} catch (e) {
+			failure = { code: 'internal', message: errorText($t, e), detail: null, params: {} };
+			return;
+		}
 		await inspect();
 	}
 
 	async function browseSdk() {
-		const picked = await pickPath({
-			filters: [{ name: "Ren'Py", extensions: ['exe', 'sh', 'py'] }]
-		});
-		if (typeof picked !== 'string') return;
 		sdkError = '';
-		let valid = false;
 		try {
-			valid = await api.validateSdkPath(picked);
-		} catch {
-			valid = false;
+			const picked = await pickPath({
+				filters: [{ name: "Ren'Py", extensions: ['exe', 'sh', 'py'] }]
+			});
+			if (typeof picked !== 'string') return;
+			let valid = false;
+			try {
+				valid = await api.validateSdkPath(picked);
+			} catch {
+				valid = false;
+			}
+			if (!valid) {
+				sdkError = $t('onboarding.sdk_invalid');
+				return;
+			}
+			await api.setSetting('sdk_path', picked);
+			sdkPath = picked;
+		} catch (e) {
+			sdkError = errorText($t, e);
 		}
-		if (!valid) {
-			sdkError = $t('onboarding.sdk_invalid');
-			return;
-		}
-		sdkPath = picked;
-		await api.setSetting('sdk_path', picked);
 	}
 
 	const missing = $derived.by(() => {

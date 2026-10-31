@@ -9,6 +9,7 @@
 //! Every write below tells a running application which lines it touched
 //! (`core::live`), a bonus the server never waits on and never needs.
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use crate::core::live;
@@ -28,6 +29,9 @@ use super::session::{ProjectSession, ServerState};
 
 const CONTEXT_RADIUS: i64 = 2;
 const UNIVERSE_SUMMARY_KEY: &str = "universe_summary";
+const MAX_PAGE_SIZE: i64 = 200;
+/// Block ids per `get_many` query, under SQLite's bound-variable limit.
+const LOOKUP_CHUNK: usize = 500;
 
 const INSTRUCTIONS: &str = "\
 Translate a Ren'Py visual novel through the studio holding the project.
@@ -89,10 +93,10 @@ fn require_unit(
     session: &ProjectSession,
     block_id: &str,
 ) -> Result<repositories::TranslationUnit, String> {
-    let units = repositories::get_all(session.conn(), None, None).map_err(|e| e.to_string())?;
-    units
+    repositories::get_many(session.conn(), &[block_id.to_string()])
+        .map_err(|e| e.to_string())?
         .into_iter()
-        .find(|u| u.block_id == block_id)
+        .next()
         .ok_or_else(|| format!("Unknown block_id: {block_id}"))
 }
 
@@ -213,11 +217,13 @@ impl RtsServer {
         let state = self.state.lock().await;
         let session = state.require().map_err(|e| e.to_string())?;
         let source_file = session.absolute(&args.source_file);
+        let page = args.page.max(0);
+        let page_size = args.page_size.clamp(1, MAX_PAGE_SIZE);
         let (units, total) = repositories::get_page(
             session.conn(),
             &source_file,
-            args.page,
-            args.page_size,
+            page,
+            page_size,
             args.status.as_deref(),
             &args.search,
             args.speaker.as_deref(),
@@ -227,8 +233,8 @@ impl RtsServer {
         Ok(Json(ListUnitsResult {
             units: units.iter().map(|u| unit_payload(session, u)).collect(),
             total,
-            page: args.page,
-            page_size: args.page_size,
+            page,
+            page_size,
         }))
     }
 
@@ -276,13 +282,19 @@ impl RtsServer {
     ) -> Result<Json<SubmitTranslationsResult>, String> {
         let state = self.state.lock().await;
         let session = state.require().map_err(|e| e.to_string())?;
-        let known = repositories::get_all(session.conn(), None, None).map_err(|e| e.to_string())?;
+        let ids: Vec<String> = args.items.iter().map(|i| i.block_id.clone()).collect();
+        let mut known: HashMap<String, repositories::TranslationUnit> = HashMap::new();
+        for chunk in ids.chunks(LOOKUP_CHUNK) {
+            for unit in repositories::get_many(session.conn(), chunk).map_err(|e| e.to_string())? {
+                known.insert(unit.block_id.clone(), unit);
+            }
+        }
 
         let mut accepted: Vec<(String, String, String)> = Vec::new();
         let mut drafted: Vec<String> = Vec::new();
         let mut rejected = Vec::new();
         for item in args.items {
-            let Some(unit) = known.iter().find(|u| u.block_id == item.block_id) else {
+            let Some(unit) = known.get(&item.block_id) else {
                 rejected.push(SubmissionRejection {
                     block_id: item.block_id,
                     reason: "Unknown block_id.".to_string(),
@@ -336,6 +348,7 @@ impl RtsServer {
             .chain(drafted)
             .collect();
         let project = session.path.clone();
+        drop(state);
         live::notify(&project, &changed).await;
         Ok(Json(SubmitTranslationsResult { applied, rejected }))
     }
@@ -358,6 +371,7 @@ impl RtsServer {
         .map_err(|e| e.to_string())?;
         let unit = refetch_unit(session, &args.block_id)?;
         let project = session.path.clone();
+        drop(state);
         live::notify(&project, std::slice::from_ref(&args.block_id)).await;
         Ok(Json(unit))
     }
@@ -374,6 +388,7 @@ impl RtsServer {
             .map_err(|e| e.to_string())?;
         let unit = refetch_unit(session, &args.block_id)?;
         let project = session.path.clone();
+        drop(state);
         live::notify(&project, std::slice::from_ref(&args.block_id)).await;
         Ok(Json(unit))
     }
@@ -396,6 +411,7 @@ impl RtsServer {
         .map_err(|e| e.to_string())?;
         if filled > 0 {
             let project = session.path.clone();
+            drop(state);
             live::notify_reload(&project).await;
         }
         Ok(Json(FillFromMemoryResult { filled }))
@@ -505,13 +521,14 @@ impl RtsServer {
         .map_err(|e| e.to_string())?;
         if cleared > 0 {
             let project = session.path.clone();
+            drop(state);
             live::notify_reload(&project).await;
         }
         Ok(Json(ClearTranslationsResult { cleared }))
     }
 }
 
-#[tool_handler]
+#[tool_handler(router = self.tool_router)]
 impl ServerHandler for RtsServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())

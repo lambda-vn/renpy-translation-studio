@@ -12,18 +12,13 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use super::parser::{NEW_LINE, OLD_LINE, STRINGS_HEADER};
 use super::say_line::{block_lines, find_say, split_say_line};
 
 static UNESCAPED_QUOTE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(\\*)""#).unwrap());
 static TRAILING_BACKSLASHES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\\+$").unwrap());
 static HEADER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^translate \w+ (\w+):\s*$").unwrap());
-static STRINGS_HEADER: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^translate \w+ strings:\s*$").unwrap());
-static OLD_LINE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^    old "((?:[^"\\]|\\.)*)""#).unwrap());
-static NEW_LINE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^    new "((?:[^"\\]|\\.)*)""#).unwrap());
 
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError {
@@ -247,10 +242,7 @@ fn escape_translation(text: &str) -> String {
             matched.to_string()
         }
     });
-    escaped
-        .replace("\r\n", "\\n")
-        .replace('\n', "\\n")
-        .replace('\r', "\\n")
+    escaped.replace("\r\n", "\\n").replace(['\n', '\r'], "\\n")
 }
 
 /// Replace the spoken string of an editable line with a translation.

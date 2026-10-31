@@ -88,8 +88,7 @@ impl LibreTranslateProvider {
             api_key,
             client: reqwest::Client::builder()
                 .timeout(REQUEST_TIMEOUT)
-                .build()
-                .unwrap(),
+                .build()?,
         })
     }
 

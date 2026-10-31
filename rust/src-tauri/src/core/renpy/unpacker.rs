@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::archive::{ArchiveError, RpaArchive};
+use super::archive::{validate_member_name, ArchiveError, RpaArchive};
 use crate::core::validators::resolve_safe_path;
 
 const DISABLED_SUFFIX: &str = ".disabled";
@@ -75,13 +75,56 @@ fn read_manifest(project: &Path) -> Manifest {
     Manifest {
         entries: items("entries")
             .into_iter()
-            .filter_map(|item| serde_json::from_value(item).ok())
+            .filter_map(|item| serde_json::from_value::<UnpackedEntry>(item).ok())
+            .filter(|entry| {
+                let valid = is_safe_entry_path(&entry.path);
+                if !valid {
+                    log::warn!("ignoring unsafe manifest entry {:?}", entry.path);
+                }
+                valid
+            })
             .collect(),
         disabled_archives: items("disabled_archives")
             .into_iter()
-            .filter_map(|item| serde_json::from_value(item).ok())
+            .filter_map(|item| serde_json::from_value::<DisabledArchive>(item).ok())
+            .filter(|disabled| {
+                let valid = is_safe_disabled_archive(disabled);
+                if !valid {
+                    log::warn!("ignoring unsafe manifest archive {disabled:?}");
+                }
+                valid
+            })
             .collect(),
     }
+}
+
+/// A manifest path is a member name as this module wrote it: already
+/// normalized, relative, without any traversal.
+fn is_safe_entry_path(path: &str) -> bool {
+    validate_member_name(path).is_ok_and(|normalized| normalized == path)
+}
+
+/// A bare `.rpa` file name, and the `<archive>.disabled[.<n>]` name
+/// [`disabled_path`] derives from it, nothing else: both are joined to
+/// `game/` and renamed.
+fn is_safe_disabled_archive(disabled: &DisabledArchive) -> bool {
+    let bare = |name: &str| {
+        !name.is_empty() && !name.contains(['/', '\\', ':']) && is_safe_entry_path(name)
+    };
+    let is_archive = Path::new(&disabled.archive)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("rpa"));
+    let Some(rest) = disabled.temp_name.strip_prefix(&disabled.archive) else {
+        return false;
+    };
+    let Some(rest) = rest.strip_prefix(DISABLED_SUFFIX) else {
+        return false;
+    };
+    let counter_ok = rest.is_empty()
+        || rest
+            .strip_prefix('.')
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+    is_archive && bare(&disabled.archive) && bare(&disabled.temp_name) && counter_ok
 }
 
 fn write_manifest(project: &Path, manifest: &Manifest) -> Result<(), ArchiveError> {
@@ -169,13 +212,39 @@ pub fn unpack_archived_sources(project: &Path) -> Result<Vec<UnpackedEntry>, Arc
         .map(|entry| (entry.path.clone(), entry))
         .collect();
 
-    for archive_path in rpa_files(&game_dir) {
+    let extraction = extract_into(&game_dir, &mut entries);
+
+    let entries: Vec<UnpackedEntry> = entries.into_values().collect();
+    if !entries.is_empty() || !manifest.disabled_archives.is_empty() {
+        let written = write_manifest(
+            project,
+            &Manifest {
+                entries: entries.clone(),
+                disabled_archives: manifest.disabled_archives,
+            },
+        );
+        extraction?;
+        written?;
+    } else {
+        extraction?;
+    }
+    Ok(entries)
+}
+
+/// Extract every archive into `game_dir`, recording each file in `entries`
+/// as soon as it is written so that a failure part-way leaves the caller
+/// able to persist exactly what is on disk.
+fn extract_into(
+    game_dir: &Path,
+    entries: &mut BTreeMap<String, UnpackedEntry>,
+) -> Result<(), ArchiveError> {
+    for archive_path in rpa_files(game_dir) {
         let mut archive = RpaArchive::open(&archive_path)?;
         for name in archive.names().to_vec() {
             if !is_extractable(&name) {
                 continue;
             }
-            let target = resolve_target(&game_dir, &name)?;
+            let target = resolve_target(game_dir, &name)?;
             if target.exists() {
                 continue;
             }
@@ -183,7 +252,7 @@ pub fn unpack_archived_sources(project: &Path) -> Result<Vec<UnpackedEntry>, Arc
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(&target, archive.read(&name)?)?;
+            let content = archive.read(&name)?;
             entries.insert(
                 name.clone(),
                 UnpackedEntry {
@@ -191,20 +260,10 @@ pub fn unpack_archived_sources(project: &Path) -> Result<Vec<UnpackedEntry>, Arc
                     rpyc_preexisted,
                 },
             );
+            std::fs::write(&target, content)?;
         }
     }
-
-    let entries: Vec<UnpackedEntry> = entries.into_values().collect();
-    if !entries.is_empty() || !manifest.disabled_archives.is_empty() {
-        write_manifest(
-            project,
-            &Manifest {
-                entries: entries.clone(),
-                disabled_archives: manifest.disabled_archives,
-            },
-        )?;
-    }
-    Ok(entries)
+    Ok(())
 }
 
 /// Whether `game/`'s archives hold a compiled script (`.rpyc`) outside `tl/`.
@@ -247,7 +306,6 @@ pub fn disable_extracted_archives(project: &Path) -> Result<Vec<String>, Archive
         manifest.entries.iter().map(|e| e.path.as_str()).collect();
 
     let mut renamed = Vec::new();
-    let mut disabled = Vec::new();
     for archive_path in rpa_files(&game_dir) {
         let names = RpaArchive::open(&archive_path)?.names().to_vec();
         if !names.iter().any(|name| unpacked.contains(name.as_str())) {
@@ -257,23 +315,24 @@ pub fn disable_extracted_archives(project: &Path) -> Result<Vec<String>, Archive
             continue;
         }
         let temp_path = disabled_path(&archive_path);
-        std::fs::rename(&archive_path, &temp_path)?;
         let file_name = |path: &Path| {
             path.file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default()
         };
-        disabled.push(DisabledArchive {
+        manifest.disabled_archives.push(DisabledArchive {
             archive: file_name(&archive_path),
             temp_name: file_name(&temp_path),
         });
+        write_manifest(project, &manifest)?;
+        if let Err(error) = std::fs::rename(&archive_path, &temp_path) {
+            manifest.disabled_archives.pop();
+            write_manifest(project, &manifest)?;
+            return Err(error.into());
+        }
         renamed.push(file_name(&archive_path));
     }
 
-    if !renamed.is_empty() {
-        manifest.disabled_archives.extend(disabled);
-        write_manifest(project, &manifest)?;
-    }
     Ok(renamed)
 }
 
@@ -609,6 +668,34 @@ mod tests {
         assert!(!project.join("game").join("broken.rpy").exists());
         assert!(project.join("game").join("mine.rpy").is_file());
         assert!(read_manifest(&project).entries.is_empty());
+    }
+
+    #[test]
+    fn a_forged_manifest_is_never_acted_on() {
+        let project = game("forged");
+        let victim = project.join("victim.rpy");
+        std::fs::write(&victim, "keep").unwrap();
+        std::fs::write(project.join("game").join("a.rpa"), "x").unwrap();
+        std::fs::create_dir_all(project.join(".rts")).unwrap();
+        std::fs::write(
+            manifest_path(&project),
+            r#"{"entries": [
+                {"path": "../victim.rpy", "rpyc_preexisted": true},
+                {"path": "ok.rpy", "rpyc_preexisted": true}],
+              "disabled_archives": [
+                {"archive": "../victim.rpy", "temp_name": "../victim.rpy"},
+                {"archive": "a.rpa", "temp_name": "../victim.rpy"},
+                {"archive": "a.rpa", "temp_name": "a.rpa.disabled"}]}"#,
+        )
+        .unwrap();
+
+        let manifest = read_manifest(&project);
+
+        assert_eq!(manifest.entries.len(), 1);
+        assert_eq!(manifest.entries[0].path, "ok.rpy");
+        assert_eq!(manifest.disabled_archives.len(), 1);
+        remove_unpacked_sources(&project).unwrap();
+        assert_eq!(std::fs::read_to_string(victim).unwrap(), "keep");
     }
 
     #[test]

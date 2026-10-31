@@ -54,10 +54,13 @@ pub fn endpoint_path(project: &Path) -> PathBuf {
 }
 
 /// A fresh token for one application session: 24 random bytes in hex.
-pub fn new_token() -> String {
+///
+/// # Errors
+/// The operating system could not provide randomness.
+pub fn new_token() -> std::io::Result<String> {
     let mut bytes = [0u8; 24];
-    getrandom::fill(&mut bytes).expect("the operating system has a source of randomness");
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    getrandom::fill(&mut bytes).map_err(|error| std::io::Error::other(error.to_string()))?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 /// Announce where this application is listening.
@@ -112,7 +115,11 @@ async fn post(project: &Path, payload: serde_json::Value) -> bool {
     let Some(endpoint) = read(project) else {
         return false;
     };
-    let Ok(client) = reqwest::Client::builder().timeout(NOTIFY_TIMEOUT).build() else {
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(NOTIFY_TIMEOUT)
+        .no_proxy()
+        .build()
+    else {
         return false;
     };
     client
@@ -149,7 +156,7 @@ impl LiveServer {
     pub async fn start(project: &Path, on_changed: OnChanged) -> std::io::Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let port = listener.local_addr()?.port();
-        let token = new_token();
+        let token = new_token()?;
         publish(
             project,
             &LiveEndpoint {
@@ -160,6 +167,7 @@ impl LiveServer {
         let task = tokio::spawn(async move {
             loop {
                 let Ok((stream, _)) = listener.accept().await else {
+                    tokio::time::sleep(Duration::from_millis(50)).await;
                     continue;
                 };
                 let token = token.clone();
@@ -435,7 +443,7 @@ mod tests {
 
     #[test]
     fn tokens_are_long_and_never_repeat() {
-        let (first, second) = (new_token(), new_token());
+        let (first, second) = (new_token().unwrap(), new_token().unwrap());
         assert_eq!(first.len(), 48);
         assert_ne!(first, second);
     }

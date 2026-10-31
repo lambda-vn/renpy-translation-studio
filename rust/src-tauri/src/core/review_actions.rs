@@ -96,11 +96,12 @@ pub fn page_of_units(
     }
     let matching = filtered_units(conn, source_file, filter)?;
     let total = matching.len() as i64;
-    let start = (page.max(0) * page_size.max(0)) as usize;
+    let page_size = page_size.clamp(1, repositories::MAX_PAGE_SIZE);
+    let start = page.max(0).saturating_mul(page_size) as usize;
     let slice = matching
         .into_iter()
         .skip(start)
-        .take(page_size.max(0) as usize)
+        .take(page_size as usize)
         .collect();
     Ok((slice, total))
 }

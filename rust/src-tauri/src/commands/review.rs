@@ -18,6 +18,9 @@ use super::dto::{
 };
 use super::{require_session, CommandError};
 
+/// Most lines a client may ask for in one page.
+const MAX_PAGE_SIZE: i64 = 200;
+
 #[tauri::command]
 pub async fn list_files(state: State<'_, AppState>) -> Result<Vec<FileEntry>, CommandError> {
     let guard = state.current.lock().await;
@@ -55,14 +58,11 @@ pub async fn list_units(
         needs_review: args.needs_review,
         errors_only: args.errors_only,
     };
-    let (units, total) = review_actions::page_of_units(
-        session.conn(),
-        &source_file,
-        &filter,
-        args.page,
-        args.page_size,
-    )
-    .map_err(|e| e.to_string())?;
+    let page = args.page.max(0);
+    let page_size = args.page_size.clamp(1, MAX_PAGE_SIZE);
+    let (units, total) =
+        review_actions::page_of_units(session.conn(), &source_file, &filter, page, page_size)
+            .map_err(|e| e.to_string())?;
     let texts: Vec<String> = units.iter().map(|u| u.source_text.clone()).collect();
     let counts = repositories::count_duplicates(session.conn(), &texts, &source_file)
         .map_err(|e| e.to_string())?;
@@ -87,8 +87,8 @@ pub async fn list_units(
             .collect(),
         duplicates,
         total,
-        page: args.page,
-        page_size: args.page_size,
+        page,
+        page_size,
     })
 }
 
