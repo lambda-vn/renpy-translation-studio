@@ -102,7 +102,8 @@
 		['protected', 'protected'],
 		['stale', 'stale'],
 		['unknown', 'unknown'],
-		['empty', 'empty']
+		['empty', 'empty'],
+		['refused', 'refused']
 	] as const;
 
 	function summary(plan: ImportPreview, applied: number): string {

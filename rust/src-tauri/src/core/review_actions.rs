@@ -188,23 +188,32 @@ pub fn spread_to_duplicates(
 /// skipping it would leave a translation the user just cleared alive in
 /// the file. For `strings:` blocks a translation wins over a cleared unit
 /// sharing the same source text.
+///
+/// A translation adding an interpolation is written as its source too.
+/// Every path into the database is meant to refuse one, but this is the
+/// last step before the players' copy of the game, so it does not take
+/// the database's word for it.
 pub fn save_maps(units: &[TranslationUnit]) -> (HashMap<String, String>, HashMap<String, String>) {
+    let writable = |unit: &TranslationUnit| {
+        !unit.translated_text.is_empty()
+            && !quality::has_extra_var(&unit.source_text, &unit.translated_text)
+    };
     let mut dialogue = HashMap::new();
     let mut old_to_new: HashMap<String, String> = HashMap::new();
     for unit in units {
         if unit.block_id.starts_with("strings_") {
             old_to_new.insert(unit.source_text.clone(), unit.source_text.clone());
         } else {
-            let text = if unit.translated_text.is_empty() {
-                &unit.source_text
-            } else {
+            let text = if writable(unit) {
                 &unit.translated_text
+            } else {
+                &unit.source_text
             };
             dialogue.insert(unit.block_id.clone(), text.clone());
         }
     }
     for unit in units {
-        if unit.block_id.starts_with("strings_") && !unit.translated_text.is_empty() {
+        if unit.block_id.starts_with("strings_") && writable(unit) {
             old_to_new.insert(unit.source_text.clone(), unit.translated_text.clone());
         }
     }
@@ -484,5 +493,26 @@ mod tests {
         let entries = chunk_entries(&result, &symbol_only);
         assert_eq!(entries[0].2, "human_validated");
         assert_eq!(entries[1].2, "ai_suggested");
+    }
+
+    #[test]
+    fn save_maps_never_write_a_translation_adding_an_interpolation() {
+        let db = open_temp();
+        let conn = db.conn();
+        repositories::bulk_insert(
+            conn,
+            &[
+                unit("d1", "f.rpy", 1, "Hello."),
+                unit("strings_1", "f.rpy", 2, "Yes"),
+            ],
+        )
+        .unwrap();
+        repositories::update_translation(conn, "d1", "Salut [renpy.quit()].", "imported").unwrap();
+        repositories::update_translation(conn, "strings_1", "Oui [x]", "draft").unwrap();
+        let units = repositories::get_all(conn, None, None).unwrap();
+
+        let (dialogue, old_to_new) = save_maps(&units);
+        assert_eq!(dialogue["d1"], "Hello.");
+        assert_eq!(old_to_new["Yes"], "Yes");
     }
 }

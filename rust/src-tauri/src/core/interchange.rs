@@ -132,6 +132,9 @@ pub struct ImportPlan {
     /// Units written as drafts instead of validated, a quality check
     /// having refused the text. They are part of `entries`.
     pub flagged: usize,
+    /// Units left alone whatever their status, the translation adding an
+    /// interpolation the source does not have: Ren'Py would run it.
+    pub refused: usize,
 }
 
 impl ImportPlan {
@@ -210,6 +213,10 @@ pub fn read_interchange(path: &Path) -> Result<Vec<InterchangeUnit>, Interchange
 /// Dropping the text outright would be worse than keeping it: the project
 /// would hold on to whatever broken translation it already had, and saving
 /// writes that one to the `.rpy` just the same.
+///
+/// The exception is a translation adding an interpolation, refused under
+/// any status: a draft is written to the `.rpy` as surely as a validated
+/// line, and what it adds is code.
 pub fn plan_import(units: &[InterchangeUnit], conn: &Connection) -> rusqlite::Result<ImportPlan> {
     let stored: HashMap<String, TranslationUnit> = repositories::get_all(conn, None, None)?
         .into_iter()
@@ -228,6 +235,8 @@ pub fn plan_import(units: &[InterchangeUnit], conn: &Connection) -> rusqlite::Re
             plan.stale += 1;
         } else if current.status == "human_validated" && unit.status != "human_validated" {
             plan.protected += 1;
+        } else if quality::has_extra_var(&current.source_text, &unit.translated_text) {
+            plan.refused += 1;
         } else {
             let mut status = incoming_status(unit, current);
             if must_be_drafted(unit, current, &status) {
@@ -1163,5 +1172,23 @@ mod tests {
         let path = export(&db, &dir, "export.csv");
         run_import(&read_interchange(&path).unwrap(), &db);
         assert_eq!(stored(&db, "strings_ccc").status, "ai_suggested");
+    }
+
+    #[test]
+    fn a_translation_adding_an_interpolation_is_refused_whatever_its_status() {
+        let (db, _) = project("extra-var");
+        for status in ["imported", "ai_suggested", "draft", "human_validated"] {
+            let (plan, applied) = run_import(
+                &[incoming(
+                    "start_bbb",
+                    "It rains.",
+                    "Il pleut [renpy.quit()].",
+                    status,
+                )],
+                &db,
+            );
+            assert_eq!((plan.refused, applied), (1, 0), "{status}");
+        }
+        assert_eq!(stored(&db, "start_bbb").translated_text, "");
     }
 }

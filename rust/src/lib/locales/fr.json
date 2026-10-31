@@ -471,7 +471,8 @@
     "confirm_unknown": "{n} lignes sont inconnues dans ce projet et seront ignorées.",
     "confirm_unknown_one": "{n} ligne est inconnue dans ce projet et sera ignorée.",
     "confirm_empty": "{n} lignes ne portent aucune traduction et seront ignorées.",
-    "confirm_empty_one": "{n} ligne ne porte aucune traduction et sera ignorée.",
+    "confirm_refused": "{n} lignes ajoutent une interpolation [...] absente de la source et seront refusées : Ren'Py l'exécuterait comme du code.",
+    "confirm_refused_one": "{n} ligne ajoute une interpolation [...] absente de la source et sera refusée : Ren'Py l'exécuterait comme du code.",
     "import_applied": "{n} traductions importées",
     "import_applied_one": "{n} traduction importée",
     "import_flagged": "{n} écrites en brouillon, refusées par un contrôle qualité",
@@ -481,7 +482,9 @@
     "import_stale": "{n} dont le texte source a changé depuis l'export",
     "import_unknown": "{n} inconnues dans ce projet",
     "import_unknown_one": "{n} inconnue dans ce projet",
-    "import_empty": "{n} sans traduction"
+    "import_empty": "{n} sans traduction",
+    "import_refused": "{n} refusées, ajoutant une interpolation absente de la source",
+    "import_refused_one": "{n} refusée, ajoutant une interpolation absente de la source"
   },
   "export": {
     "title": "Exporter la traduction",

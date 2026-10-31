@@ -30,6 +30,7 @@ pub struct ImportPreview {
     pub empty: usize,
     pub protected: usize,
     pub flagged: usize,
+    pub refused: usize,
 }
 
 impl From<&ImportPlan> for ImportPreview {
@@ -41,6 +42,7 @@ impl From<&ImportPlan> for ImportPreview {
             empty: plan.empty,
             protected: plan.protected,
             flagged: plan.flagged,
+            refused: plan.refused,
         }
     }
 }

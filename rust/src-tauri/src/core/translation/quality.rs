@@ -139,6 +139,19 @@ fn sorted<'a>(items: impl Iterator<Item = &'a &'a str>) -> Vec<&'a str> {
     items
 }
 
+/// Whether a translation adds an interpolation the source does not have.
+///
+/// The one issue no path may let reach a `.rpy`, whatever its status: it
+/// is code the shipped game would run. Writing and importing ask this
+/// rather than [`has_blocking_issue`], which also bars a dropped tag that
+/// a draft is allowed to carry.
+pub fn has_extra_var(source: &str, translation: &str) -> bool {
+    let source_vars: HashSet<&str> = VAR_PATTERN.find_iter(source).map(|m| m.as_str()).collect();
+    VAR_PATTERN
+        .find_iter(translation)
+        .any(|m| !source_vars.contains(m.as_str()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,5 +227,13 @@ mod tests {
         assert_eq!(strip_tags("...{w=0.5}"), "...");
         assert_eq!(strip_tags("{i}Hello{/i} [name]"), "Hello [name]");
         assert_eq!(strip_tags("no tags here"), "no tags here");
+    }
+
+    #[test]
+    fn has_extra_var_sees_only_added_interpolations() {
+        assert!(has_extra_var("Hi.", "Salut [renpy.quit()]."));
+        assert!(has_extra_var("Hi [name].", "Salut [name] [name.upper()]."));
+        assert!(!has_extra_var("Hi [name].", "Salut [name]."));
+        assert!(!has_extra_var("Hi [name].", "Salut."));
     }
 }

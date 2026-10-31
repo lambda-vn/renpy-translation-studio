@@ -241,10 +241,41 @@ pub mod pickle {
         Dict(Vec<(Value, Value)>),
     }
 
-    /// A stack slot: a value, or the marker an opcode like `(` leaves.
+    /// How deep a value may nest, a scalar counting as one.
+    ///
+    /// A real index is a dict of lists of tuples of scalars, four levels.
+    /// One byte of input adds a level (`0x85` wraps the top in a tuple),
+    /// and `clone`, `drop` and `weight` recurse once per level: unbounded,
+    /// a few kilobytes of forged index overflow the stack and abort the
+    /// process, which no `Result` can catch.
+    const MAX_DEPTH: usize = 16;
+
+    /// A stack slot: a value with its depth, or the marker an opcode like
+    /// `(` leaves.
     enum Slot {
         Mark,
-        Value(Value),
+        Value(Value, usize),
+    }
+
+    fn scalar(value: Value) -> Slot {
+        Slot::Value(value, 1)
+    }
+
+    /// The depth a container holding values `items` deep reaches, refused
+    /// past [`MAX_DEPTH`].
+    fn nest(items: usize) -> Result<usize, ArchiveError> {
+        let depth = items + 1;
+        if depth > MAX_DEPTH {
+            return Err(corrupt("pickle nested too deep"));
+        }
+        Ok(depth)
+    }
+
+    /// Split popped values from their depths, returning the depth a
+    /// container holding them reaches.
+    fn contents(items: Vec<(Value, usize)>) -> Result<(Vec<Value>, usize), ArchiveError> {
+        let depth = nest(items.iter().map(|(_, depth)| *depth).max().unwrap_or(0))?;
+        Ok((items.into_iter().map(|(value, _)| value).collect(), depth))
     }
 
     struct Cursor<'a> {
@@ -316,17 +347,17 @@ pub mod pickle {
     pub fn load(data: &[u8]) -> Result<Value, ArchiveError> {
         let mut cursor = Cursor { data, position: 0 };
         let mut stack: Vec<Slot> = Vec::new();
-        let mut memo: Vec<Option<Value>> = Vec::new();
+        let mut memo: Vec<Option<(Value, usize)>> = Vec::new();
         let mut budget = super::MAX_INDEX_SIZE;
 
-        fn pop_value(stack: &mut Vec<Slot>) -> Result<Value, ArchiveError> {
+        fn pop_value(stack: &mut Vec<Slot>) -> Result<(Value, usize), ArchiveError> {
             match stack.pop() {
-                Some(Slot::Value(value)) => Ok(value),
+                Some(Slot::Value(value, depth)) => Ok((value, depth)),
                 _ => Err(corrupt("pickle stack underflow")),
             }
         }
 
-        fn pop_to_mark(stack: &mut Vec<Slot>) -> Result<Vec<Value>, ArchiveError> {
+        fn pop_to_mark(stack: &mut Vec<Slot>) -> Result<Vec<(Value, usize)>, ArchiveError> {
             let mark = stack
                 .iter()
                 .rposition(|slot| matches!(slot, Slot::Mark))
@@ -335,7 +366,7 @@ pub mod pickle {
                 .split_off(mark + 1)
                 .into_iter()
                 .map(|slot| match slot {
-                    Slot::Value(value) => Ok(value),
+                    Slot::Value(value, depth) => Ok((value, depth)),
                     Slot::Mark => Err(corrupt("nested pickle mark")),
                 })
                 .collect::<Result<Vec<_>, _>>()
@@ -347,9 +378,9 @@ pub mod pickle {
         // A real pickle numbers its memo densely, one PUT per entry, so an
         // index past the input size is forged to make `resize` allocate.
         fn remember(
-            memo: &mut Vec<Option<Value>>,
+            memo: &mut Vec<Option<(Value, usize)>>,
             index: usize,
-            value: Value,
+            value: (Value, usize),
             limit: usize,
         ) -> Result<(), ArchiveError> {
             if index > limit {
@@ -382,18 +413,36 @@ pub mod pickle {
         // Each GET copies a whole value, so nesting GETs doubles the size
         // at every level; `budget` caps what all copies may add up to.
         fn recall(
-            memo: &[Option<Value>],
+            memo: &[Option<(Value, usize)>],
             index: usize,
             budget: &mut usize,
-        ) -> Result<Value, ArchiveError> {
-            let value = memo
+        ) -> Result<Slot, ArchiveError> {
+            let (value, depth) = memo
                 .get(index)
                 .and_then(Option::as_ref)
                 .ok_or_else(|| corrupt("pickle memo miss"))?;
             *budget = budget
                 .checked_sub(weight(value))
                 .ok_or_else(|| corrupt("pickle memo copies too large"))?;
-            Ok(value.clone())
+            Ok(Slot::Value(value.clone(), *depth))
+        }
+
+        /// The top of the stack, copied for the memo.
+        fn top(stack: &[Slot], refusal: &str) -> Result<(Value, usize), ArchiveError> {
+            match stack.last() {
+                Some(Slot::Value(value, depth)) => Ok((value.clone(), *depth)),
+                _ => Err(corrupt(refusal)),
+            }
+        }
+
+        /// The container on top of the stack, its depth raised to at least
+        /// `reach` for what it is about to hold.
+        fn target(stack: &mut [Slot], reach: usize) -> Result<&mut Value, ArchiveError> {
+            let Some(Slot::Value(target, depth)) = stack.last_mut() else {
+                return Err(corrupt("pickle container missing"));
+            };
+            *depth = (*depth).max(reach);
+            Ok(target)
         }
 
         fn set_items(target: &mut Value, items: Vec<Value>) -> Result<(), ArchiveError> {
@@ -411,7 +460,7 @@ pub mod pickle {
         loop {
             let opcode = cursor.byte()?;
             match opcode {
-                b'.' => return pop_value(&mut stack),
+                b'.' => return pop_value(&mut stack).map(|(value, _)| value),
                 0x80 => {
                     cursor.byte()?;
                 }
@@ -419,25 +468,25 @@ pub mod pickle {
                     cursor.take(8)?;
                 }
                 b'(' => stack.push(Slot::Mark),
-                b'N' => stack.push(Slot::Value(Value::None)),
-                0x88 => stack.push(Slot::Value(Value::Bool(true))),
-                0x89 => stack.push(Slot::Value(Value::Bool(false))),
-                b'}' => stack.push(Slot::Value(Value::Dict(Vec::new()))),
-                b']' => stack.push(Slot::Value(Value::List(Vec::new()))),
-                b')' => stack.push(Slot::Value(Value::Tuple(Vec::new()))),
+                b'N' => stack.push(scalar(Value::None)),
+                0x88 => stack.push(scalar(Value::Bool(true))),
+                0x89 => stack.push(scalar(Value::Bool(false))),
+                b'}' => stack.push(scalar(Value::Dict(Vec::new()))),
+                b']' => stack.push(scalar(Value::List(Vec::new()))),
+                b')' => stack.push(scalar(Value::Tuple(Vec::new()))),
                 b'd' => {
-                    let items = pop_to_mark(&mut stack)?;
+                    let (items, depth) = contents(pop_to_mark(&mut stack)?)?;
                     let mut dict = Value::Dict(Vec::new());
                     set_items(&mut dict, items)?;
-                    stack.push(Slot::Value(dict));
+                    stack.push(Slot::Value(dict, depth));
                 }
                 b'l' => {
-                    let items = pop_to_mark(&mut stack)?;
-                    stack.push(Slot::Value(Value::List(items)));
+                    let (items, depth) = contents(pop_to_mark(&mut stack)?)?;
+                    stack.push(Slot::Value(Value::List(items), depth));
                 }
                 b't' => {
-                    let items = pop_to_mark(&mut stack)?;
-                    stack.push(Slot::Value(Value::Tuple(items)));
+                    let (items, depth) = contents(pop_to_mark(&mut stack)?)?;
+                    stack.push(Slot::Value(Value::Tuple(items), depth));
                 }
                 0x85..=0x87 => {
                     let count = usize::from(opcode - 0x84);
@@ -446,33 +495,29 @@ pub mod pickle {
                         items.push(pop_value(&mut stack)?);
                     }
                     items.reverse();
-                    stack.push(Slot::Value(Value::Tuple(items)));
+                    let (items, depth) = contents(items)?;
+                    stack.push(Slot::Value(Value::Tuple(items), depth));
                 }
                 b's' => {
                     let value = pop_value(&mut stack)?;
                     let key = pop_value(&mut stack)?;
-                    let Some(Slot::Value(target)) = stack.last_mut() else {
-                        return Err(corrupt("SETITEM without a dict"));
-                    };
-                    set_items(target, vec![key, value])?;
+                    let (items, depth) = contents(vec![key, value])?;
+                    set_items(target(&mut stack, depth)?, items)?;
                 }
                 b'u' => {
-                    let items = pop_to_mark(&mut stack)?;
-                    let Some(Slot::Value(target)) = stack.last_mut() else {
-                        return Err(corrupt("SETITEMS without a dict"));
-                    };
-                    set_items(target, items)?;
+                    let (items, depth) = contents(pop_to_mark(&mut stack)?)?;
+                    set_items(target(&mut stack, depth)?, items)?;
                 }
                 b'a' => {
-                    let item = pop_value(&mut stack)?;
-                    let Some(Slot::Value(Value::List(list))) = stack.last_mut() else {
+                    let (item, depth) = pop_value(&mut stack)?;
+                    let Value::List(list) = target(&mut stack, nest(depth)?)? else {
                         return Err(corrupt("APPEND without a list"));
                     };
                     list.push(item);
                 }
                 b'e' => {
-                    let items = pop_to_mark(&mut stack)?;
-                    let Some(Slot::Value(Value::List(list))) = stack.last_mut() else {
+                    let (items, depth) = contents(pop_to_mark(&mut stack)?)?;
+                    let Value::List(list) = target(&mut stack, depth)? else {
                         return Err(corrupt("APPENDS without a list"));
                     };
                     list.extend(items);
@@ -486,42 +531,42 @@ pub mod pickle {
                             Value::Int(number.parse::<i128>().map_err(|_| corrupt("bad integer"))?)
                         }
                     };
-                    stack.push(Slot::Value(value));
+                    stack.push(scalar(value));
                 }
                 b'J' => {
                     let value = cursor.le(4)? as u32 as i32;
-                    stack.push(Slot::Value(Value::Int(i128::from(value))));
+                    stack.push(scalar(Value::Int(i128::from(value))));
                 }
                 b'K' => {
                     let value = cursor.byte()?;
-                    stack.push(Slot::Value(Value::Int(i128::from(value))));
+                    stack.push(scalar(Value::Int(i128::from(value))));
                 }
                 b'M' => {
                     let value = cursor.le(2)?;
-                    stack.push(Slot::Value(Value::Int(i128::from(value))));
+                    stack.push(scalar(Value::Int(i128::from(value))));
                 }
                 0x8a => {
                     let length = usize::from(cursor.byte()?);
                     let value = signed_le(cursor.take(length)?)?;
-                    stack.push(Slot::Value(Value::Int(value)));
+                    stack.push(scalar(Value::Int(value)));
                 }
                 0x8b => {
                     let length = cursor.length(4)?;
                     let value = signed_le(cursor.take(length)?)?;
-                    stack.push(Slot::Value(Value::Int(value)));
+                    stack.push(scalar(Value::Int(value)));
                 }
                 b'F' => {
                     let value = cursor
                         .line()?
                         .parse::<f64>()
                         .map_err(|_| corrupt("bad float"))?;
-                    stack.push(Slot::Value(Value::Float(value)));
+                    stack.push(scalar(Value::Float(value)));
                 }
                 b'G' => {
                     let bytes = cursor.take(8)?;
                     let mut array = [0u8; 8];
                     array.copy_from_slice(bytes);
-                    stack.push(Slot::Value(Value::Float(f64::from_be_bytes(array))));
+                    stack.push(scalar(Value::Float(f64::from_be_bytes(array))));
                 }
                 // Python 2 `str`, decoded as latin-1 like the Python reader.
                 b'T' | b'U' => {
@@ -535,7 +580,7 @@ pub mod pickle {
                         .iter()
                         .map(|b| char::from(*b))
                         .collect();
-                    stack.push(Slot::Value(Value::Str(text)));
+                    stack.push(scalar(Value::Str(text)));
                 }
                 b'X' | 0x8c | 0x8d => {
                     let length = match opcode {
@@ -546,7 +591,7 @@ pub mod pickle {
                     let text = std::str::from_utf8(cursor.take(length)?)
                         .map_err(|_| corrupt("pickle string is not UTF-8"))?
                         .to_string();
-                    stack.push(Slot::Value(Value::Str(text)));
+                    stack.push(scalar(Value::Str(text)));
                 }
                 b'B' | b'C' | 0x8e => {
                     let length = match opcode {
@@ -554,17 +599,14 @@ pub mod pickle {
                         b'C' => usize::from(cursor.byte()?),
                         _ => cursor.length(8)?,
                     };
-                    stack.push(Slot::Value(Value::Bytes(cursor.take(length)?.to_vec())));
+                    stack.push(scalar(Value::Bytes(cursor.take(length)?.to_vec())));
                 }
                 b'p' => {
                     let index = cursor
                         .line()?
                         .parse::<usize>()
                         .map_err(|_| corrupt("bad memo index"))?;
-                    let value = match stack.last() {
-                        Some(Slot::Value(value)) => value.clone(),
-                        _ => return Err(corrupt("PUT on an empty stack")),
-                    };
+                    let value = top(&stack, "PUT on an empty stack")?;
                     remember(&mut memo, index, value, data.len())?;
                 }
                 b'q' | b'r' => {
@@ -573,17 +615,11 @@ pub mod pickle {
                     } else {
                         cursor.length(4)?
                     };
-                    let value = match stack.last() {
-                        Some(Slot::Value(value)) => value.clone(),
-                        _ => return Err(corrupt("PUT on an empty stack")),
-                    };
+                    let value = top(&stack, "PUT on an empty stack")?;
                     remember(&mut memo, index, value, data.len())?;
                 }
                 0x94 => {
-                    let value = match stack.last() {
-                        Some(Slot::Value(value)) => value.clone(),
-                        _ => return Err(corrupt("MEMOIZE on an empty stack")),
-                    };
+                    let value = top(&stack, "MEMOIZE on an empty stack")?;
                     let index = memo.len();
                     remember(&mut memo, index, value, data.len())?;
                 }
@@ -592,7 +628,7 @@ pub mod pickle {
                         .line()?
                         .parse::<usize>()
                         .map_err(|_| corrupt("bad memo index"))?;
-                    stack.push(Slot::Value(recall(&memo, index, &mut budget)?));
+                    stack.push(recall(&memo, index, &mut budget)?);
                 }
                 b'h' | b'j' => {
                     let index = if opcode == b'h' {
@@ -600,7 +636,7 @@ pub mod pickle {
                     } else {
                         cursor.length(4)?
                     };
-                    stack.push(Slot::Value(recall(&memo, index, &mut budget)?));
+                    stack.push(recall(&memo, index, &mut budget)?);
                 }
                 // GLOBAL, REDUCE, BUILD, INST, OBJ, NEWOBJ, STACK_GLOBAL,
                 // EXT*, persistent ids, ...: all of them would resolve or
@@ -810,6 +846,36 @@ mod tests {
             pickle.extend_from_slice(&[b'h', 0, b'h', 0, 0x86, b'q', 0]);
         }
         pickle.push(b'.');
+        assert!(matches!(
+            pickle::load(&pickle),
+            Err(ArchiveError::CorruptIndex(_))
+        ));
+    }
+
+    #[test]
+    fn a_pickle_nested_past_the_depth_limit_is_refused() {
+        let nested = |levels: usize| {
+            let mut pickle = vec![0x80, 2, b'N'];
+            pickle.extend(std::iter::repeat_n(0x85, levels));
+            pickle.push(b'.');
+            pickle
+        };
+        assert!(pickle::load(&nested(15)).is_ok());
+        assert!(matches!(
+            pickle::load(&nested(16)),
+            Err(ArchiveError::CorruptIndex(_))
+        ));
+        assert!(matches!(
+            pickle::load(&nested(1_000_000)),
+            Err(ArchiveError::CorruptIndex(_))
+        ));
+    }
+
+    #[test]
+    fn appending_a_deep_value_raises_the_list_depth() {
+        let mut pickle = vec![0x80, 2, b']', b'N'];
+        pickle.extend(std::iter::repeat_n(0x85, 15));
+        pickle.extend_from_slice(b"a.");
         assert!(matches!(
             pickle::load(&pickle),
             Err(ArchiveError::CorruptIndex(_))

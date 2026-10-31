@@ -14,6 +14,7 @@
 //! there is nothing to review.
 
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -101,56 +102,73 @@ pub async fn start_translation_job(
         *slot = Some(cancel.clone());
     }
 
-    let prepared = async {
-        let (units, symbol_only, source_lang, target_lang, universe_summary, characters) = {
-            let guard = state.current.lock().await;
-            let session = super::require_session(&guard)?;
-            let selected = select_units(session, &args)?;
-            let symbol_only: HashSet<String> = selected
-                .iter()
-                .filter(|u| !job::needs_translation(&u.source_text))
-                .map(|u| u.block_id.clone())
-                .collect();
-            let units: Vec<TranslationUnitPayload> = selected
-                .into_iter()
-                .map(|u| TranslationUnitPayload {
-                    block_id: u.block_id,
-                    source_text: u.source_text,
-                    character_variable: u.character_variable,
-                })
-                .collect();
-            let universe_summary =
-                repositories::get_project_meta(session.conn(), "universe_summary")
-                    .map_err(|e| e.to_string())?;
-            let characters =
-                repositories::get_all_characters(session.conn()).map_err(|e| e.to_string())?;
-            (
+    let prepared =
+        async {
+            let (
+                project,
                 units,
                 symbol_only,
-                session.source_language(),
-                session.target_language(),
+                source_lang,
+                target_lang,
                 universe_summary,
                 characters,
-            )
-        };
+            ) = {
+                let guard = state.current.lock().await;
+                let session = super::require_session(&guard)?;
+                let selected = select_units(session, &args)?;
+                let symbol_only: HashSet<String> = selected
+                    .iter()
+                    .filter(|u| !job::needs_translation(&u.source_text))
+                    .map(|u| u.block_id.clone())
+                    .collect();
+                let units: Vec<TranslationUnitPayload> = selected
+                    .into_iter()
+                    .map(|u| TranslationUnitPayload {
+                        block_id: u.block_id,
+                        source_text: u.source_text,
+                        character_variable: u.character_variable,
+                    })
+                    .collect();
+                let universe_summary =
+                    repositories::get_project_meta(session.conn(), "universe_summary")
+                        .map_err(|e| e.to_string())?;
+                let characters =
+                    repositories::get_all_characters(session.conn()).map_err(|e| e.to_string())?;
+                (
+                    session.path.clone(),
+                    units,
+                    symbol_only,
+                    session.source_language(),
+                    session.target_language(),
+                    universe_summary,
+                    characters,
+                )
+            };
 
-        if units.is_empty() {
-            return Err(CommandError::message("errors.nothing_to_translate"));
+            if units.is_empty() {
+                return Err(CommandError::message("errors.nothing_to_translate"));
+            }
+
+            let provider = {
+                let mut settings = state.settings.lock().await;
+                registry::get(
+                    &mut settings,
+                    &args.provider_id,
+                    universe_summary,
+                    characters,
+                )?
+            };
+            Ok::<_, CommandError>((
+                project,
+                units,
+                symbol_only,
+                source_lang,
+                target_lang,
+                provider,
+            ))
         }
-
-        let provider = {
-            let mut settings = state.settings.lock().await;
-            registry::get(
-                &mut settings,
-                &args.provider_id,
-                universe_summary,
-                characters,
-            )?
-        };
-        Ok::<_, CommandError>((units, symbol_only, source_lang, target_lang, provider))
-    }
-    .await;
-    let (units, symbol_only, source_lang, target_lang, mut provider) = match prepared {
+        .await;
+    let (project, units, symbol_only, source_lang, target_lang, mut provider) = match prepared {
         Ok(ready) => ready,
         Err(e) => {
             *state.job.lock().await = None;
@@ -162,6 +180,7 @@ pub async fn start_translation_job(
     let current = state.current.clone();
     let job_slot = state.job.clone();
     let symbol_only = Arc::new(symbol_only);
+    let stop = cancel.clone();
 
     tauri::async_runtime::spawn(async move {
         let app_for_events = app.clone();
@@ -169,9 +188,13 @@ pub async fn start_translation_job(
             while let Some(event) = rx.recv().await {
                 match event {
                     JobEvent::Chunk(result) => {
-                        if persist_chunk(&current, &result, &symbol_only).await {
-                            let _ = app_for_events
-                                .emit(JOB_EVENT_NAME, JobEventPayload::ChunkPersisted);
+                        match persist_chunk(&current, &project, &result, &symbol_only).await {
+                            Persisted::Stored => {
+                                let _ = app_for_events
+                                    .emit(JOB_EVENT_NAME, JobEventPayload::ChunkPersisted);
+                            }
+                            Persisted::Failed => {}
+                            Persisted::ProjectGone => stop.cancel(),
                         }
                     }
                     JobEvent::Progress(progress) | JobEvent::Complete(progress) => {
@@ -269,23 +292,38 @@ fn select_units(
     }
 }
 
-/// Write a translated chunk to the database. Returns whether it was
-/// stored, so the caller only announces a chunk that is really there.
+/// What became of a translated chunk.
+enum Persisted {
+    Stored,
+    Failed,
+    /// The project the job was started on is no longer the open one.
+    ProjectGone,
+}
+
+/// Write a translated chunk to the database of `project`, the project the
+/// job was started on.
+///
+/// The open project is read again for every chunk, and nothing stops the
+/// user from opening another one while a job runs. Block ids are hashes
+/// of the dialogue, so two versions of a game share most of them: writing
+/// into whatever is open would land one game's suggestions on the other.
 async fn persist_chunk(
     current: &Arc<Mutex<Option<ProjectSession>>>,
+    project: &Path,
     result: &TranslateBatchResult,
     symbol_only: &HashSet<String>,
-) -> bool {
+) -> Persisted {
     let guard = current.lock().await;
-    let Some(session) = guard.as_ref() else {
-        return false;
+    let Some(session) = guard.as_ref().filter(|session| session.path == project) else {
+        log::warn!("project closed during a translation job, dropping its chunk");
+        return Persisted::ProjectGone;
     };
     let entries = review_actions::chunk_entries(result, symbol_only);
     match repositories::update_translations(session.conn(), &entries) {
-        Ok(_) => true,
+        Ok(_) => Persisted::Stored,
         Err(e) => {
             log::error!("could not persist a chunk of {} units: {e}", entries.len());
-            false
+            Persisted::Failed
         }
     }
 }
@@ -320,7 +358,7 @@ pub async fn translate_unit(
     provider_id: String,
     block_id: String,
 ) -> Result<UnitTranslation, CommandError> {
-    let (payload, source_lang, target_lang, universe_summary, characters) = {
+    let (project, payload, source_lang, target_lang, universe_summary, characters) = {
         let guard = state.current.lock().await;
         let session = super::require_session(&guard)?;
         let unit = super::require_unit(session, &block_id)?;
@@ -336,6 +374,7 @@ pub async fn translate_unit(
         let characters =
             repositories::get_all_characters(session.conn()).map_err(|e| e.to_string())?;
         (
+            session.path.clone(),
             TranslationUnitPayload {
                 block_id: unit.block_id,
                 source_text: unit.source_text,
@@ -365,7 +404,7 @@ pub async fn translate_unit(
         while let Some(event) = rx.recv().await {
             match event {
                 JobEvent::Chunk(result) => {
-                    persist_chunk(&current, &result, &symbol_only).await;
+                    persist_chunk(&current, &project, &result, &symbol_only).await;
                 }
                 JobEvent::Event(message) => messages.push(message),
                 JobEvent::Progress(_) | JobEvent::Complete(_) => {}
@@ -407,4 +446,62 @@ pub async fn cancel_translation_job(state: State<'_, AppState>) -> Result<(), St
 #[tauri::command]
 pub async fn is_translation_job_running(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(state.job.lock().await.is_some())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::core::storage::database::Database;
+    use crate::core::storage::repositories::NewUnit;
+    use crate::core::translation::providers::base::TranslatedUnit;
+    use crate::mcp_server::session;
+
+    fn extracted_project(name: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let project = std::env::temp_dir().join(format!("rts-translate-test-{name}-{nanos}"));
+        let db_path = Database::path_for(&project);
+        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+        let db = Database::open(&db_path).unwrap();
+        repositories::bulk_insert(
+            db.conn(),
+            &[NewUnit {
+                block_id: "start_a1",
+                source_file: "game/script.rpy",
+                source_line: 1,
+                character_variable: None,
+                source_text: "Hello.",
+            }],
+        )
+        .unwrap();
+        project
+    }
+
+    #[tokio::test]
+    async fn a_chunk_is_never_written_into_another_project() {
+        let started_on = extracted_project("a");
+        let opened = extracted_project("b");
+        let current = Arc::new(Mutex::new(Some(session::open_project(&opened).unwrap())));
+        let result = TranslateBatchResult {
+            translations: vec![TranslatedUnit {
+                block_id: "start_a1".into(),
+                translated_text: "Bonjour.".into(),
+            }],
+            ..Default::default()
+        };
+
+        let outcome = persist_chunk(&current, &started_on, &result, &HashSet::new()).await;
+        assert!(matches!(outcome, Persisted::ProjectGone));
+        let guard = current.lock().await;
+        let units =
+            repositories::get_many(guard.as_ref().unwrap().conn(), &["start_a1".into()]).unwrap();
+        assert_eq!(units[0].translated_text, "");
+        drop(guard);
+
+        let outcome = persist_chunk(&current, &opened, &result, &HashSet::new()).await;
+        assert!(matches!(outcome, Persisted::Stored));
+    }
 }

@@ -468,14 +468,16 @@
     "confirm_unknown": "{n} lines are unknown in this project and will be ignored.",
     "confirm_unknown_one": "{n} line is unknown in this project and will be ignored.",
     "confirm_empty": "{n} lines carry no translation and will be ignored.",
-    "confirm_empty_one": "{n} line carries no translation and will be ignored.",
+    "confirm_refused": "{n} lines add an interpolation [...] absent from the source and will be refused: Ren'Py would run it as code.",
+    "confirm_refused_one": "{n} line adds an interpolation [...] absent from the source and will be refused: Ren'Py would run it as code.",
     "import_applied": "{n} translations imported",
     "import_applied_one": "{n} translation imported",
     "import_flagged": "{n} written as drafts, refused by a quality check",
     "import_protected": "{n} already validated, left untouched",
     "import_stale": "{n} whose source text has changed since the export",
     "import_unknown": "{n} unknown in this project",
-    "import_empty": "{n} without a translation"
+    "import_empty": "{n} without a translation",
+    "import_refused": "{n} refused, adding an interpolation absent from the source"
   },
   "export": {
     "title": "Export translation",

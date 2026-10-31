@@ -264,6 +264,7 @@ export interface ImportPreview {
 	empty: number;
 	protected: number;
 	flagged: number;
+	refused: number;
 }
 
 export interface ImportOutcome {
