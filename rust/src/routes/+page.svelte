@@ -13,13 +13,13 @@
 		type ProjectEntry
 	} from '$lib/api';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import SdkField from '$lib/components/SdkField.svelte';
 	import Select from '$lib/components/Select.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
 	import { errorText } from '$lib/messages';
 	import { languageName } from '$lib/languages';
 	import { ROUTES } from '$lib/navigation';
-	import { pickAndValidateSdk } from '$lib/sdk';
 	import { project } from '$lib/stores';
 	import { toast } from '$lib/toast';
 
@@ -34,7 +34,6 @@
 	let sourceLanguage = $state('english');
 	let targetLanguage = $state('');
 	let sdkPath = $state('');
-	let sdkError = $state('');
 
 	let extracting = $state(false);
 	let stage = $state<ExtractionStage | null>(null);
@@ -150,26 +149,6 @@
 			return;
 		}
 		await inspect();
-	}
-
-	async function browseSdk() {
-		sdkError = '';
-		const picked = await pickAndValidateSdk();
-		if (!picked) return;
-		if ('error' in picked) {
-			sdkError = errorText($t, picked.error);
-			return;
-		}
-		if (!picked.valid) {
-			sdkError = $t('onboarding.sdk_invalid');
-			return;
-		}
-		try {
-			await api.setSetting('sdk_path', picked.path);
-			sdkPath = picked.path;
-		} catch (e) {
-			sdkError = errorText($t, e);
-		}
 	}
 
 	const missing = $derived.by(() => {
@@ -419,24 +398,16 @@
 			</div>
 
 			{#if inspection?.valid && inspection.needsSdk}
-				<div>
-					<label class="lbl" for="np-sdk">{$t('project_setup.sdk_title')}</label>
-					<div class="row">
-						<input
-							id="np-sdk"
-							class="mono"
-							readonly
-							value={sdkPath}
-							placeholder={$t('project_setup.sdk_file_hint')}
-							aria-describedby="np-sdk-help"
-						/>
-						<button type="button" class="btn" disabled={extracting} onclick={browseSdk}>
-							{$t('project_setup.sdk_select')}
-						</button>
-					</div>
-					{#if sdkError}<p class="status err" role="alert">{sdkError}</p>{/if}
-					<p id="np-sdk-help" class="help">{$t('project_setup.sdk_desc')}</p>
-				</div>
+				<SdkField
+					id="np-sdk"
+					label={$t('project_setup.sdk_title')}
+					placeholder={$t('project_setup.sdk_file_hint')}
+					help={$t('project_setup.sdk_desc')}
+					browseLabel={$t('project_setup.sdk_select')}
+					disabled={extracting}
+					bind:value={sdkPath}
+					onchange={(path) => api.setSetting('sdk_path', path)}
+				/>
 			{/if}
 
 			<p id="np-notice" class="notice">

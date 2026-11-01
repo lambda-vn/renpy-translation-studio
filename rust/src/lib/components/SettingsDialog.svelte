@@ -9,11 +9,11 @@
 	import { errorText } from '$lib/messages';
 	import { languageName } from '$lib/languages';
 	import { ROUTES } from '$lib/navigation';
-	import { pickAndValidateSdk } from '$lib/sdk';
 	import { jobRunning, settingsOpen } from '$lib/stores';
 	import { parseTheme, setTheme, themePreference, THEME_PREFERENCES } from '$lib/theme';
 	import { toast } from '$lib/toast';
 	import Dialog from './Dialog.svelte';
+	import SdkField from './SdkField.svelte';
 	import Select from './Select.svelte';
 
 	const LOCALES = [
@@ -22,7 +22,6 @@
 	];
 
 	let sdkPath = $state('');
-	let sdkError = $state('');
 	let verbose = $state(false);
 	let memory = $state<MemoryPair[]>([]);
 	let error = $state('');
@@ -33,7 +32,6 @@
 
 	async function load() {
 		error = '';
-		sdkError = '';
 		try {
 			const settings = await api.getSettings();
 			sdkPath = settings.sdkPath ?? '';
@@ -75,28 +73,6 @@
 		} catch (e) {
 			error = errorText($t, e);
 		}
-	}
-
-	async function browseSdk() {
-		const picked = await pickAndValidateSdk();
-		if (!picked) return;
-		if ('error' in picked) {
-			sdkError = errorText($t, picked.error);
-			return;
-		}
-		sdkError = '';
-		if (!picked.valid) {
-			sdkError = $t('onboarding.sdk_invalid');
-			return;
-		}
-		sdkPath = picked.path;
-		await persist('sdk_path', picked.path);
-	}
-
-	async function clearSdk() {
-		sdkPath = '';
-		sdkError = '';
-		await persist('sdk_path', null);
 	}
 
 	async function forget(pair: MemoryPair) {
@@ -173,25 +149,16 @@
 		</span>
 	</div>
 
-	<div>
-		<label class="lbl" for="set-sdk">{$t('settings.sdk_label')}</label>
-		<div class="row">
-			<input
-				id="set-sdk"
-				class="mono"
-				readonly
-				value={sdkPath}
-				placeholder={$t('settings.sdk_none')}
-				aria-describedby="set-sdk-help"
-			/>
-			<button type="button" class="btn" onclick={browseSdk}>{$t('settings.sdk_browse')}…</button>
-			{#if sdkPath}
-				<button type="button" class="btn ghost" onclick={clearSdk}>{$t('settings.clear')}</button>
-			{/if}
-		</div>
-		{#if sdkError}<p class="notice err sdk-err" role="alert">{sdkError}</p>{/if}
-		<p class="help" id="set-sdk-help">{$t('settings.sdk_hint')}</p>
-	</div>
+	<SdkField
+		id="set-sdk"
+		label={$t('settings.sdk_label')}
+		placeholder={$t('settings.sdk_none')}
+		help={$t('settings.sdk_hint')}
+		browseLabel="{$t('settings.sdk_browse')}…"
+		clearLabel={$t('settings.clear')}
+		bind:value={sdkPath}
+		onchange={(path) => api.setSetting('sdk_path', path)}
+	/>
 
 	<div>
 		<p class="lbl">{$t('settings.memory_label')}</p>
@@ -236,10 +203,6 @@
 </Dialog>
 
 <style>
-	.row {
-		display: flex;
-		gap: 6px;
-	}
 	.grow {
 		flex: 1;
 		min-width: 0;
@@ -259,10 +222,6 @@
 	}
 	.help.top {
 		margin: 0 0 8px;
-	}
-	.sdk-err {
-		margin-top: 6px;
-		padding: 8px 10px;
 	}
 	.memory {
 		list-style: none;
