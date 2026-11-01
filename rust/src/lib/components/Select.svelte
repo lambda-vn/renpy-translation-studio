@@ -68,9 +68,17 @@
 	aria-expanded={menuOpen}
 	aria-describedby={describedby}
 	onpointerdown={() => (wasOpen = menuOpen)}
-	onclick={() => {
-		menuOpen = !wasOpen;
+	onclick={(event) => {
+		// A keyboard activation (detail 0) has no pointerdown before it, so
+		// `wasOpen` may be left over from a press released elsewhere.
+		menuOpen = event.detail === 0 ? !menuOpen : !wasOpen;
 		wasOpen = false;
+	}}
+	onkeydown={(event) => {
+		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			menuOpen = true;
+		}
 	}}
 >
 	<span class="val" class:placeholder={!current}>{current?.label ?? placeholder}</span>

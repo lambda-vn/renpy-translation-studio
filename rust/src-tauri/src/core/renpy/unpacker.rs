@@ -253,15 +253,22 @@ fn extract_into(
 }
 
 /// [`extract_into`] with explicit ceilings on the total bytes written and
-/// the number of members extracted, across all archives.
+/// the number of members extracted, across all archives. What earlier runs
+/// extracted (`entries` on entry) counts too, so running again after a
+/// refusal does not grant a fresh quota.
 fn extract_within(
     game_dir: &Path,
     entries: &mut BTreeMap<String, UnpackedEntry>,
     max_bytes: u64,
     max_members: usize,
 ) -> Result<(), ArchiveError> {
-    let mut written_bytes: u64 = 0;
-    let mut written_members: usize = 0;
+    let mut written_members = entries.len();
+    let mut written_bytes: u64 = entries
+        .keys()
+        .filter_map(|name| resolve_target(game_dir, name).ok())
+        .filter_map(|target| std::fs::metadata(target).ok())
+        .map(|metadata| metadata.len())
+        .fold(0, u64::saturating_add);
     for archive_path in rpa_files(game_dir) {
         let mut archive = RpaArchive::open(&archive_path)?;
         for name in archive.names().to_vec() {
@@ -582,6 +589,42 @@ mod tests {
         ));
         assert!(entries.is_empty());
         assert!(!project.join("game").join("a.rpy").exists());
+    }
+
+    #[test]
+    fn a_second_run_after_a_refusal_gets_no_fresh_quota() {
+        let project = game("limits-rerun");
+        archive_in(
+            &project,
+            "scripts.rpa",
+            &[("a.rpy", b"12345"), ("b.rpy", b"12345")],
+        );
+        let game_dir = project.join("game");
+
+        let mut entries = BTreeMap::new();
+        assert!(extract_within(&game_dir, &mut entries, 1024, 1).is_err());
+        assert!(game_dir.join("a.rpy").exists());
+
+        assert!(matches!(
+            extract_within(&game_dir, &mut entries, 1024, 1),
+            Err(ArchiveError::ExtractionLimit(_))
+        ));
+        assert!(!game_dir.join("b.rpy").exists());
+
+        let project = game("limits-rerun-bytes");
+        archive_in(
+            &project,
+            "scripts.rpa",
+            &[("a.rpy", b"12345"), ("b.rpy", b"12345")],
+        );
+        let game_dir = project.join("game");
+        let mut entries = BTreeMap::new();
+        assert!(extract_within(&game_dir, &mut entries, 7, 10).is_err());
+        assert!(matches!(
+            extract_within(&game_dir, &mut entries, 7, 10),
+            Err(ArchiveError::ExtractionLimit(_))
+        ));
+        assert!(!game_dir.join("b.rpy").exists());
     }
 
     #[test]
