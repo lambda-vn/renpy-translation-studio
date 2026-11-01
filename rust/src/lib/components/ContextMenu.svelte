@@ -7,9 +7,9 @@
 		/** Red text: for the destructive entry. */
 		danger?: boolean;
 		disabled?: boolean;
-		/** Set (true or false) for a choice list: the item becomes a
-		 * menuitemradio with a check mark, and the checked one takes the focus
-		 * when the menu opens. */
+		/** Set (true or false) for a choice list: the item gets a check mark
+		 * (a menuitemradio, or an option in a listbox), and the checked one
+		 * takes the focus when the menu opens. */
 		checked?: boolean;
 	}
 
@@ -27,6 +27,10 @@
 	// are clamped to the window. For the keyboard (ContextMenu key, Shift+F10)
 	// pass the focused element as `anchor`. A long list scrolls, and typing a
 	// letter jumps to the next item starting with it.
+	//
+	// `listbox` turns it into a value picker (role="listbox" / "option") for
+	// a button that chooses a value rather than runs a command; `id` lets
+	// that button point at it with aria-controls.
 	import Kbd from './Kbd.svelte';
 
 	interface Props {
@@ -38,10 +42,21 @@
 		y?: number;
 		anchor?: HTMLElement | null;
 		onclose?: () => void;
+		id?: string;
+		listbox?: boolean;
 	}
 
-	let { open = $bindable(false), label, items, x = 0, y = 0, anchor = null, onclose }: Props =
-		$props();
+	let {
+		open = $bindable(false),
+		label,
+		items,
+		x = 0,
+		y = 0,
+		anchor = null,
+		onclose,
+		id,
+		listbox = false
+	}: Props = $props();
 
 	const MARGIN = 8;
 
@@ -77,7 +92,7 @@
 		menu.style.top = `${Math.max(MARGIN, top)}px`;
 		menu.style.visibility = 'visible';
 		const list = buttons();
-		(list.find((button) => button.getAttribute('aria-checked') === 'true') ?? list[0])?.focus();
+		(list.find((button) => button.dataset.checked === 'true') ?? list[0])?.focus();
 	});
 
 	function close(restoreFocus = true) {
@@ -159,8 +174,9 @@
 {#if open}
 	<ul
 		bind:this={menu}
+		{id}
 		class="menu"
-		role="menu"
+		role={listbox ? 'listbox' : 'menu'}
 		aria-label={label}
 		tabindex="-1"
 		style="visibility: hidden"
@@ -173,8 +189,10 @@
 				<li role="none">
 					<button
 						type="button"
-						role={entry.checked === undefined ? 'menuitem' : 'menuitemradio'}
-						aria-checked={entry.checked === undefined ? undefined : entry.checked}
+						role={listbox ? 'option' : entry.checked === undefined ? 'menuitem' : 'menuitemradio'}
+						aria-checked={listbox || entry.checked === undefined ? undefined : entry.checked}
+						aria-selected={listbox ? entry.checked === true : undefined}
+						data-checked={entry.checked}
 						class="mi"
 						class:danger={entry.danger}
 						aria-disabled={entry.disabled ? 'true' : undefined}
@@ -266,7 +284,7 @@
 		stroke-linejoin: round;
 	}
 
-	.mi[aria-checked='true'] {
+	.mi[data-checked='true'] {
 		font-weight: 600;
 	}
 

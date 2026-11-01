@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api, type TestConnectionResult } from '$lib/api';
 	import BackLink from '$lib/components/BackLink.svelte';
+	import Select, { type SelectOption } from '$lib/components/Select.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { locale, t } from '$lib/i18n';
 	import { errorText } from '$lib/messages';
@@ -28,6 +29,14 @@
 	let ollamaModel = $state('');
 	let ollamaBatchSize = $state('');
 	let ollamaModels = $state<string[]>([]);
+	// The saved model stays listed before a connection test fills the
+	// list, and after one that no longer finds it.
+	const modelOptions = $derived<SelectOption[]>(
+		[...new Set([...(ollamaModel ? [ollamaModel] : []), ...ollamaModels])].map((model) => ({
+			value: model,
+			label: model
+		}))
+	);
 	let ollamaBatchError = $state('');
 	let ollama = $state<Probe>(idle());
 
@@ -335,16 +344,14 @@
 					</div>
 					<div>
 						<label class="lbl" for="ol-model">{$t('provider_config.ollama_model_label')}</label>
-						<input
+						<Select
 							id="ol-model"
-							list="ol-models"
-							autocomplete="off"
-							placeholder={$t('provider_config.ollama_model_hint')}
+							label={$t('provider_config.ollama_model_label')}
 							bind:value={ollamaModel}
+							options={modelOptions}
+							placeholder={$t('provider_config.ollama_model_hint')}
+							disabled={modelOptions.length === 0}
 						/>
-						<datalist id="ol-models">
-							{#each ollamaModels as model (model)}<option value={model}></option>{/each}
-						</datalist>
 					</div>
 				</div>
 				<div>

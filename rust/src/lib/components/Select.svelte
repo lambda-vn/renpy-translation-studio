@@ -38,6 +38,9 @@
 		onchange
 	}: Props = $props();
 
+	const uid = $props.id();
+	const listId = `${uid}-list`;
+
 	let menuOpen = $state(false);
 	let wasOpen = false;
 	let button: HTMLButtonElement | undefined = $state();
@@ -64,8 +67,9 @@
 	class="btn select"
 	bind:this={button}
 	{disabled}
-	aria-haspopup="menu"
+	aria-haspopup="listbox"
 	aria-expanded={menuOpen}
+	aria-controls={listId}
 	aria-describedby={describedby}
 	onpointerdown={() => (wasOpen = menuOpen)}
 	onclick={(event) => {
@@ -74,18 +78,14 @@
 		menuOpen = event.detail === 0 ? !menuOpen : !wasOpen;
 		wasOpen = false;
 	}}
-	onkeydown={(event) => {
-		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-			event.preventDefault();
-			menuOpen = true;
-		}
-	}}
 >
 	<span class="val" class:placeholder={!current}>{current?.label ?? placeholder}</span>
 	<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5L8 10l3.5-3.5" /></svg>
 </button>
 <ContextMenu
 	bind:open={menuOpen}
+	id={listId}
+	listbox
 	{label}
 	{items}
 	anchor={button}

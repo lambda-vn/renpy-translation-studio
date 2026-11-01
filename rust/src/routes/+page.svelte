@@ -404,6 +404,7 @@
 					placeholder={$t('project_setup.sdk_file_hint')}
 					help={$t('project_setup.sdk_desc')}
 					browseLabel={$t('project_setup.sdk_select')}
+					clearLabel={$t('settings.clear')}
 					disabled={extracting}
 					bind:value={sdkPath}
 					onchange={(path) => api.setSetting('sdk_path', path)}

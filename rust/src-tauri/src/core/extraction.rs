@@ -835,6 +835,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&project);
         std::fs::create_dir_all(&project).unwrap();
         copy_dir(&demo, &project);
+        // The demo ships no `.rts`: one there was left by opening the SDK's
+        // own copy in the application, and its backups would be counted.
+        let _ = std::fs::remove_dir_all(project.join(".rts"));
 
         let run = |mode| {
             let mut stages = Vec::new();
