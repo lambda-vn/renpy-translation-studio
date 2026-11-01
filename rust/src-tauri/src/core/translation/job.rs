@@ -247,7 +247,7 @@ pub fn needs_translation(source_text: &str) -> bool {
 ///
 /// Returns `(units to actually send, block_ids waiting on each one)`. A
 /// text occurring once has an empty follower list.
-pub fn group_by_source(
+fn group_by_source(
     units: &[TranslationUnitPayload],
 ) -> (Vec<TranslationUnitPayload>, HashMap<String, Vec<String>>) {
     let mut representatives = Vec::new();

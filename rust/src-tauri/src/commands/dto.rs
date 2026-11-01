@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::review_actions::UnitFilter;
 use crate::core::storage::repositories;
 
 #[derive(Debug, Clone, Serialize)]
@@ -142,6 +143,19 @@ pub struct ListUnitsArgs {
 
 fn default_page_size() -> i64 {
     50
+}
+
+impl ListUnitsArgs {
+    /// The review-screen filter these arguments describe.
+    pub fn unit_filter(&self) -> UnitFilter {
+        UnitFilter {
+            status: self.status.clone(),
+            search: self.search.clone(),
+            speaker: self.speaker.clone(),
+            needs_review: self.needs_review,
+            errors_only: self.errors_only,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

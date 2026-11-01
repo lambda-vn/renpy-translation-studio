@@ -92,25 +92,6 @@ impl TranslateBlockWriter {
     }
 }
 
-/// Split into lines with their line endings still attached, the way
-/// Python's `str.splitlines(keepends=True)` does for `\n`/`\r\n` — the
-/// writer has to hand back untouched lines byte-for-byte, unlike the
-/// parser, which only ever reads line content.
-fn split_keepends(content: &str) -> Vec<String> {
-    let mut result = Vec::new();
-    let mut start = 0;
-    for (i, byte) in content.as_bytes().iter().enumerate() {
-        if *byte == b'\n' {
-            result.push(content[start..=i].to_string());
-            start = i + 1;
-        }
-    }
-    if start < content.len() {
-        result.push(content[start..].to_string());
-    }
-    result
-}
-
 /// The index of the line a translation is written into: the block's say
 /// statement, which is neither its first line nor always its only
 /// statement. Ren'Py writes a blank line under every header, then the
@@ -136,7 +117,7 @@ fn apply_translations(
     translations: &HashMap<String, String>,
     old_to_new: &HashMap<String, String>,
 ) -> String {
-    let lines = split_keepends(content);
+    let lines: Vec<String> = content.split_inclusive('\n').map(str::to_string).collect();
     let mut result = String::with_capacity(content.len());
     let mut i = 0usize;
     let mut in_strings = false;
@@ -499,10 +480,13 @@ translate french start_x:\n    # e \"Hi\"\n    e \"\"\n",
     }
 
     #[test]
-    fn split_keepends_matches_python_semantics() {
-        assert_eq!(split_keepends("a\nb\r\nc"), vec!["a\n", "b\r\n", "c"]);
-        assert_eq!(split_keepends("a\n"), vec!["a\n"]);
-        assert_eq!(split_keepends(""), Vec::<String>::new());
+    fn split_inclusive_keeps_line_endings_like_python_splitlines() {
+        fn split(s: &str) -> Vec<&str> {
+            s.split_inclusive('\n').collect()
+        }
+        assert_eq!(split("a\nb\r\nc"), vec!["a\n", "b\r\n", "c"]);
+        assert_eq!(split("a\n"), vec!["a\n"]);
+        assert_eq!(split(""), Vec::<&str>::new());
     }
 
     #[test]

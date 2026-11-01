@@ -5,13 +5,11 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::core::storage::repositories;
+use crate::core::storage::repositories::{self, UNIVERSE_SUMMARY_KEY};
 use crate::core::translation::providers::registry;
 use crate::core::translation::universe_generator;
 
 use super::CommandError;
-
-const UNIVERSE_SUMMARY_KEY: &str = "universe_summary";
 
 #[tauri::command]
 pub async fn get_universe_summary(

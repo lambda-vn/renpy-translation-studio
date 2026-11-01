@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::core::review_actions::{self, UnitFilter};
+use crate::core::review_actions;
 use crate::core::storage::{repositories, translation_memory};
 use crate::core::translation::quality;
 use crate::mcp_server::session::ProjectSession;
@@ -51,13 +51,7 @@ pub async fn list_units(
     let guard = state.current.lock().await;
     let session = require_session(&guard)?;
     let source_file = session.absolute(&args.source_file);
-    let filter = UnitFilter {
-        status: args.status.clone(),
-        search: args.search.clone(),
-        speaker: args.speaker.clone(),
-        needs_review: args.needs_review,
-        errors_only: args.errors_only,
-    };
+    let filter = args.unit_filter();
     let page = args.page.max(0);
     let page_size = args.page_size.clamp(1, MAX_PAGE_SIZE);
     let (units, total) =

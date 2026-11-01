@@ -231,7 +231,7 @@ fn select(
 ) -> rusqlite::Result<HashMap<String, String>> {
     let mut found = HashMap::new();
     for batch in values.chunks(MAX_LOOKUP_PARAMS) {
-        let placeholders = vec!["?"; batch.len()].join(",");
+        let placeholders = super::repositories::sql_placeholders(batch.len());
         let mut stmt = conn.prepare(&format!(
             "SELECT {column}, translated_text FROM memory \
              WHERE source_language = ? AND target_language = ? \

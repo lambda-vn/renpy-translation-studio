@@ -209,10 +209,6 @@
 		font-size: 13px;
 		font-weight: 600;
 	}
-	.optional {
-		font-weight: 400;
-		color: var(--ink3);
-	}
 	.row {
 		display: flex;
 		gap: 6px;

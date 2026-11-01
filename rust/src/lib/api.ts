@@ -41,6 +41,13 @@ export interface FileEntry {
 	imported: number;
 }
 
+export type UnitStatus =
+	| 'not_translated'
+	| 'ai_suggested'
+	| 'human_validated'
+	| 'draft'
+	| 'imported';
+
 export interface UnitPayload {
 	blockId: string;
 	sourceFile: string;
@@ -48,14 +55,14 @@ export interface UnitPayload {
 	speaker: string | null;
 	sourceText: string;
 	translatedText: string;
-	status: string;
+	status: UnitStatus;
 	needsReview: boolean;
 	note: string | null;
 }
 
 export interface ListUnitsArgs {
 	sourceFile: string;
-	status?: string | null;
+	status?: UnitStatus | null;
 	search?: string;
 	speaker?: string | null;
 	needsReview?: boolean;
@@ -298,7 +305,7 @@ export const api = {
 	/** Per-file match counts (relative paths) for a search/speaker/flag under a status. */
 	countMatches: (args: {
 		search: string;
-		status: string | null;
+		status: UnitStatus | null;
 		speaker: string | null;
 		needsReview: boolean;
 	}) => invoke<Record<string, number>>('count_matches', args),

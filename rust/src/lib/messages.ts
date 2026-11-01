@@ -2,7 +2,9 @@
 // in the language of the interface.
 
 import type { JobMessage, QualityIssuePayload } from '$lib/api';
-import type { Translate } from '$lib/i18n';
+import { t, type Translate } from '$lib/i18n';
+import { toast } from '$lib/toast';
+import { get } from 'svelte/store';
 
 /** The sentence for one quality issue; a kind without a catalog entry shows its detail as is. */
 export function qualityText(t: Translate, issue: QualityIssuePayload): string {
@@ -32,4 +34,9 @@ export function errorText(t: Translate, error: unknown): string {
 		return jobMessageText(t, error as JobMessage);
 	}
 	return String(error);
+}
+
+/** Shows a command failure as an error toast. */
+export function reportError(error: unknown): void {
+	toast.error(errorText(get(t), error));
 }

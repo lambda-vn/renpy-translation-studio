@@ -5,9 +5,8 @@
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
-	import { errorText } from '$lib/messages';
+	import { errorText, reportError } from '$lib/messages';
 	import { project } from '$lib/stores';
-	import { toast } from '$lib/toast';
 
 	// The only LLM provider there is for now; the generation command takes none.
 	const PROVIDER_LABEL = 'Ollama';
@@ -37,7 +36,7 @@
 	onDestroy(() => {
 		clearTimeout(timer);
 		if (dirty && $project) {
-			api.setUniverseSummary(summary).catch((e) => toast.error(errorText($t, e)));
+			api.setUniverseSummary(summary).catch(reportError);
 		}
 	});
 

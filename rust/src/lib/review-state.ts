@@ -4,17 +4,9 @@
 // to one project: opening another resets it.
 
 import { writable } from 'svelte/store';
-import type { ListUnitsArgs } from './api';
+import type { ListUnitsArgs, UnitStatus } from './api';
 
-export type StatusFilter =
-	| 'all'
-	| 'not_translated'
-	| 'draft'
-	| 'imported'
-	| 'ai_suggested'
-	| 'human_validated'
-	| 'flagged'
-	| 'errors';
+export type StatusFilter = UnitStatus | 'all' | 'flagged' | 'errors';
 
 export interface ReviewNav {
 	/** Path of the project the rest belongs to. */
@@ -39,7 +31,7 @@ export const emptyNav = (projectPath = ''): ReviewNav => ({
 export const reviewNav = writable<ReviewNav>(emptyNav());
 
 /** The five real statuses; the other filters are views over the lines. */
-const REAL_STATUSES: readonly StatusFilter[] = [
+const REAL_STATUSES: readonly UnitStatus[] = [
 	'not_translated',
 	'draft',
 	'imported',
@@ -47,12 +39,16 @@ const REAL_STATUSES: readonly StatusFilter[] = [
 	'human_validated'
 ];
 
+function isUnitStatus(filter: StatusFilter): filter is UnitStatus {
+	return (REAL_STATUSES as readonly StatusFilter[]).includes(filter);
+}
+
 /** The filter fields of `listUnits` / `countMatches` for a nav state. */
 export function filterArgs(
 	nav: Pick<ReviewNav, 'filter' | 'speaker' | 'search'>
 ): Required<Pick<ListUnitsArgs, 'status' | 'search' | 'speaker' | 'needsReview' | 'errorsOnly'>> {
 	return {
-		status: REAL_STATUSES.includes(nav.filter) ? nav.filter : null,
+		status: isUnitStatus(nav.filter) ? nav.filter : null,
 		search: nav.search,
 		speaker: nav.speaker || null,
 		needsReview: nav.filter === 'flagged',

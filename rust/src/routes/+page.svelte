@@ -17,7 +17,7 @@
 	import Select from '$lib/components/Select.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
-	import { errorText } from '$lib/messages';
+	import { errorText, reportError } from '$lib/messages';
 	import { languageName } from '$lib/languages';
 	import { ROUTES } from '$lib/navigation';
 	import { project } from '$lib/stores';
@@ -51,7 +51,7 @@
 
 	onMount(async () => {
 		unlisten = listen<ExtractionStage>('extraction-stage', (e) => (stage = e.payload));
-		unlisten.catch((e) => toast.error(errorText($t, e)));
+		unlisten.catch(reportError);
 		try {
 			[recent, languages] = await Promise.all([api.listRecentProjects(), api.listLanguages()]);
 			sdkPath = (await api.getSettings()).sdkPath ?? '';
@@ -639,10 +639,6 @@
 	.lbl {
 		font-size: 13px;
 		font-weight: 600;
-	}
-	.optional {
-		font-weight: 400;
-		color: var(--ink3);
 	}
 	.row {
 		display: flex;

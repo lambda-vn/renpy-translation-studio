@@ -22,7 +22,7 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 use crate::app_state::AppState;
-use crate::core::review_actions::{self, JobScope, UnitFilter};
+use crate::core::review_actions::{self, JobScope};
 use crate::core::storage::repositories;
 use crate::core::translation::job::{self, CancelToken, JobEvent, JobMessage, JobProgress};
 use crate::core::translation::providers::base::{
@@ -123,7 +123,7 @@ impl JobContext {
             }
             let (units, symbol_only) = to_payloads(selected);
             let universe_summary =
-                repositories::get_project_meta(session.conn(), "universe_summary")
+                repositories::get_project_meta(session.conn(), repositories::UNIVERSE_SUMMARY_KEY)
                     .map_err(|e| e.to_string())?;
             let characters =
                 repositories::get_all_characters(session.conn()).map_err(|e| e.to_string())?;
@@ -438,18 +438,10 @@ fn select_for_job(
     args: &StartJobArgs,
 ) -> Result<Vec<repositories::TranslationUnit>, String> {
     let source_file = args.source_file.as_deref().map(|f| session.absolute(f));
-    let filter = args.filter.as_ref().map(|filter| {
-        (
-            session.absolute(&filter.source_file),
-            UnitFilter {
-                status: filter.status.clone(),
-                search: filter.search.clone(),
-                speaker: filter.speaker.clone(),
-                needs_review: filter.needs_review,
-                errors_only: filter.errors_only,
-            },
-        )
-    });
+    let filter = args
+        .filter
+        .as_ref()
+        .map(|filter| (session.absolute(&filter.source_file), filter.unit_filter()));
     review_actions::select_units(
         session.conn(),
         args.scope,

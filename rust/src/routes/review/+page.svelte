@@ -24,7 +24,7 @@
 	import JobBanner, { type JobLogEntry } from '$lib/components/review/JobBanner.svelte';
 	import Kbd from '$lib/components/Kbd.svelte';
 	import LineRow from '$lib/components/review/LineRow.svelte';
-	import { errorText, jobMessageText } from '$lib/messages';
+	import { errorText, jobMessageText, reportError } from '$lib/messages';
 	import Pagination from '$lib/components/review/Pagination.svelte';
 	import ReviewToolbar from '$lib/components/review/ReviewToolbar.svelte';
 	import TranslateDialog from '$lib/components/review/TranslateDialog.svelte';
@@ -178,7 +178,7 @@
 			listen<{ blockIds: string[] | null }>('live-changed', handleLiveChange)
 		];
 		for (const off of subscribed) {
-			off.catch((e) => toast.error(errorText(get(t), e)));
+			off.catch(reportError);
 			unlisteners.push(off);
 		}
 		api.startLive().catch(() => {});
@@ -192,7 +192,7 @@
 		clearTimeout(sideTimer);
 		for (const id of Object.keys(editTimers)) {
 			clearTimeout(editTimers[id]);
-			api.saveDraft(id, drafts[id] ?? '').catch((e) => toast.error(errorText(get(t), e)));
+			api.saveDraft(id, drafts[id] ?? '').catch(reportError);
 		}
 	});
 
@@ -201,7 +201,7 @@
 		try {
 			files = await api.listFiles();
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 			return;
 		}
 		if (!files.some((f) => f.sourceFile === file)) {
@@ -241,7 +241,7 @@
 					? settings.defaultProvider
 					: (providers[0] ?? '');
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -286,7 +286,7 @@
 			matchByFile = found;
 			errorsInFile = errors;
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -340,7 +340,7 @@
 			);
 			loaded = true;
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -494,7 +494,7 @@
 			patchUnit(await api.saveDraft(blockId, drafts[blockId] ?? ''), false);
 			scheduleSide();
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -523,7 +523,7 @@
 			if (result.duplicates > 0) offerSpread(blockId, result.duplicates);
 			if (advance) await advanceFrom(index);
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -541,7 +541,7 @@
 							announceSpread(ids);
 							await refreshShown(ids);
 						} catch (e) {
-							toast.error(errorText(get(t), e));
+							reportError(e);
 						}
 					}
 				}
@@ -585,7 +585,7 @@
 			announceSpread(result.propagated);
 			await refreshShown(result.propagated);
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -605,7 +605,7 @@
 			scheduleSide();
 			focusField(blockId);
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -629,7 +629,7 @@
 			}
 			scheduleSide();
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -641,7 +641,7 @@
 			toast.success($t('review.note_saved'));
 			scheduleSide();
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -659,7 +659,7 @@
 			}
 			scheduleSide();
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		} finally {
 			delete translating[blockId];
 		}
@@ -715,7 +715,7 @@
 			}
 			void refreshSide();
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -763,7 +763,7 @@
 		} catch (e) {
 			job = null;
 			jobRunning.set(false);
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -772,7 +772,7 @@
 		try {
 			await api.cancelTranslationJob();
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -829,7 +829,7 @@
 			const nothingToSave =
 				typeof e === 'object' && e !== null && 'key' in e && e.key === 'errors.nothing_to_save';
 			if (nothingToSave) toast.info($t('review.sync_ok'));
-			else toast.error(errorText(get(t), e));
+			else reportError(e);
 		} finally {
 			saving = false;
 			void refreshSide();
@@ -847,7 +847,7 @@
 			toast.success(filled > 0 ? $t('review.memory_filled', { n: filled }) : $t('review.memory_none'));
 			await reloadAll();
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -873,7 +873,7 @@
 			toast.success($t('review.clear_done', { n }));
 			await reloadAll();
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 
@@ -896,7 +896,7 @@
 			await navigator.clipboard.writeText(entry.path);
 			toast.success($t('review.file_menu_copied'));
 		} catch (e) {
-			toast.error(errorText(get(t), e));
+			reportError(e);
 		}
 	}
 

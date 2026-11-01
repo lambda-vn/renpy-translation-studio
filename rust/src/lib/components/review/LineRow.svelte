@@ -63,7 +63,7 @@
 	const warnId = `warn-${uid}`;
 	const errId = `err-${uid}`;
 
-	const status = $derived(unit.status as TranslationStatus);
+	const status = $derived(unit.status);
 	const hasError = $derived(blocking.length > 0);
 	const label = $derived(
 		$t('review.row_label', {

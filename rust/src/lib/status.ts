@@ -2,14 +2,10 @@
 // are not statuses. Status is never carried by colour alone: every glyph has
 // a distinct shape and a screen-reader label.
 
+import type { UnitStatus } from './api';
 import type { Translate } from './i18n';
 
-export type TranslationStatus =
-	| 'not_translated'
-	| 'draft'
-	| 'imported'
-	| 'ai_suggested'
-	| 'human_validated';
+export type TranslationStatus = UnitStatus;
 
 export type GlyphKind = TranslationStatus | 'flag' | 'error' | 'warning';
 

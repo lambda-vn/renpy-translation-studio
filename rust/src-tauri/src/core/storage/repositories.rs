@@ -24,6 +24,17 @@ use rusqlite::{
 pub const STATUS_NOT_TRANSLATED: &str = "not_translated";
 pub const STATUS_DRAFT: &str = "draft";
 pub const STATUS_HUMAN_VALIDATED: &str = "human_validated";
+pub const STATUS_IMPORTED: &str = "imported";
+pub const STATUS_AI_SUGGESTED: &str = "ai_suggested";
+
+/// Every status a line can carry, in the order the review screen lists them.
+pub const ALL_STATUSES: [&str; 5] = [
+    STATUS_NOT_TRANSLATED,
+    STATUS_DRAFT,
+    STATUS_IMPORTED,
+    STATUS_AI_SUGGESTED,
+    STATUS_HUMAN_VALIDATED,
+];
 
 const SELECT_COLUMNS: &str = "id, block_id, source_file, source_line, character_variable, \
      source_text, translated_text, status, needs_review, note";
@@ -129,7 +140,7 @@ pub fn get_all(
 pub fn get_many(conn: &Connection, block_ids: &[String]) -> rusqlite::Result<Vec<TranslationUnit>> {
     let mut units = Vec::with_capacity(block_ids.len());
     for slice in block_ids.chunks(MAX_IN_PARAMS) {
-        let placeholders = vec!["?"; slice.len()].join(",");
+        let placeholders = sql_placeholders(slice.len());
         let query = format!(
             "SELECT {SELECT_COLUMNS} FROM translation_units WHERE block_id IN ({placeholders})"
         );
@@ -485,7 +496,7 @@ pub fn clear_translations(
         if statuses.is_empty() {
             return Ok(0);
         }
-        let placeholders = vec!["?"; statuses.len()].join(",");
+        let placeholders = sql_placeholders(statuses.len());
         conditions.push(format!("status IN ({placeholders})"));
         for status in statuses {
             params.push(Box::new(status.clone()));
@@ -575,7 +586,7 @@ pub fn count_duplicates(
     if unique.is_empty() {
         return Ok(std::collections::HashMap::new());
     }
-    let placeholders = vec!["?"; unique.len()].join(",");
+    let placeholders = sql_placeholders(unique.len());
     let mut stmt = conn.prepare(&format!(
         "SELECT source_text, COUNT(*) AS total, \
                 SUM(CASE WHEN source_file != ? THEN 1 ELSE 0 END) \
@@ -1006,6 +1017,9 @@ pub fn delete_character(conn: &Connection, variable: &str) -> rusqlite::Result<(
     Ok(())
 }
 
+/// The `project_meta` key under which the universe summary is stored.
+pub const UNIVERSE_SUMMARY_KEY: &str = "universe_summary";
+
 /// A per-project key/value pair (universe summary, etc.).
 pub fn get_project_meta(conn: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
     conn.query_row(
@@ -1028,14 +1042,14 @@ pub fn set_project_meta(conn: &Connection, key: &str, value: &str) -> rusqlite::
 /// Open a transaction unless the caller already holds one, so a write is
 /// atomic on its own and still composes inside a larger transaction
 /// (SQLite does not nest them).
-pub fn begin(conn: &Connection) -> rusqlite::Result<Option<Transaction<'_>>> {
+pub(crate) fn begin(conn: &Connection) -> rusqlite::Result<Option<Transaction<'_>>> {
     conn.is_autocommit()
         .then(|| conn.unchecked_transaction())
         .transpose()
 }
 
 /// Commit what [`begin`] opened; a no-op when the caller owns the transaction.
-pub fn commit(tx: Option<Transaction<'_>>) -> rusqlite::Result<()> {
+pub(crate) fn commit(tx: Option<Transaction<'_>>) -> rusqlite::Result<()> {
     tx.map_or(Ok(()), Transaction::commit)
 }
 
@@ -1059,6 +1073,11 @@ pub struct UnitQuery<'a> {
     pub search_query: &'a str,
     pub character: Option<&'a str>,
     pub needs_review: bool,
+}
+
+/// `n` comma-separated `?` placeholders for an `IN (...)` clause.
+pub(crate) fn sql_placeholders(n: usize) -> String {
+    vec!["?"; n].join(",")
 }
 
 #[cfg(test)]
@@ -1234,12 +1253,12 @@ mod tests {
         assert!(get_all_characters(db.conn()).unwrap().is_empty());
 
         assert_eq!(
-            get_project_meta(db.conn(), "universe_summary").unwrap(),
+            get_project_meta(db.conn(), UNIVERSE_SUMMARY_KEY).unwrap(),
             None
         );
-        set_project_meta(db.conn(), "universe_summary", "A fantasy world.").unwrap();
+        set_project_meta(db.conn(), UNIVERSE_SUMMARY_KEY, "A fantasy world.").unwrap();
         assert_eq!(
-            get_project_meta(db.conn(), "universe_summary")
+            get_project_meta(db.conn(), UNIVERSE_SUMMARY_KEY)
                 .unwrap()
                 .as_deref(),
             Some("A fantasy world.")
