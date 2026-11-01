@@ -9,7 +9,28 @@ compatibles avec la 1.0.0 Python, MCP sur
 `main` n'est remplacé qu'à la sortie de la 2.0.0 — cette branche coexiste
 avec le code Python (`../src/`) le temps du chantier.
 
-## Actuel : `2.0.0-rc.4`
+## Actuel : `2.0.0-rc.5`
+
+Les corrections de deux revues de code, sans nouvelle fonction.
+
+- Sécurité :
+  - un import bilingue ne peut plus faire entrer une interpolation `[...]` absente de la source, quel que soit le statut de la ligne ;
+  - `.rpa` hostiles : profondeur, mémoire, en-tête et volume extrait sont bornés ;
+  - CSP stricte, `opener` limité à la page du SDK, nom du jeu et langue validés à l'export, chemin du SDK validé à l'enregistrement.
+- Serveur MCP : les outils qui écrivent le glossaire et le résumé d'univers (`upsert_character`, `delete_character`, `detect_characters`, `set_universe_summary`) exigent le drapeau `--allow-edit-glossary`.
+- Jobs :
+  - un job reste lié au projet sur lequel il a été lancé ;
+  - un refus du fournisseur (401, 403, 429, 456) arrête le job au lieu de rejouer chaque ligne, et garde les traductions déjà reçues ;
+  - le slot du job est libéré même après une panique.
+- Données :
+  - `.rpy` et zip exporté écrits par fichier temporaire puis renommage ;
+  - la resynchronisation ne remet jamais à zéro une ligne validée ;
+  - une seule regex d'en-tête pour le parseur et l'écriture.
+- Interface : les listes déroulantes natives sont remplacées par un menu stylé, le résumé d'univers ne perd plus la dernière frappe, le test de connexion ignore un résultat obsolète.
+
+Non vérifié : macOS et Linux.
+
+## Précédemment : `2.0.0-rc.4`
 
 Des correctifs après la rc.3, la check-list [`PARITY.md`](PARITY.md) étant
 complète (40 ✅, le lanceur `rts-mcp` vérifié sur l'installateur rc.3).
