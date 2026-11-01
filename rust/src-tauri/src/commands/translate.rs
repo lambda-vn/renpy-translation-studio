@@ -22,6 +22,7 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 use crate::app_state::AppState;
+use crate::core::project_session::ProjectSession;
 use crate::core::review_actions::{self, JobScope};
 use crate::core::storage::repositories;
 use crate::core::translation::job::{self, CancelToken, JobEvent, JobMessage, JobProgress};
@@ -30,7 +31,6 @@ use crate::core::translation::providers::base::{
 };
 use crate::core::translation::providers::registry;
 use crate::core::validators::is_recognized_language;
-use crate::mcp_server::session::ProjectSession;
 
 use super::dto::{ListUnitsArgs, UnitPayload};
 use super::CommandError;
@@ -457,10 +457,10 @@ fn select_for_job(
 mod tests {
     use super::*;
 
+    use crate::core::project_session;
     use crate::core::storage::database::Database;
     use crate::core::storage::repositories::NewUnit;
     use crate::core::translation::providers::base::TranslatedUnit;
-    use crate::mcp_server::session;
 
     fn extracted_project(name: &str) -> std::path::PathBuf {
         let nanos = std::time::SystemTime::now()
@@ -489,7 +489,9 @@ mod tests {
     async fn a_chunk_is_never_written_into_another_project() {
         let started_on = extracted_project("a");
         let opened = extracted_project("b");
-        let current = Arc::new(Mutex::new(Some(session::open_project(&opened).unwrap())));
+        let current = Arc::new(Mutex::new(Some(
+            project_session::open_project(&opened).unwrap(),
+        )));
         let result = TranslateBatchResult {
             translations: vec![TranslatedUnit {
                 block_id: "start_a1".into(),

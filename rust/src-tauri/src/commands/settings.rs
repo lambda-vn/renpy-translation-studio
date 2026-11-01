@@ -6,6 +6,7 @@
 //! falls back on the saved key: keys are never read back into the field,
 //! so without it a saved key could not be tested at all.
 
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
 use tauri::State;
@@ -48,27 +49,64 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsPayload,
     })
 }
 
+/// Refuse an SDK path that does not name a Ren'Py launcher: it is run
+/// later.
+fn check_value(key: &str, value: Option<&str>) -> Result<(), String> {
+    if key == "sdk_path" {
+        if let Some(path) = value.map(str::trim).filter(|p| !p.is_empty()) {
+            if !is_valid_sdk_path(std::path::Path::new(path)) {
+                return Err(format!("Not a Ren'Py SDK: {path}"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn apply_value(key: &str, value: Option<&str>) {
+    if key == "verbose_logging" {
+        logging::set_verbose(value.is_some_and(|v| !v.is_empty()));
+    }
+}
+
 #[tauri::command]
 pub async fn set_setting(
     state: State<'_, AppState>,
     key: String,
     value: Option<String>,
 ) -> Result<(), String> {
-    if key == "sdk_path" {
-        if let Some(path) = value.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
-            if !is_valid_sdk_path(std::path::Path::new(path)) {
-                return Err(format!("Not a Ren'Py SDK: {path}"));
-            }
-        }
-    }
+    check_value(&key, value.as_deref())?;
     state
         .settings
         .lock()
         .await
         .set(&key, value.as_deref())
         .map_err(|e| e.to_string())?;
-    if key == "verbose_logging" {
-        logging::set_verbose(value.is_some_and(|v| !v.is_empty()));
+    apply_value(&key, value.as_deref());
+    Ok(())
+}
+
+/// Save several settings together, as the provider screen's "Save" does,
+/// so a refused value leaves every one of them as it was.
+#[tauri::command]
+pub async fn set_settings(
+    state: State<'_, AppState>,
+    values: HashMap<String, Option<String>>,
+) -> Result<(), String> {
+    let entries: Vec<(&str, Option<&str>)> = values
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_deref()))
+        .collect();
+    for (key, value) in &entries {
+        check_value(key, *value)?;
+    }
+    state
+        .settings
+        .lock()
+        .await
+        .set_many(&entries)
+        .map_err(|e| e.to_string())?;
+    for (key, value) in &entries {
+        apply_value(key, *value);
     }
     Ok(())
 }

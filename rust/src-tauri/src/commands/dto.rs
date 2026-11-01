@@ -23,7 +23,7 @@ pub struct UnitPayload {
 
 impl UnitPayload {
     pub fn from_unit(
-        session: &crate::mcp_server::session::ProjectSession,
+        session: &crate::core::project_session::ProjectSession,
         unit: &repositories::TranslationUnit,
     ) -> Self {
         Self {

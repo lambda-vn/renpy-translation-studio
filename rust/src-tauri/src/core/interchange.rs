@@ -27,7 +27,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 
 use super::languages::get_language;
-use super::storage::repositories::{self, TranslationUnit};
+use super::storage::repositories::{self, Status, TranslationUnit};
 use super::translation::quality;
 
 pub const XLIFF_NAMESPACE: &str = "urn:oasis:names:tc:xliff:document:1.2";
@@ -116,7 +116,7 @@ pub struct ImportPlan {
     /// The `(block_id, translated_text, status)` triples that would be
     /// written.
     #[serde(skip)]
-    pub entries: Vec<(String, String, String)>,
+    pub entries: Vec<(String, String, Status)>,
     /// Block ids the project does not hold, typically a file exported from
     /// another game.
     pub unknown: usize,
@@ -238,11 +238,13 @@ pub fn plan_import(units: &[InterchangeUnit], conn: &Connection) -> rusqlite::Re
         } else if quality::has_extra_var(&current.source_text, &unit.translated_text) {
             plan.refused += 1;
         } else {
-            let mut status = incoming_status(unit, current);
-            if must_be_drafted(unit, current, &status) {
-                status = "draft".to_string();
+            let incoming = incoming_status(unit, current);
+            let status = if must_be_drafted(unit, current, &incoming) {
                 plan.flagged += 1;
-            }
+                Status::Draft
+            } else {
+                Status::from_stored(&incoming).unwrap_or(Status::Imported)
+            };
             plan.entries
                 .push((unit.block_id.clone(), unit.translated_text.clone(), status));
         }
@@ -787,8 +789,13 @@ mod tests {
     fn round_trip_keeps_block_ids_and_text_in_every_format() {
         for file in ["export.csv", "export.json", "export.xlf"] {
             let (db, dir) = project("round-trip");
-            update_translation(db.conn(), "start_aaa", "Bonjour à toi.", "human_validated")
-                .unwrap();
+            update_translation(
+                db.conn(),
+                "start_aaa",
+                "Bonjour à toi.",
+                Status::HumanValidated,
+            )
+            .unwrap();
             let read: HashMap<String, InterchangeUnit> = read_interchange(&export(&db, &dir, file))
                 .unwrap()
                 .into_iter()
@@ -809,7 +816,7 @@ mod tests {
     fn csv_and_json_keep_the_ai_status() {
         for file in ["export.csv", "export.json"] {
             let (db, dir) = project("ai-status");
-            update_translation(db.conn(), "start_bbb", "Il pleut.", "ai_suggested").unwrap();
+            update_translation(db.conn(), "start_bbb", "Il pleut.", Status::AiSuggested).unwrap();
             let read = read_interchange(&export(&db, &dir, file)).unwrap();
             let unit = read.iter().find(|u| u.block_id == "start_bbb").unwrap();
             assert_eq!(unit.status, "ai_suggested", "{file}");
@@ -819,7 +826,7 @@ mod tests {
     #[test]
     fn xliff_downgrades_unreviewed_status_to_imported() {
         let (db, dir) = project("xliff-status");
-        update_translation(db.conn(), "start_bbb", "Il pleut.", "ai_suggested").unwrap();
+        update_translation(db.conn(), "start_bbb", "Il pleut.", Status::AiSuggested).unwrap();
         let read = read_interchange(&export(&db, &dir, "export.xlf")).unwrap();
         let unit = read.iter().find(|u| u.block_id == "start_bbb").unwrap();
         assert_eq!(unit.status, "imported");
@@ -944,7 +951,7 @@ mod tests {
             db.conn(),
             "start_aaa",
             "Bon\u{c}jour & <fin>.",
-            "human_validated",
+            Status::HumanValidated,
         )
         .unwrap();
         let read = read_interchange(&export(&db, &dir, "export.xlf")).unwrap();
@@ -956,7 +963,7 @@ mod tests {
     fn csv_keeps_commas_quotes_and_line_breaks() {
         let (db, dir) = project("csv-quoting");
         let text = "Il dit : \"oui, non\"\net voilà.";
-        update_translation(db.conn(), "start_aaa", text, "draft").unwrap();
+        update_translation(db.conn(), "start_aaa", text, Status::Draft).unwrap();
         let read = read_interchange(&export(&db, &dir, "export.csv")).unwrap();
         let unit = read.iter().find(|u| u.block_id == "start_aaa").unwrap();
         assert_eq!(unit.translated_text, text);
@@ -985,8 +992,8 @@ mod tests {
             ],
         )
         .unwrap();
-        update_translation(db.conn(), "start_ddd", "-- Bonjour", "draft").unwrap();
-        update_translation(db.conn(), "start_eee", "'+vrai", "draft").unwrap();
+        update_translation(db.conn(), "start_ddd", "-- Bonjour", Status::Draft).unwrap();
+        update_translation(db.conn(), "start_eee", "'+vrai", Status::Draft).unwrap();
         let path = export(&db, &dir, "export.csv");
 
         let raw = std::fs::read_to_string(&path).unwrap();
@@ -1033,7 +1040,7 @@ mod tests {
     #[test]
     fn unknown_stale_empty_and_protected_lines_are_counted_not_applied() {
         let (db, _) = project("skips");
-        update_translation(db.conn(), "start_bbb", "Il pleut.", "human_validated").unwrap();
+        update_translation(db.conn(), "start_bbb", "Il pleut.", Status::HumanValidated).unwrap();
         let (plan, applied) = run_import(
             &[
                 incoming("other_game_xyz", "Hi", "Salut", "imported"),
@@ -1085,7 +1092,7 @@ mod tests {
     #[test]
     fn proofread_suggestions_come_back_as_imported() {
         let (db, dir) = project("proofread");
-        update_translation(db.conn(), "start_bbb", "Il pleut.", "ai_suggested").unwrap();
+        update_translation(db.conn(), "start_bbb", "Il pleut.", Status::AiSuggested).unwrap();
         let path = export(&db, &dir, "export.csv");
         let edited = std::fs::read_to_string(&path)
             .unwrap()
@@ -1145,7 +1152,7 @@ mod tests {
             }],
         )
         .unwrap();
-        update_translation(db.conn(), "start_ddd", "Salut toi.", "human_validated").unwrap();
+        update_translation(db.conn(), "start_ddd", "Salut toi.", Status::HumanValidated).unwrap();
         let path = export(&db, &dir, "export.csv");
 
         let (plan, _) = run_import(&read_interchange(&path).unwrap(), &db);
@@ -1168,7 +1175,7 @@ mod tests {
         );
         assert_eq!((plan.flagged, applied), (0, 1));
 
-        update_translation(db.conn(), "strings_ccc", "Démarrer.", "ai_suggested").unwrap();
+        update_translation(db.conn(), "strings_ccc", "Démarrer.", Status::AiSuggested).unwrap();
         let path = export(&db, &dir, "export.csv");
         run_import(&read_interchange(&path).unwrap(), &db);
         assert_eq!(stored(&db, "strings_ccc").status, "ai_suggested");

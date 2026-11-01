@@ -21,11 +21,12 @@ use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
 use rmcp::{tool, tool_handler, tool_router, ServerHandler};
 use tokio::sync::Mutex;
 
+use crate::core::project_session::ProjectSession;
 use crate::core::review_actions;
 use crate::core::storage::{repositories, Database};
 
 use super::dto::*;
-use super::session::{ProjectSession, ServerState};
+use super::session::ServerState;
 
 const CONTEXT_RADIUS: i64 = 2;
 const MAX_PAGE_SIZE: i64 = 200;
@@ -289,7 +290,7 @@ impl RtsServer {
             }
         }
 
-        let mut accepted: Vec<(String, String, String)> = Vec::new();
+        let mut accepted: Vec<(String, String, repositories::Status)> = Vec::new();
         let mut drafted: Vec<String> = Vec::new();
         let mut rejected = Vec::new();
         for item in args.items {
@@ -341,7 +342,7 @@ impl RtsServer {
             accepted.push((
                 item.block_id,
                 screening.text.to_string(),
-                "ai_suggested".to_string(),
+                repositories::Status::AiSuggested,
             ));
         }
 

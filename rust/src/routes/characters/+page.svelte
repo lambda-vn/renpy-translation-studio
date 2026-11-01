@@ -111,9 +111,7 @@
 		if (!confirmed) return;
 		const count = characters.length;
 		try {
-			for (const character of [...characters]) {
-				characters = await api.deleteCharacter(character.variable);
-			}
+			characters = await api.deleteAllCharacters();
 			detected = [];
 			toast.success($t('characters.cleared_count', { n: count }));
 		} catch (e) {

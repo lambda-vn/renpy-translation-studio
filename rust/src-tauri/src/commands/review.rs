@@ -7,10 +7,10 @@ use std::collections::HashMap;
 use tauri::State;
 
 use crate::app_state::AppState;
+use crate::core::project_session::ProjectSession;
 use crate::core::review_actions;
 use crate::core::storage::{repositories, translation_memory};
 use crate::core::translation::quality;
-use crate::mcp_server::session::ProjectSession;
 
 use super::dto::{
     ClearArgs, DuplicatePayload, FileEntry, ListUnitsArgs, ListUnitsResult, ProgressPayload,

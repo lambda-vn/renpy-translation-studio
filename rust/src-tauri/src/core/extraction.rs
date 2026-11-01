@@ -385,14 +385,14 @@ fn import_disk_translations(
         .into_iter()
         .map(|unit| unit.block_id)
         .collect();
-    let entries: Vec<(String, String, String)> = blocks
+    let entries: Vec<(String, String, repo::Status)> = blocks
         .iter()
         .filter(|block| pending.contains(&block.block_id) && is_translated(block))
         .map(|block| {
             (
                 block.block_id.clone(),
                 block.translated_text.clone(),
-                "imported".to_string(),
+                repo::Status::Imported,
             )
         })
         .collect();
@@ -407,7 +407,7 @@ fn import_disk_translations(
 /// suggested" filter to actual model output. A unit whose text was edited
 /// by hand is left alone.
 fn validate_symbol_only_units(conn: &Connection) -> rusqlite::Result<usize> {
-    let mut entries: Vec<(String, String, String)> = Vec::new();
+    let mut entries: Vec<(String, String, repo::Status)> = Vec::new();
     for status in [repo::STATUS_NOT_TRANSLATED, "ai_suggested"] {
         for unit in repo::get_all(conn, Some(status), None)? {
             if needs_translation(&unit.source_text) {
@@ -419,7 +419,7 @@ fn validate_symbol_only_units(conn: &Connection) -> rusqlite::Result<usize> {
             entries.push((
                 unit.block_id,
                 unit.source_text,
-                repo::STATUS_HUMAN_VALIDATED.to_string(),
+                repo::Status::HumanValidated,
             ));
         }
     }
@@ -643,7 +643,7 @@ mod tests {
             "french",
         )
         .unwrap();
-        repo::update_translation(db.conn(), "a", "Bonjour.", repo::STATUS_HUMAN_VALIDATED).unwrap();
+        repo::update_translation(db.conn(), "a", "Bonjour.", repo::Status::HumanValidated).unwrap();
         let again = Extracted {
             blocks: vec![block("a", "script.rpy", "Hello.", "Salut.")],
             disk_blocks: vec![block("a", "script.rpy", "Hello.", "Salut.")],
@@ -673,7 +673,7 @@ mod tests {
             "french",
         )
         .unwrap();
-        repo::update_translation(db.conn(), "a", "Bonjour.", repo::STATUS_HUMAN_VALIDATED).unwrap();
+        repo::update_translation(db.conn(), "a", "Bonjour.", repo::Status::HumanValidated).unwrap();
 
         sync_database(
             db.conn(),
@@ -698,7 +698,7 @@ mod tests {
             discarded_sources: Vec::new(),
         };
         sync_database(db.conn(), &first, ExtractMode::Update, "english", "french").unwrap();
-        repo::update_translation(db.conn(), "old", "Bonjour.", repo::STATUS_HUMAN_VALIDATED)
+        repo::update_translation(db.conn(), "old", "Bonjour.", repo::Status::HumanValidated)
             .unwrap();
         let second = Extracted {
             blocks: vec![block("new", "script.rpy", "Hello.", "Hello.")],

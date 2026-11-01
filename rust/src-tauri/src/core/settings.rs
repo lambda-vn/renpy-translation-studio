@@ -237,6 +237,37 @@ impl Settings {
         self.save()
     }
 
+    /// Update several settings, writing `settings.json` once.
+    ///
+    /// Every key is checked before anything is written, so a typo leaves
+    /// the settings as they were. API keys go to the keyring first: the
+    /// keyring is what tends to be missing, and failing there leaves the
+    /// file untouched too.
+    ///
+    /// # Errors
+    ///
+    /// [`SettingsError::UnknownKey`] for a key that is neither a setting
+    /// nor an API key, before anything is written; otherwise the keyring
+    /// or file error that stopped the write.
+    pub fn set_many(&mut self, entries: &[(&str, Option<&str>)]) -> Result<(), SettingsError> {
+        if let Some((key, _)) = entries
+            .iter()
+            .find(|(key, _)| !KEYRING_KEYS.contains(key) && !DEFAULTS.iter().any(|(k, _)| k == key))
+        {
+            return Err(SettingsError::UnknownKey(key.to_string()));
+        }
+        for (key, value) in entries.iter().filter(|(key, _)| KEYRING_KEYS.contains(key)) {
+            self.keyring_set(key, *value)?;
+        }
+        for (key, value) in entries
+            .iter()
+            .filter(|(key, _)| !KEYRING_KEYS.contains(key))
+        {
+            self.data.insert(key.to_string(), value.map(str::to_string));
+        }
+        self.save()
+    }
+
     /// `true` if the settings file does not exist yet.
     pub fn is_first_launch(&self) -> bool {
         !self.config_file.exists()
@@ -406,5 +437,33 @@ mod tests {
         assert!(s.is_first_launch());
         s.set("locale", Some("en")).unwrap();
         assert!(!s.is_first_launch());
+    }
+
+    #[test]
+    fn set_many_writes_every_value_at_once() {
+        let mut s = temp_settings();
+        s.set_many(&[
+            ("ollama_model", Some("qwen")),
+            ("deepl_api_key", Some("secret")),
+            ("default_provider", Some("ollama")),
+        ])
+        .unwrap();
+
+        assert_eq!(s.get("ollama_model").as_deref(), Some("qwen"));
+        assert_eq!(s.get("deepl_api_key").as_deref(), Some("secret"));
+        assert_eq!(s.get("default_provider").as_deref(), Some("ollama"));
+        assert!(!fs::read_to_string(&s.config_file)
+            .unwrap()
+            .contains("secret"));
+    }
+
+    #[test]
+    fn set_many_writes_nothing_when_a_key_is_unknown() {
+        let mut s = temp_settings();
+        let result = s.set_many(&[("ollama_model", Some("qwen")), ("bogus", Some("x"))]);
+
+        assert!(matches!(result, Err(SettingsError::UnknownKey(_))));
+        assert_eq!(s.get("ollama_model"), None);
+        assert!(!s.config_file.exists());
     }
 }

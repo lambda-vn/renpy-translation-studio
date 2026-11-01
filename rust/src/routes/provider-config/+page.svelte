@@ -215,13 +215,16 @@
 				defaultProvider && configured.includes(defaultProvider as ProviderId)
 					? defaultProvider
 					: (configured[0] ?? null);
-			await api.setSetting('ollama_endpoint', ollamaEndpoint.trim() || DEFAULT_OLLAMA);
-			await api.setSetting('ollama_model', ollamaModel.trim() || null);
-			await api.setSetting('ollama_batch_size', batch || null);
-			await api.setSetting('libretranslate_url', ltUrl.trim() || null);
-			await api.setSetting('default_provider', choice);
-			if (deeplKey.trim()) await api.setSetting('deepl_api_key', deeplKey.trim());
-			if (ltKey.trim()) await api.setSetting('libretranslate_api_key', ltKey.trim());
+			const values: Record<string, string | null> = {
+				ollama_endpoint: ollamaEndpoint.trim() || DEFAULT_OLLAMA,
+				ollama_model: ollamaModel.trim() || null,
+				ollama_batch_size: batch || null,
+				libretranslate_url: ltUrl.trim() || null,
+				default_provider: choice
+			};
+			if (deeplKey.trim()) values.deepl_api_key = deeplKey.trim();
+			if (ltKey.trim()) values.libretranslate_api_key = ltKey.trim();
+			await api.setSettings(values);
 			defaultProvider = choice;
 			if (deeplKey.trim()) deeplHadKey = true;
 			if (ltKey.trim()) ltHadKey = true;

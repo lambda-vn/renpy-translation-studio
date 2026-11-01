@@ -9,6 +9,7 @@ pub mod languages;
 pub mod live;
 pub mod logging;
 pub mod project_actions;
+pub mod project_session;
 pub mod renpy;
 pub mod review_actions;
 pub mod settings;

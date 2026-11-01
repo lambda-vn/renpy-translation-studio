@@ -19,11 +19,11 @@ use crate::core::extraction::{
     self, ExtractMode, ExtractionError, ExtractionReport, ExtractionRequest, ExtractionStage,
 };
 use crate::core::languages::LANGUAGES;
+use crate::core::project_session;
 use crate::core::renpy::cli::CliError;
 use crate::core::renpy::engine::{self, EngineError};
 use crate::core::storage::{recent_projects, Database};
 use crate::core::validators::validate_project_dir;
-use crate::mcp_server::session;
 
 use super::dto::ProjectInfo;
 use super::project::project_info;
@@ -214,7 +214,7 @@ pub async fn extract_project(
     })?;
 
     let report = result.map_err(|e| ExtractionFailure::from(&e))?;
-    let opened = session::open_project(&project).map_err(|e| ExtractionFailure {
+    let opened = project_session::open_project(&project).map_err(|e| ExtractionFailure {
         code: "database",
         message: e.to_string(),
         detail: None,

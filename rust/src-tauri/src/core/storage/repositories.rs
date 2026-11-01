@@ -17,15 +17,64 @@
 //! connection across threads holds it behind a `Mutex`, so nothing extra
 //! is threaded through every function here.
 
+use rusqlite::types::ToSqlOutput;
 use rusqlite::{
-    params, params_from_iter, Connection, OptionalExtension, Transaction, TransactionBehavior,
+    params, params_from_iter, Connection, OptionalExtension, ToSql, Transaction,
+    TransactionBehavior,
 };
 
-pub const STATUS_NOT_TRANSLATED: &str = "not_translated";
-pub const STATUS_DRAFT: &str = "draft";
-pub const STATUS_HUMAN_VALIDATED: &str = "human_validated";
-pub const STATUS_IMPORTED: &str = "imported";
-pub const STATUS_AI_SUGGESTED: &str = "ai_suggested";
+/// Where a line's translation stands, written to the `status` column.
+///
+/// The stored strings are part of the frozen 1.x schema: [`Status::as_str`]
+/// is the only place they are spelled, so a write can no longer carry a
+/// misspelled status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Status {
+    NotTranslated,
+    Draft,
+    Imported,
+    AiSuggested,
+    HumanValidated,
+}
+
+impl Status {
+    /// The value stored in the database.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NotTranslated => "not_translated",
+            Self::Draft => "draft",
+            Self::Imported => "imported",
+            Self::AiSuggested => "ai_suggested",
+            Self::HumanValidated => "human_validated",
+        }
+    }
+
+    /// The status a stored value names, `None` for one this version
+    /// does not know.
+    pub fn from_stored(value: &str) -> Option<Self> {
+        [
+            Self::NotTranslated,
+            Self::Draft,
+            Self::Imported,
+            Self::AiSuggested,
+            Self::HumanValidated,
+        ]
+        .into_iter()
+        .find(|status| status.as_str() == value)
+    }
+}
+
+impl ToSql for Status {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(self.as_str()))
+    }
+}
+
+pub const STATUS_NOT_TRANSLATED: &str = Status::NotTranslated.as_str();
+pub const STATUS_DRAFT: &str = Status::Draft.as_str();
+pub const STATUS_HUMAN_VALIDATED: &str = Status::HumanValidated.as_str();
+pub const STATUS_IMPORTED: &str = Status::Imported.as_str();
+pub const STATUS_AI_SUGGESTED: &str = Status::AiSuggested.as_str();
 
 /// Every status a line can carry, in the order the review screen lists them.
 pub const ALL_STATUSES: [&str; 5] = [
@@ -166,18 +215,26 @@ fn like_pattern(query: &str) -> String {
     format!("%{escaped}%")
 }
 
-/// The WHERE clause and bound values shared by the paginated review
-/// queries ([`get_page`], [`get_matching`]).
+/// The WHERE clause and bound values shared by the review queries
+/// ([`get_page`], [`get_matching`], and [`count_matches_by_file`] across
+/// every file when `source_file` is `None`).
+///
+/// The clause is empty when nothing filters; a caller passing no file
+/// makes sure something else does.
 fn page_filters(
-    source_file: &str,
+    source_file: Option<&str>,
     status_filter: Option<&str>,
     search_query: &str,
     character: Option<&str>,
     needs_review: bool,
 ) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
-    let mut conditions = vec!["source_file = ?".to_string()];
-    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(source_file.to_string())];
+    let mut conditions: Vec<String> = Vec::new();
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
+    if let Some(file) = source_file {
+        conditions.push("source_file = ?".to_string());
+        params.push(Box::new(file.to_string()));
+    }
     if let Some(status) = status_filter {
         conditions.push("status = ?".to_string());
         params.push(Box::new(status.to_string()));
@@ -215,7 +272,7 @@ pub fn get_matching(
     needs_review: bool,
 ) -> rusqlite::Result<Vec<TranslationUnit>> {
     let (where_clause, params) = page_filters(
-        source_file,
+        Some(source_file),
         status_filter,
         search_query,
         character,
@@ -241,7 +298,7 @@ pub fn get_page(
     query: &UnitQuery,
 ) -> rusqlite::Result<(Vec<TranslationUnit>, i64)> {
     let (where_clause, params) = page_filters(
-        query.source_file,
+        Some(query.source_file),
         query.status_filter,
         query.search_query,
         query.character,
@@ -323,15 +380,11 @@ pub fn update_translation(
     conn: &Connection,
     block_id: &str,
     translated_text: &str,
-    status: &str,
+    status: Status,
 ) -> rusqlite::Result<()> {
     update_translations(
         conn,
-        &[(
-            block_id.to_string(),
-            translated_text.to_string(),
-            status.to_string(),
-        )],
+        &[(block_id.to_string(), translated_text.to_string(), status)],
     )?;
     Ok(())
 }
@@ -348,7 +401,7 @@ pub fn update_translation(
 /// Returns the number of units actually updated.
 pub fn update_translations(
     conn: &Connection,
-    entries: &[(String, String, String)],
+    entries: &[(String, String, Status)],
 ) -> rusqlite::Result<usize> {
     apply_translations(
         conn,
@@ -371,7 +424,7 @@ pub fn update_translations(
 /// Returns the number of units actually updated.
 pub fn update_translations_unvalidated(
     conn: &Connection,
-    entries: &[(String, String, String)],
+    entries: &[(String, String, Status)],
 ) -> rusqlite::Result<usize> {
     apply_translations(
         conn,
@@ -383,7 +436,7 @@ pub fn update_translations_unvalidated(
 
 fn apply_translations(
     conn: &Connection,
-    entries: &[(String, String, String)],
+    entries: &[(String, String, Status)],
     update: &str,
 ) -> rusqlite::Result<usize> {
     if entries.is_empty() {
@@ -527,35 +580,15 @@ pub fn count_matches_by_file(
     character: Option<&str>,
     needs_review: bool,
 ) -> rusqlite::Result<std::collections::HashMap<String, i64>> {
-    let query = search_query.trim();
-    if query.is_empty() && character.is_none() && !needs_review {
+    if search_query.trim().is_empty() && character.is_none() && !needs_review {
         return Ok(std::collections::HashMap::new());
     }
-    let mut conditions: Vec<String> = Vec::new();
-    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-    if !query.is_empty() {
-        conditions.push(
-            "(source_text LIKE ? ESCAPE '\\' OR translated_text LIKE ? ESCAPE '\\')".to_string(),
-        );
-        let like = like_pattern(query);
-        params.push(Box::new(like.clone()));
-        params.push(Box::new(like));
-    }
-    if let Some(speaker) = character {
-        conditions.push("character_variable = ?".to_string());
-        params.push(Box::new(speaker.to_string()));
-    }
-    if needs_review {
-        conditions.push("needs_review = 1".to_string());
-    }
-    if let Some(status) = status_filter {
-        conditions.push("status = ?".to_string());
-        params.push(Box::new(status.to_string()));
-    }
+    let (where_clause, params) =
+        page_filters(None, status_filter, search_query, character, needs_review);
     let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
     let mut stmt = conn.prepare(&format!(
-        "SELECT source_file, COUNT(*) FROM translation_units WHERE {} GROUP BY source_file",
-        conditions.join(" AND ")
+        "SELECT source_file, COUNT(*) FROM translation_units WHERE {where_clause} \
+         GROUP BY source_file"
     ))?;
     let rows = stmt.query_map(bound.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?;
     rows.collect()
@@ -791,20 +824,15 @@ pub fn transfer_orphan_translations(
         }
     }
 
-    let mut entries: Vec<(String, String, String)> = Vec::new();
+    let mut entries: Vec<(String, String, Status)> = Vec::new();
     for (source_text, block_ids) in heirs {
         let orphan = by_text[source_text];
-        let status = if block_ids.len() == 1 {
-            orphan.status.as_str()
-        } else {
-            "imported"
+        let status = match Status::from_stored(&orphan.status) {
+            Some(status) if block_ids.len() == 1 => status,
+            _ => Status::Imported,
         };
         for block_id in block_ids {
-            entries.push((
-                block_id.to_string(),
-                orphan.translated_text.clone(),
-                status.to_string(),
-            ));
+            entries.push((block_id.to_string(), orphan.translated_text.clone(), status));
         }
     }
     let moved = update_translations_unvalidated(conn, &entries)?;
@@ -1017,6 +1045,15 @@ pub fn delete_character(conn: &Connection, variable: &str) -> rusqlite::Result<(
     Ok(())
 }
 
+/// Delete every character in one statement; returns how many there were.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
+pub fn delete_all_characters(conn: &Connection) -> rusqlite::Result<usize> {
+    conn.execute("DELETE FROM characters", [])
+}
+
 /// The `project_meta` key under which the universe summary is stored.
 pub const UNIVERSE_SUMMARY_KEY: &str = "universe_summary";
 
@@ -1145,7 +1182,7 @@ mod tests {
     fn get_all_filters_by_status_and_file() {
         let db = open_temp();
         seed(db.conn());
-        update_translation(db.conn(), "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "a", "Bonjour.", Status::HumanValidated).unwrap();
 
         let validated = get_all(db.conn(), Some(STATUS_HUMAN_VALIDATED), None).unwrap();
         assert_eq!(validated.len(), 1);
@@ -1159,9 +1196,9 @@ mod tests {
     fn human_validated_is_never_overwritten() {
         let db = open_temp();
         seed(db.conn());
-        update_translation(db.conn(), "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "a", "Bonjour.", Status::HumanValidated).unwrap();
 
-        update_translation(db.conn(), "a", "wrong AI guess", "ai_suggested").unwrap();
+        update_translation(db.conn(), "a", "wrong AI guess", Status::AiSuggested).unwrap();
 
         let units = get_many(db.conn(), &["a".to_string()]).unwrap();
         assert_eq!(units[0].translated_text, "Bonjour.");
@@ -1201,7 +1238,7 @@ mod tests {
     fn project_progress_counts_lines_and_words() {
         let db = open_temp();
         seed(db.conn());
-        update_translation(db.conn(), "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "a", "Bonjour.", Status::HumanValidated).unwrap();
 
         let progress = project_progress(db.conn()).unwrap();
         assert_eq!(progress.lines, 2);
@@ -1444,7 +1481,7 @@ mod tests {
     fn update_translations_applies_batch_and_protects_human_validated() {
         let db = open_temp();
         seed(db.conn());
-        update_translation(db.conn(), "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "a", "Bonjour.", Status::HumanValidated).unwrap();
 
         let updated = update_translations(
             db.conn(),
@@ -1452,12 +1489,12 @@ mod tests {
                 (
                     "a".to_string(),
                     "wrong AI guess".to_string(),
-                    "ai_suggested".to_string(),
+                    Status::AiSuggested,
                 ),
                 (
                     "b".to_string(),
                     "Au revoir.".to_string(),
-                    "ai_suggested".to_string(),
+                    Status::AiSuggested,
                 ),
             ],
         )
@@ -1475,8 +1512,8 @@ mod tests {
     fn clear_translations_respects_scope_and_statuses() {
         let db = open_temp();
         seed(db.conn());
-        update_translation(db.conn(), "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
-        update_translation(db.conn(), "b", "Au revoir.", "ai_suggested").unwrap();
+        update_translation(db.conn(), "a", "Bonjour.", Status::HumanValidated).unwrap();
+        update_translation(db.conn(), "b", "Au revoir.", Status::AiSuggested).unwrap();
 
         let cleared =
             clear_translations(db.conn(), None, Some(&["ai_suggested".to_string()])).unwrap();
@@ -1494,7 +1531,7 @@ mod tests {
     fn count_by_status_groups_rows() {
         let db = open_temp();
         seed(db.conn());
-        update_translation(db.conn(), "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "a", "Bonjour.", Status::HumanValidated).unwrap();
 
         let counts = count_by_status(db.conn()).unwrap();
         assert_eq!(counts.get(STATUS_HUMAN_VALIDATED), Some(&1));
@@ -1523,8 +1560,8 @@ mod tests {
             &[unit("a", "old a"), unit("b", "old b"), unit("c", "same")],
         )
         .unwrap();
-        update_translation(db.conn(), "a", "vieux a", "ai_suggested").unwrap();
-        update_translation(db.conn(), "b", "vieux b", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "a", "vieux a", Status::AiSuggested).unwrap();
+        update_translation(db.conn(), "b", "vieux b", Status::HumanValidated).unwrap();
 
         let outcome = resync_sources(
             db.conn(),
@@ -1554,7 +1591,7 @@ mod tests {
     fn a_translation_follows_its_line_when_the_block_id_is_rebuilt() {
         let db = open_temp();
         bulk_insert(db.conn(), &[unit("old_id", "Hello.")]).unwrap();
-        update_translation(db.conn(), "old_id", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "old_id", "Bonjour.", Status::HumanValidated).unwrap();
         bulk_insert(db.conn(), &[unit("new_id", "Hello.")]).unwrap();
 
         let moved = transfer_orphan_translations(db.conn(), &ids(&["new_id"])).unwrap();
@@ -1569,7 +1606,7 @@ mod tests {
     fn a_translation_spread_over_several_lines_becomes_imported() {
         let db = open_temp();
         bulk_insert(db.conn(), &[unit("old_id", "Yes.")]).unwrap();
-        update_translation(db.conn(), "old_id", "Oui.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "old_id", "Oui.", Status::HumanValidated).unwrap();
         bulk_insert(db.conn(), &[unit("n1", "Yes."), unit("n2", "Yes.")]).unwrap();
 
         let moved = transfer_orphan_translations(db.conn(), &ids(&["n1", "n2"])).unwrap();
@@ -1585,8 +1622,8 @@ mod tests {
     fn a_validated_heir_is_never_overwritten_by_a_transfer() {
         let db = open_temp();
         bulk_insert(db.conn(), &[unit("old_id", "Hi."), unit("new_id", "Hi.")]).unwrap();
-        update_translation(db.conn(), "old_id", "Salut.", "ai_suggested").unwrap();
-        update_translation(db.conn(), "new_id", "Coucou.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(db.conn(), "old_id", "Salut.", Status::AiSuggested).unwrap();
+        update_translation(db.conn(), "new_id", "Coucou.", Status::HumanValidated).unwrap();
 
         let moved = transfer_orphan_translations(db.conn(), &ids(&["new_id"])).unwrap();
 
@@ -1670,7 +1707,7 @@ mod tests {
         let by_speaker = count_matches_by_file(conn, "", None, Some("e"), false).unwrap();
         assert_eq!(by_speaker.len(), 2);
 
-        update_translation(conn, "a", "Oui", "draft").unwrap();
+        update_translation(conn, "a", "Oui", Status::Draft).unwrap();
         let by_status = count_matches_by_file(conn, "", Some("draft"), Some("e"), false).unwrap();
         assert_eq!(by_status.len(), 1);
         assert_eq!(by_status.get("f1.rpy"), Some(&1));
@@ -1731,7 +1768,7 @@ mod tests {
         let db = open_temp();
         let conn = db.conn();
         seed(conn);
-        update_translation(conn, "b", "Au revoir.", "imported").unwrap();
+        update_translation(conn, "b", "Au revoir.", Status::Imported).unwrap();
         let translated = get_translated(conn).unwrap();
         assert_eq!(translated.len(), 1);
         assert_eq!(translated[0].block_id, "b");
@@ -1769,17 +1806,17 @@ mod tests {
         let db = open_temp();
         let conn = db.conn();
         seed(conn);
-        update_translation(conn, "a", "Bonjour.", STATUS_HUMAN_VALIDATED).unwrap();
+        update_translation(conn, "a", "Bonjour.", Status::HumanValidated).unwrap();
         let entries = [
             (
                 "a".to_string(),
                 "propagated".to_string(),
-                STATUS_HUMAN_VALIDATED.to_string(),
+                Status::HumanValidated,
             ),
             (
                 "b".to_string(),
                 "propagated".to_string(),
-                STATUS_HUMAN_VALIDATED.to_string(),
+                Status::HumanValidated,
             ),
         ];
 
@@ -1798,7 +1835,7 @@ mod tests {
         let db = open_temp();
         let conn = db.conn();
         bulk_insert(conn, &[unit("a", "old a")]).unwrap();
-        update_translation(conn, "a", "vieux a", "ai_suggested").unwrap();
+        update_translation(conn, "a", "vieux a", Status::AiSuggested).unwrap();
 
         conn.execute_batch("BEGIN").unwrap();
         let outcome = resync_sources(conn, &[unit("a", "new a")]).unwrap();
@@ -1807,5 +1844,26 @@ mod tests {
         assert_eq!(outcome.dropped, 1);
         let a = get_many(conn, &["a".to_string()]).unwrap();
         assert_eq!(a[0].status, STATUS_NOT_TRANSLATED);
+    }
+
+    #[test]
+    fn every_stored_status_reads_back_as_itself() {
+        for stored in ALL_STATUSES {
+            assert_eq!(
+                Status::from_stored(stored).map(Status::as_str),
+                Some(stored)
+            );
+        }
+        assert_eq!(Status::from_stored("validated"), None);
+    }
+
+    #[test]
+    fn delete_all_characters_empties_the_glossary() {
+        let db = open_temp();
+        upsert_character(db.conn(), "e", "Eileen").unwrap();
+        upsert_character(db.conn(), "l", "Lucy").unwrap();
+
+        assert_eq!(delete_all_characters(db.conn()).unwrap(), 2);
+        assert!(get_all_characters(db.conn()).unwrap().is_empty());
     }
 }

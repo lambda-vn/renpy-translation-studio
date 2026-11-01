@@ -17,9 +17,9 @@ pub mod universe;
 
 use serde::Serialize;
 
+use crate::core::project_session::ProjectSession;
 use crate::core::storage::repositories;
 use crate::core::translation::providers::base::ProviderError;
-use crate::mcp_server::session::ProjectSession;
 
 /// The failure of a command: plain text (technical details, left in
 /// English), or a message the interface translates (`{ key, params }`),
@@ -117,7 +117,7 @@ mod tests {
         let db_path = Database::path_for(&project);
         std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
         Database::open(&db_path).unwrap();
-        let guard = Some(crate::mcp_server::session::open_project(&project).unwrap());
+        let guard = Some(crate::core::project_session::open_project(&project).unwrap());
 
         assert!(require_session_at(&guard, &guard.as_ref().unwrap().path).is_ok());
         let other = serde_json::to_value(

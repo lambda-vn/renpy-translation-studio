@@ -7,8 +7,8 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::core::project_actions;
+use crate::core::project_session::{self, ProjectSession};
 use crate::core::storage::{recent_projects, repositories, Database};
-use crate::mcp_server::session::{self, ProjectSession};
 
 use super::dto::{ProjectEntry, ProjectInfo};
 use super::CommandError;
@@ -90,7 +90,7 @@ pub async fn delete_project_data(
 #[tauri::command]
 pub async fn open_project(state: State<'_, AppState>, path: String) -> Result<ProjectInfo, String> {
     let target = std::path::Path::new(&path);
-    let opened = session::open_project(target).map_err(|e| e.to_string())?;
+    let opened = project_session::open_project(target).map_err(|e| e.to_string())?;
     let info = project_info(&opened)?;
     recent_projects::add(&recent_projects::default_path(), target);
     *state.current.lock().await = Some(opened);

@@ -12,9 +12,9 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::core::project_session::open_project;
 use crate::core::settings::Settings;
 use crate::core::storage::{recent_projects, repositories, translation_memory};
-use crate::mcp_server::session::open_project;
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/compat")
@@ -162,7 +162,13 @@ fn rust_writes_keep_the_database_valid_and_protect_validated_lines() {
     let session = open_project(&project_copy()).unwrap();
     let conn = session.conn();
 
-    repositories::update_translation(conn, "start_a1", "overwritten", "ai_suggested").unwrap();
+    repositories::update_translation(
+        conn,
+        "start_a1",
+        "overwritten",
+        repositories::Status::AiSuggested,
+    )
+    .unwrap();
     let a1 = repositories::get_many(conn, &["start_a1".to_string()]).unwrap();
     assert_eq!(a1[0].translated_text, "Bonjour [name].");
 
@@ -171,7 +177,7 @@ fn rust_writes_keep_the_database_valid_and_protect_validated_lines() {
         &[(
             "start_a5".to_string(),
             "\u{c0} faire.".to_string(),
-            "ai_suggested".to_string(),
+            repositories::Status::AiSuggested,
         )],
     )
     .unwrap();

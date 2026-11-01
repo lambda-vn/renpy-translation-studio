@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use rusqlite::Connection;
 use serde::Deserialize;
 
-use crate::core::storage::repositories::{self, TranslationUnit};
+use crate::core::storage::repositories::{self, Status, TranslationUnit};
 use crate::core::translation::providers::base::TranslateBatchResult;
 use crate::core::translation::quality::{self, QualityIssue};
 
@@ -135,13 +135,8 @@ pub fn validate_translation(
             stored: None,
         });
     }
-    repositories::update_translation(
-        conn,
-        &unit.block_id,
-        screening.text,
-        repositories::STATUS_HUMAN_VALIDATED,
-    )
-    .map_err(|e| e.to_string())?;
+    repositories::update_translation(conn, &unit.block_id, screening.text, Status::HumanValidated)
+        .map_err(|e| e.to_string())?;
     Ok(Validation {
         blocking: screening.blocking,
         warnings: screening.warnings,
@@ -161,15 +156,9 @@ pub fn spread_to_duplicates(
     translated: &str,
 ) -> rusqlite::Result<Vec<String>> {
     let block_ids = repositories::find_duplicate_block_ids(conn, source_text, block_id)?;
-    let entries: Vec<(String, String, String)> = block_ids
+    let entries: Vec<(String, String, Status)> = block_ids
         .iter()
-        .map(|id| {
-            (
-                id.clone(),
-                translated.to_string(),
-                repositories::STATUS_HUMAN_VALIDATED.to_string(),
-            )
-        })
+        .map(|id| (id.clone(), translated.to_string(), Status::HumanValidated))
         .collect();
     repositories::update_translations_unvalidated(conn, &entries)?;
     Ok(block_ids)
@@ -223,21 +212,17 @@ pub fn save_maps(units: &[TranslationUnit]) -> (HashMap<String, String>, HashMap
 pub fn chunk_entries(
     result: &TranslateBatchResult,
     symbol_only: &HashSet<String>,
-) -> Vec<(String, String, String)> {
+) -> Vec<(String, String, Status)> {
     result
         .translations
         .iter()
         .map(|t| {
             let status = if symbol_only.contains(&t.block_id) {
-                repositories::STATUS_HUMAN_VALIDATED
+                Status::HumanValidated
             } else {
-                "ai_suggested"
+                Status::AiSuggested
             };
-            (
-                t.block_id.clone(),
-                t.translated_text.clone(),
-                status.to_string(),
-            )
+            (t.block_id.clone(), t.translated_text.clone(), status)
         })
         .collect()
 }
@@ -410,9 +395,9 @@ mod tests {
             ],
         )
         .unwrap();
-        repositories::update_translation(conn, "a", "Un.", "human_validated").unwrap();
-        repositories::update_translation(conn, "b", "Deux.", "ai_suggested").unwrap();
-        repositories::update_translation(conn, "c", "Trois.", "draft").unwrap();
+        repositories::update_translation(conn, "a", "Un.", Status::HumanValidated).unwrap();
+        repositories::update_translation(conn, "b", "Deux.", Status::AiSuggested).unwrap();
+        repositories::update_translation(conn, "c", "Trois.", Status::Draft).unwrap();
         repositories::set_note(conn, "b", "check").unwrap();
 
         let statuses = clear_statuses(Some("unvalidated")).unwrap();
@@ -440,8 +425,8 @@ mod tests {
             ],
         )
         .unwrap();
-        repositories::update_translation(conn, "a", "Un.", "human_validated").unwrap();
-        repositories::update_translation(conn, "c", "Trois.", "human_validated").unwrap();
+        repositories::update_translation(conn, "a", "Un.", Status::HumanValidated).unwrap();
+        repositories::update_translation(conn, "c", "Trois.", Status::HumanValidated).unwrap();
 
         let cleared = repositories::clear_translations(conn, Some("f1.rpy"), None).unwrap();
         assert_eq!(cleared, 1);
@@ -462,8 +447,8 @@ mod tests {
             ],
         )
         .unwrap();
-        repositories::update_translation(conn, "ok", "Salut {i}toi{/i}.", "draft").unwrap();
-        repositories::update_translation(conn, "bad", "Salut toi.", "draft").unwrap();
+        repositories::update_translation(conn, "ok", "Salut {i}toi{/i}.", Status::Draft).unwrap();
+        repositories::update_translation(conn, "bad", "Salut toi.", Status::Draft).unwrap();
 
         let filter = UnitFilter {
             errors_only: true,
@@ -531,8 +516,8 @@ mod tests {
             ],
         )
         .unwrap();
-        repositories::update_translation(conn, "d", "Si.", "human_validated").unwrap();
-        repositories::update_translation(conn, "c", "Peut-etre.", "ai_suggested").unwrap();
+        repositories::update_translation(conn, "d", "Si.", Status::HumanValidated).unwrap();
+        repositories::update_translation(conn, "c", "Peut-etre.", Status::AiSuggested).unwrap();
         let a = get(conn, "a");
         let outcome = validate_translation(conn, &a, "Oui.").unwrap();
 
@@ -560,8 +545,8 @@ mod tests {
             ],
         )
         .unwrap();
-        repositories::update_translation(conn, "d1", "Salut.", "draft").unwrap();
-        repositories::update_translation(conn, "strings_2", "Oui", "draft").unwrap();
+        repositories::update_translation(conn, "d1", "Salut.", Status::Draft).unwrap();
+        repositories::update_translation(conn, "strings_2", "Oui", Status::Draft).unwrap();
         let units = repositories::get_all(conn, None, None).unwrap();
 
         let (dialogue, old_to_new) = save_maps(&units);
@@ -588,8 +573,8 @@ mod tests {
         };
         let symbol_only: HashSet<String> = ["dots".to_string()].into();
         let entries = chunk_entries(&result, &symbol_only);
-        assert_eq!(entries[0].2, "human_validated");
-        assert_eq!(entries[1].2, "ai_suggested");
+        assert_eq!(entries[0].2, Status::HumanValidated);
+        assert_eq!(entries[1].2, Status::AiSuggested);
     }
 
     #[test]
@@ -604,8 +589,9 @@ mod tests {
             ],
         )
         .unwrap();
-        repositories::update_translation(conn, "d1", "Salut [renpy.quit()].", "imported").unwrap();
-        repositories::update_translation(conn, "strings_1", "Oui [x]", "draft").unwrap();
+        repositories::update_translation(conn, "d1", "Salut [renpy.quit()].", Status::Imported)
+            .unwrap();
+        repositories::update_translation(conn, "strings_1", "Oui [x]", Status::Draft).unwrap();
         let units = repositories::get_all(conn, None, None).unwrap();
 
         let (dialogue, old_to_new) = save_maps(&units);

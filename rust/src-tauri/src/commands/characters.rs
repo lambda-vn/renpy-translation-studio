@@ -13,7 +13,7 @@ use super::dto::CharacterEntry;
 use super::CommandError;
 
 fn characters(
-    session: &crate::mcp_server::session::ProjectSession,
+    session: &crate::core::project_session::ProjectSession,
 ) -> Result<Vec<CharacterEntry>, CommandError> {
     Ok(repositories::get_all_characters(session.conn())
         .map_err(|e| e.to_string())?
@@ -80,5 +80,17 @@ pub async fn delete_character(
     let guard = state.current.lock().await;
     let session = super::require_session(&guard)?;
     repositories::delete_character(session.conn(), &variable).map_err(|e| e.to_string())?;
+    characters(session)
+}
+
+/// Empty the glossary in one statement, so a failure leaves it whole
+/// rather than half deleted.
+#[tauri::command]
+pub async fn delete_all_characters(
+    state: State<'_, AppState>,
+) -> Result<Vec<CharacterEntry>, CommandError> {
+    let guard = state.current.lock().await;
+    let session = super::require_session(&guard)?;
+    repositories::delete_all_characters(session.conn()).map_err(|e| e.to_string())?;
     characters(session)
 }

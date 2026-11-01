@@ -34,11 +34,16 @@ pub fn fill_from_memory(
         })
         .unwrap_or_default();
 
-    let entries: Vec<(String, String, String)> = units
+    let entries: Vec<(String, String, repositories::Status)> = units
         .iter()
         .filter_map(|u| {
-            hits.get(&u.source_text)
-                .map(|t| (u.block_id.clone(), t.clone(), "imported".to_string()))
+            hits.get(&u.source_text).map(|t| {
+                (
+                    u.block_id.clone(),
+                    t.clone(),
+                    repositories::Status::Imported,
+                )
+            })
         })
         .collect();
     repositories::update_translations(conn, &entries)
@@ -195,7 +200,13 @@ mod tests {
             }],
         )
         .unwrap();
-        repositories::update_translation(db.conn(), "a", "Salut.", "human_validated").unwrap();
+        repositories::update_translation(
+            db.conn(),
+            "a",
+            "Salut.",
+            repositories::Status::HumanValidated,
+        )
+        .unwrap();
         assert!(read_resume_info(&project).is_none());
 
         repositories::set_project_meta(db.conn(), "target_language", "french").unwrap();
@@ -260,7 +271,13 @@ mod tests {
             ],
         )
         .unwrap();
-        repositories::update_translation(db.conn(), "b", "Au revoir.", "human_validated").unwrap();
+        repositories::update_translation(
+            db.conn(),
+            "b",
+            "Au revoir.",
+            repositories::Status::HumanValidated,
+        )
+        .unwrap();
 
         let memory_path = temp("memory");
         let memory = translation_memory::open(&memory_path).unwrap();

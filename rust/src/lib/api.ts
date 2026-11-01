@@ -345,6 +345,7 @@ export const api = {
 
 	getSettings: () => invoke<SettingsPayload>('get_settings'),
 	setSetting: (key: string, value: string | null) => invoke<void>('set_setting', { key, value }),
+	setSettings: (values: Record<string, string | null>) => invoke<void>('set_settings', { values }),
 	/** true until the onboarding is finished (no settings file existed at startup). */
 	isFirstLaunch: () => invoke<boolean>('is_first_launch'),
 	validateSdkPath: (path: string) => invoke<boolean>('validate_sdk_path', { path }),
@@ -369,6 +370,7 @@ export const api = {
 	detectCharacters: () => invoke<CharacterEntry[]>('detect_characters'),
 	deleteCharacter: (variable: string) =>
 		invoke<CharacterEntry[]>('delete_character', { variable }),
+	deleteAllCharacters: () => invoke<CharacterEntry[]>('delete_all_characters'),
 
 	getUniverseSummary: () => invoke<string | null>('get_universe_summary'),
 	setUniverseSummary: (summary: string) => invoke<void>('set_universe_summary', { summary }),

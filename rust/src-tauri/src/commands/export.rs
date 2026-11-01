@@ -16,17 +16,17 @@ use tauri::State;
 use crate::app_state::AppState;
 use crate::core::export_sync;
 use crate::core::exporter;
+use crate::core::project_session::ProjectSession;
 use crate::core::renpy::writer::TranslateBlockWriter;
 use crate::core::review_actions;
 use crate::core::storage::repositories;
 use crate::core::translation::quality;
-use crate::mcp_server::session::ProjectSession;
 
 use super::dto::{ExportInfo, FailingFile, SyncPayload};
 use super::CommandError;
 
 fn tl_dir(
-    session: &crate::mcp_server::session::ProjectSession,
+    session: &crate::core::project_session::ProjectSession,
     language: &str,
 ) -> std::path::PathBuf {
     session.path.join("game").join("tl").join(language)

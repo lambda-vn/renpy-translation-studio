@@ -1,15 +1,13 @@
 //! Shared state behind every Tauri command: the project currently open,
 //! persistent settings, and a running translation job's cancel token.
 //!
-//! `ProjectSession` is reused as-is from `mcp_server::session` — a
-//! project connection, and `relative()`/`absolute()` path helpers, have
-//! nothing MCP-specific about them. What the desktop app does not reuse
-//! is `ServerState::use_project`'s registry gate: an MCP client is
-//! reached from outside and can only open a project the application
-//! already listed, but the human using this app picks a folder directly
-//! through a native dialog, so `commands::project::open_project` calls
-//! the free `mcp_server::session::open_project` function instead and
-//! registers the result itself.
+//! `ProjectSession` lives in `core::project_session`, shared with the MCP
+//! server. What the desktop app does not reuse is
+//! `ServerState::use_project`'s registry gate: an MCP client is reached
+//! from outside and can only open a project the application already
+//! listed, but the human using this app picks a folder directly through
+//! a native dialog, so `commands::project::open_project` calls
+//! `core::project_session::open_project` and registers the result itself.
 
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -17,9 +15,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::core::live::LiveServer;
+use crate::core::project_session::ProjectSession;
 use crate::core::settings::Settings;
 use crate::core::translation::job::CancelToken;
-use crate::mcp_server::session::ProjectSession;
 
 #[derive(Clone)]
 pub struct AppState {

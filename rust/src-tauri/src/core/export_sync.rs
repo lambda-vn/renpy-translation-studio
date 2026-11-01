@@ -157,7 +157,8 @@ mod tests {
         let (db, tl) = project();
         insert(db.conn(), "a");
         record_save(db.conn(), &tl).unwrap();
-        repositories::update_translation(db.conn(), "a", "Salut.", "draft").unwrap();
+        repositories::update_translation(db.conn(), "a", "Salut.", repositories::Status::Draft)
+            .unwrap();
         db.conn()
             .execute(
                 "UPDATE translation_units SET updated_at = datetime('now', '+5 seconds')",
@@ -173,7 +174,8 @@ mod tests {
         let (db, _tl) = project();
         insert(db.conn(), "a");
         insert(db.conn(), "b");
-        repositories::update_translation(db.conn(), "a", "Salut.", "draft").unwrap();
+        repositories::update_translation(db.conn(), "a", "Salut.", repositories::Status::Draft)
+            .unwrap();
         assert_eq!(count_unwritten(db.conn()).unwrap(), 1);
     }
 
