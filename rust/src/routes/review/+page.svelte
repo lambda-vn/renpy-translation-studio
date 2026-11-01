@@ -14,14 +14,13 @@
 		type ProgressPayload,
 		type QualityIssuePayload,
 		type SpeakerEntry,
-		type StartJobArgs,
 		type UnitPayload
 	} from '$lib/api';
 	import ClearDialog from '$lib/components/review/ClearDialog.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import FileList, { type FileMenuRequest } from '$lib/components/review/FileList.svelte';
 	import FilterBar from '$lib/components/review/FilterBar.svelte';
-	import JobBanner, { type JobLogEntry } from '$lib/components/review/JobBanner.svelte';
+	import JobBanner from '$lib/components/review/JobBanner.svelte';
 	import Kbd from '$lib/components/Kbd.svelte';
 	import LineRow from '$lib/components/review/LineRow.svelte';
 	import { errorText, jobMessageText, reportError } from '$lib/messages';
@@ -29,7 +28,7 @@
 	import ReviewToolbar from '$lib/components/review/ReviewToolbar.svelte';
 	import TranslateDialog from '$lib/components/review/TranslateDialog.svelte';
 	import ContextMenu, { type MenuEntry } from '$lib/components/ContextMenu.svelte';
-	import { baseName, providerLabel, untranslatedOf } from '$lib/components/review/labels';
+	import { baseName, untranslatedOf } from '$lib/components/review/labels';
 	import { confirmDialog } from '$lib/confirm';
 	import InterchangeDialog from '$lib/InterchangeDialog.svelte';
 	import { t } from '$lib/i18n';
@@ -40,17 +39,16 @@
 		reviewNav,
 		type StatusFilter
 	} from '$lib/review-state';
-	import { matches } from '$lib/shortcuts';
-	import { jobRunning, modalDepth, project, skipLinks } from '$lib/stores';
+	import { ReviewJob } from '$lib/review/job.svelte';
+	import { createReviewKeydown } from '$lib/review/keyboard';
+	import { jobRunning, project, skipLinks } from '$lib/stores';
 	import { toast } from '$lib/toast';
 
 	const PAGE_SIZE = 50;
 	const EDIT_DEBOUNCE_MS = 350;
 	const SEARCH_DEBOUNCE_MS = 250;
 	const SIDE_DEBOUNCE_MS = 400;
-	const REFRESH_THROTTLE_MS = 1000;
 	const MCP_MARK_MS = 8000;
-	const LOG_LIMIT = 100;
 
 	interface RowIssues {
 		blocking: QualityIssuePayload[];
@@ -90,19 +88,14 @@
 	let providers = $state<string[]>([]);
 	let defaultProvider = $state('');
 
-	interface JobState {
-		running: boolean;
-		cancelling: boolean;
-		summary: string;
-		total: number;
-		done: number;
-		failed: number;
-		error: string | null;
-		/** What the provider is doing (a model loading); `warn` ones stay to the end. */
-		notice: { text: string; warn: boolean } | null;
-	}
-	let job = $state<JobState | null>(null);
-	let jobLog = $state<JobLogEntry[]>([]);
+	const job = new ReviewJob({
+		file: () => file,
+		total: () => total,
+		filter: () => filterArgs({ filter, speaker, search }),
+		reloadUnits: () => void loadUnits(),
+		refreshSide: () => void refreshSide(),
+		scheduleSide
+	});
 
 	// Dialogs and menus --------------------------------------------------
 	let translateOpen = $state(false);
@@ -120,7 +113,6 @@
 	let sideTimer: ReturnType<typeof setTimeout> | undefined;
 	let loadToken = 0;
 	let sideToken = 0;
-	let lastRefresh = 0;
 	let ready = $state(false);
 	const unlisteners: Promise<UnlistenFn>[] = [];
 
@@ -174,7 +166,7 @@
 		}
 		ready = true;
 		const subscribed = [
-			listen<JobEventPayload>('translation-job', handleJobEvent),
+			listen<JobEventPayload>('translation-job', job.handleEvent),
 			listen<{ blockIds: string[] | null }>('live-changed', handleLiveChange)
 		];
 		for (const off of subscribed) {
@@ -197,7 +189,7 @@
 	});
 
 	async function init() {
-		await Promise.all([loadProviders(), loadSpeakers(), restoreJob()]);
+		await Promise.all([loadProviders(), loadSpeakers(), job.restore()]);
 		try {
 			files = await api.listFiles();
 		} catch (e) {
@@ -210,26 +202,6 @@
 		}
 		await loadUnits();
 		void refreshSide();
-	}
-
-	async function restoreJob() {
-		try {
-			if (await api.isTranslationJobRunning()) {
-				job = {
-					running: true,
-					cancelling: false,
-					summary: '',
-					total: 0,
-					done: 0,
-					failed: 0,
-					error: null,
-					notice: null
-				};
-				jobRunning.set(true);
-			}
-		} catch {
-			// No job info: the banner simply stays hidden.
-		}
 	}
 
 	async function loadProviders() {
@@ -721,101 +693,9 @@
 
 	// Job ----------------------------------------------------------------------
 
-	function logLine(message: string, error = false) {
-		const time = new Date().toLocaleTimeString(undefined, { hour12: false });
-		jobLog = [{ time, message, error }, ...jobLog].slice(0, LOG_LIMIT);
-	}
-
 	function openTranslate(sourceFile: string) {
 		translateFile = sourceFile;
 		translateOpen = true;
-	}
-
-	async function startJob(args: Omit<StartJobArgs, 'filter'>) {
-		jobLog = [];
-		const scopeText =
-			args.scope === 'file'
-				? baseName(args.sourceFile ?? file)
-				: args.scope === 'project'
-					? $t('translation.scope_all')
-					: $t('translation.scope_filter', { n: total });
-		// Set up before the call: a job that fails at once (provider unreachable)
-		// sends its last event before the call returns.
-		job = {
-			running: true,
-			cancelling: false,
-			summary: `${providerLabel(args.providerId)} · ${scopeText}`,
-			total: 0,
-			done: 0,
-			failed: 0,
-			error: null,
-			notice: null
-		};
-		jobRunning.set(true);
-		try {
-			await api.startTranslationJob({
-				...args,
-				filter:
-					args.scope === 'filter'
-						? { sourceFile: file, ...filterArgs({ filter, speaker, search }) }
-						: null
-			});
-		} catch (e) {
-			job = null;
-			jobRunning.set(false);
-			reportError(e);
-		}
-	}
-
-	async function cancelJob() {
-		if (job) job.cancelling = true;
-		try {
-			await api.cancelTranslationJob();
-		} catch (e) {
-			reportError(e);
-		}
-	}
-
-	function handleJobEvent(event: { payload: JobEventPayload }) {
-		const payload = event.payload;
-		if (payload.kind !== 'event' && job?.notice && !job.notice.warn) job.notice = null;
-		if (payload.kind === 'progress') {
-			if (job) {
-				job.total = payload.total;
-				job.done = payload.done;
-				job.failed = payload.failed;
-				job.error = payload.error ? errorText(get(t), payload.error) : null;
-			}
-			if (payload.error) logLine(errorText(get(t), payload.error), true);
-			if (payload.finished) {
-				if (job) job.running = false;
-				jobRunning.set(false);
-				toast.success($t('translation.translation_done', { done: payload.done, failed: payload.failed }));
-				lastRefresh = Date.now();
-				void loadUnits();
-				void refreshSide();
-			} else {
-				throttledRefresh();
-			}
-		} else if (payload.kind === 'chunkPersisted') {
-			throttledRefresh();
-		} else {
-			const text = jobMessageText(get(t), payload.message);
-			logLine(text);
-			if (job && payload.message.key === 'job_events.model_loading') {
-				job.notice = { text, warn: false };
-			} else if (job && payload.message.key === 'job_events.cpu_offload_warning') {
-				job.notice = { text, warn: true };
-			}
-		}
-	}
-
-	function throttledRefresh() {
-		const now = Date.now();
-		if (now - lastRefresh < REFRESH_THROTTLE_MS) return;
-		lastRefresh = now;
-		void loadUnits();
-		scheduleSide();
 	}
 
 	// Toolbar actions -----------------------------------------------------------
@@ -943,57 +823,23 @@
 
 	// Keyboard ---------------------------------------------------------------------
 
-	function onkeydown(event: KeyboardEvent) {
-		if (!$project || $modalDepth > 0) return;
-
-		if (matches('escape', event)) {
-			if (searchText !== '' || search !== '') {
-				event.preventDefault();
-				clearSearch();
-			}
-			return;
-		}
-
-		const rowId = currentRowId();
-		if (matches('search', event)) {
-			event.preventDefault();
+	const onkeydown = createReviewKeydown({
+		searching: () => searchText !== '' || search !== '',
+		clearSearch,
+		focusSearch: () => {
 			searchInput?.focus();
 			searchInput?.select();
-		} else if (matches('save', event)) {
-			event.preventDefault();
-			void saveProject();
-		} else if (matches('spread_duplicates', event)) {
-			event.preventDefault();
-			if (rowId) void spreadRow(rowId);
-		} else if (matches('validate', event)) {
-			event.preventDefault();
-			if (rowId) void validateRow(rowId, true);
-		} else if (matches('copy_source', event)) {
-			event.preventDefault();
-			if (rowId) void copySource(rowId);
-		} else if (matches('needs_review', event)) {
-			event.preventDefault();
-			if (rowId) void toggleFlag(rowId);
-		} else if (matches('prev_row', event)) {
-			event.preventDefault();
-			moveRow(-1);
-		} else if (matches('next_row', event)) {
-			event.preventDefault();
-			moveRow(1);
-		} else if (matches('prev_file', event)) {
-			event.preventDefault();
-			stepFile(-1);
-		} else if (matches('next_file', event)) {
-			event.preventDefault();
-			stepFile(1);
-		} else if (matches('prev_page', event)) {
-			event.preventDefault();
-			void goToPage(page - 1, 'row');
-		} else if (matches('next_page', event)) {
-			event.preventDefault();
-			void goToPage(page + 1, 'row');
-		}
-	}
+		},
+		save: saveProject,
+		currentRowId,
+		spreadRow,
+		validateRow: (blockId) => validateRow(blockId, true),
+		copySource,
+		toggleFlag,
+		moveRow,
+		stepFile,
+		stepPage: (delta) => goToPage(page + delta, 'row')
+	});
 
 	function openHelp() {
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F1' }));
@@ -1056,19 +902,19 @@
 				/>
 			</div>
 
-			{#if job}
+			{#if job.state}
 				<JobBanner
-					running={job.running}
-					cancelling={job.cancelling}
-					summary={job.summary}
-					total={job.total}
-					done={job.done}
-					failed={job.failed}
-					error={job.error}
-					notice={job.notice}
-					log={jobLog}
-					oncancel={cancelJob}
-					ondismiss={() => (job = null)}
+					running={job.state.running}
+					cancelling={job.state.cancelling}
+					summary={job.state.summary}
+					total={job.state.total}
+					done={job.state.done}
+					failed={job.state.failed}
+					error={job.state.error}
+					notice={job.state.notice}
+					log={job.log}
+					oncancel={() => job.cancel()}
+					ondismiss={() => job.dismiss()}
 				/>
 			{/if}
 
@@ -1151,7 +997,7 @@
 		{files}
 		file={translateFile}
 		filterCount={narrowing ? total : null}
-		onstart={startJob}
+		onstart={(args) => job.start(args)}
 	/>
 	<ClearDialog bind:open={clearOpen} {files} file={clearFile} onclear={clearTranslations} />
 	<ContextMenu

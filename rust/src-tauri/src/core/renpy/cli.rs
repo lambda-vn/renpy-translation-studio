@@ -6,8 +6,9 @@
 
 use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::LazyLock;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use regex::Regex;
@@ -96,40 +97,10 @@ pub fn translate(
     }
     let mut child = command.spawn().map_err(CliError::Spawn)?;
 
-    let drain = |stream: Option<Box<dyn Read + Send>>| {
-        std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            if let Some(mut stream) = stream {
-                let _ = stream.read_to_end(&mut bytes);
-            }
-            String::from_utf8_lossy(&bytes).into_owned()
-        })
-    };
-    let stdout = drain(
-        child
-            .stdout
-            .take()
-            .map(|s| Box::new(s) as Box<dyn Read + Send>),
-    );
-    let stderr = drain(
-        child
-            .stderr
-            .take()
-            .map(|s| Box::new(s) as Box<dyn Read + Send>),
-    );
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
 
-    let started = Instant::now();
-    let status = loop {
-        match child.try_wait().map_err(CliError::Spawn)? {
-            Some(status) => break Some(status),
-            None if started.elapsed() >= timeout => {
-                let _ = child.kill();
-                let _ = child.wait();
-                break None;
-            }
-            None => std::thread::sleep(Duration::from_millis(50)),
-        }
-    };
+    let status = wait_or_kill(&mut child, timeout)?;
 
     let out = stdout.join().unwrap_or_default();
     let err = stderr.join().unwrap_or_default();
@@ -149,6 +120,34 @@ pub fn translate(
             seconds: timeout.as_secs(),
             output,
         }),
+    }
+}
+
+/// Read a child pipe to its end on its own thread, as lossy UTF-8.
+fn drain<R: Read + Send + 'static>(stream: Option<R>) -> JoinHandle<String> {
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut stream) = stream {
+            let _ = stream.read_to_end(&mut bytes);
+        }
+        String::from_utf8_lossy(&bytes).into_owned()
+    })
+}
+
+/// Wait for the child to exit, killing it once `timeout` has passed.
+/// `None` means it was killed.
+fn wait_or_kill(child: &mut Child, timeout: Duration) -> Result<Option<ExitStatus>, CliError> {
+    let started = Instant::now();
+    loop {
+        match child.try_wait().map_err(CliError::Spawn)? {
+            Some(status) => return Ok(Some(status)),
+            None if started.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Ok(None);
+            }
+            None => std::thread::sleep(Duration::from_millis(50)),
+        }
     }
 }
 

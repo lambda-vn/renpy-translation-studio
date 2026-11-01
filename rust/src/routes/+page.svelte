@@ -13,12 +13,12 @@
 		type ProjectEntry
 	} from '$lib/api';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import RecentProjects from '$lib/components/RecentProjects.svelte';
 	import SdkField from '$lib/components/SdkField.svelte';
 	import Select from '$lib/components/Select.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
 	import { errorText, reportError } from '$lib/messages';
-	import { languageName } from '$lib/languages';
 	import { ROUTES } from '$lib/navigation';
 	import { project } from '$lib/stores';
 	import { toast } from '$lib/toast';
@@ -75,12 +75,6 @@
 	const languageOptions = $derived(
 		languages.map((entry) => ({ value: entry.code, label: languageLabel(entry) }))
 	);
-
-	function percent(entry: ProjectEntry): number {
-		const resume = entry.resume;
-		if (!resume || resume.total === 0) return 0;
-		return Math.floor((resume.validated * 100) / resume.total);
-	}
 
 	async function openRecent(entry: ProjectEntry) {
 		if (opening) return;
@@ -245,84 +239,14 @@
 <svelte:head><title>{$t('project_setup.list_title')} — Ren'Py Translation Studio</title></svelte:head>
 
 <div class="setup">
-	<section class="recent" aria-labelledby="h-recent">
-		<h1 id="h-recent">{$t('project_setup.list_title')}</h1>
-
-		{#if listError}
-			<p class="notice err" role="alert">{listError}</p>
-		{/if}
-
-		{#if recentLoaded && recent.length === 0}
-			<p class="empty">{$t('project_setup.list_empty')}</p>
-		{:else}
-			<ul class="projects">
-				{#each recent as entry (entry.path)}
-					{@const resume = entry.resume}
-					{@const pct = percent(entry)}
-					<li class="proj">
-						<button
-							type="button"
-							class="open"
-							disabled={!resume || Boolean(opening)}
-							title={entry.path}
-							onclick={() => openRecent(entry)}
-						>
-							<span class="info">
-								<span class="name">{entry.name}</span>
-								<span class="meta">
-									{#if resume}
-										{languageName(resume.sourceLanguage, $t)} → {languageName(
-											resume.targetLanguage,
-											$t
-										)} ·
-									{/if}
-									<span class="mono">{entry.path}</span>
-								</span>
-							</span>
-							{#if resume}
-								<span
-									class="prog"
-									title={$t('project_setup.recent_lines', {
-										total: resume.total,
-										validated: resume.validated
-									})}
-								>
-									<span class="mono pct"
-										>{pct} %<span class="sr"> {$t('project_setup.validated_sr')}</span></span
-									>
-									<progress class="ok" value={pct} max="100" aria-hidden="true"></progress>
-								</span>
-							{:else}
-								<span class="prog"
-									><span class="mono pct">{$t('extraction.not_extracted')}</span></span
-								>
-							{/if}
-						</button>
-						<button
-							type="button"
-							class="btn ghost icon"
-							aria-label={$t('project_setup.delete_label', { name: entry.name })}
-							title={$t('project_setup.delete_tooltip')}
-							onclick={() => deleteEntry(entry)}
-						>
-							<svg
-								class="ico"
-								viewBox="0 0 16 16"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-								aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg
-							>
-						</button>
-					</li>
-				{/each}
-			</ul>
-			{#if recent.length > 0}
-				<p class="foot-note">{$t('project_setup.delete_note')}</p>
-			{/if}
-		{/if}
-	</section>
+	<RecentProjects
+		entries={recent}
+		loaded={recentLoaded}
+		error={listError}
+		{opening}
+		onopen={openRecent}
+		ondelete={deleteEntry}
+	/>
 
 	<section class="new" aria-labelledby="h-new">
 		<h2 id="h-new">{$t('project_setup.new_project')}</h2>
@@ -524,100 +448,6 @@
 		flex-wrap: wrap;
 		gap: 48px;
 		align-items: flex-start;
-	}
-
-	.recent {
-		flex: 999 1 480px;
-		min-width: 0;
-	}
-	.recent h1 {
-		margin: 0 0 8px;
-		font-size: 22px;
-	}
-	.empty {
-		margin: 0;
-		padding: 24px 0;
-		border-top: 1px solid var(--line);
-		color: var(--ink2);
-	}
-
-	.projects {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		border-top: 1px solid var(--line);
-	}
-	.proj {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		border-bottom: 1px solid var(--line);
-	}
-	.open {
-		flex: 1;
-		min-width: 0;
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) 140px;
-		gap: 16px;
-		align-items: center;
-		padding: 16px 12px;
-		margin-left: -12px;
-		border: 0;
-		border-radius: 10px;
-		background: transparent;
-		color: var(--ink);
-		text-align: left;
-	}
-	.open:hover:not(:disabled) {
-		background: var(--hover);
-	}
-	.open:hover:not(:disabled) .name {
-		color: var(--acc7);
-	}
-	.open:disabled {
-		cursor: default;
-		color: var(--ink2);
-	}
-	.info {
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-	.name {
-		font-size: 15px;
-		font-weight: 600;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.meta {
-		font-size: 13px;
-		color: var(--ink3);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.meta .mono {
-		font-size: 12px;
-	}
-	.prog {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-	.pct {
-		font-size: 12.5px;
-		color: var(--ink2);
-		text-align: right;
-	}
-	.prog progress {
-		height: 4px;
-	}
-	.foot-note {
-		margin: 14px 0 0;
-		font-size: 12.5px;
-		color: var(--ink3);
 	}
 
 	.new {
