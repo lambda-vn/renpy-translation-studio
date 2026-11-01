@@ -148,6 +148,81 @@ fn drop_duplicate_content(
     (kept, dropped)
 }
 
+/// Pull the list of entries out of the model's raw `message.content`.
+///
+/// Accepts a bare array, a single bare entry (wrapped into a one-element
+/// list), or an object holding the array under any key. Returns the
+/// failure reason when the content is not JSON or holds no array.
+fn extract_items(content: &str) -> Result<Vec<Value>, &'static str> {
+    let Ok(parsed) = serde_json::from_str::<Value>(content) else {
+        return Err("the response is not JSON");
+    };
+    let array_value = match &parsed {
+        Value::Object(map) => {
+            if extract_entry(&parsed).is_some() {
+                Value::Array(vec![parsed.clone()])
+            } else {
+                map.values()
+                    .find(|v| v.is_array())
+                    .cloned()
+                    .unwrap_or_else(|| parsed.clone())
+            }
+        }
+        other => other.clone(),
+    };
+    match array_value {
+        Value::Array(items) => Ok(items),
+        _ => Err("no array in the response"),
+    }
+}
+
+/// Turn parsed entries into translations, applying the batch guards.
+///
+/// Entries with an unrequested id are ignored, padding duplicated across
+/// units is dropped by [`drop_duplicate_content`], and every requested id
+/// left without a translation is returned, sorted, as failed.
+///
+/// Returns `(translations, failed_block_ids)`.
+fn collect_translations(
+    items: &[Value],
+    requested_ids: &HashSet<&str>,
+    source_by_id: &HashMap<String, String>,
+) -> (Vec<TranslatedUnit>, Vec<String>) {
+    let mut translations: Vec<TranslatedUnit> = Vec::new();
+    for item in items {
+        if let Some((block_id, translated_text)) = extract_entry(item) {
+            if requested_ids.contains(block_id.as_str()) {
+                translations.push(TranslatedUnit {
+                    block_id,
+                    translated_text,
+                });
+            }
+        }
+    }
+
+    let (translations, duplicate_ids) = drop_duplicate_content(translations, source_by_id);
+    if !duplicate_ids.is_empty() {
+        log::warn!("Dropped padding duplicated across the batch: {duplicate_ids:?}");
+    }
+
+    let present: HashSet<&str> = translations.iter().map(|t| t.block_id.as_str()).collect();
+    let mut missing_ids: Vec<String> = requested_ids
+        .iter()
+        .filter(|id| !present.contains(*id))
+        .map(|id| (*id).to_string())
+        .collect();
+    missing_ids.sort();
+    if !missing_ids.is_empty() {
+        log::warn!(
+            "{} of {} unit(s) missing from the response: {missing_ids:?}",
+            missing_ids.len(),
+            requested_ids.len()
+        );
+    }
+
+    (translations, missing_ids)
+}
+
 /// Turn each unit into a [`ContextualUnit`], without its neighbors' text.
 ///
 /// The preceding and following source lines used to go along as
@@ -544,60 +619,11 @@ impl OllamaProvider {
             return fail_all("no message content in the response");
         };
         log::debug!("Batch raw response: {content}");
-        let Ok(parsed) = serde_json::from_str::<Value>(content) else {
-            return fail_all("the response is not JSON");
+        let items = match extract_items(content) {
+            Ok(items) => items,
+            Err(reason) => return fail_all(reason),
         };
-
-        let array_value = match &parsed {
-            Value::Object(map) => {
-                if extract_entry(&parsed).is_some() {
-                    Value::Array(vec![parsed.clone()])
-                } else {
-                    map.values()
-                        .find(|v| v.is_array())
-                        .cloned()
-                        .unwrap_or_else(|| parsed.clone())
-                }
-            }
-            other => other.clone(),
-        };
-        let Some(items) = array_value.as_array() else {
-            return fail_all("no array in the response");
-        };
-
-        let mut translations: Vec<TranslatedUnit> = Vec::new();
-        for item in items {
-            if let Some((block_id, translated_text)) = extract_entry(item) {
-                if requested_ids.contains(block_id.as_str()) {
-                    translations.push(TranslatedUnit {
-                        block_id,
-                        translated_text,
-                    });
-                }
-            }
-        }
-
-        let (translations, duplicate_ids) = drop_duplicate_content(translations, &source_by_id);
-        if !duplicate_ids.is_empty() {
-            log::warn!("Dropped padding duplicated across the batch: {duplicate_ids:?}");
-        }
-
-        let present: HashSet<&str> = translations.iter().map(|t| t.block_id.as_str()).collect();
-        let mut missing_ids: Vec<String> = requested_ids
-            .into_iter()
-            .filter(|id| !present.contains(id))
-            .map(String::from)
-            .collect();
-        missing_ids.sort();
-        if !missing_ids.is_empty() {
-            log::warn!(
-                "{} of {} unit(s) missing from the response: {missing_ids:?}",
-                missing_ids.len(),
-                batch.len()
-            );
-        }
-
-        Ok((translations, missing_ids))
+        Ok(collect_translations(&items, &requested_ids, &source_by_id))
     }
 }
 
@@ -1175,5 +1201,73 @@ mod tests {
             Err(ProviderError::OllamaModelMissing { .. })
         ));
         assert!(notices.is_empty());
+    }
+
+    fn requested<'a>(ids: &[&'a str]) -> HashSet<&'a str> {
+        ids.iter().copied().collect()
+    }
+
+    fn sources(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(id, text)| (id.to_string(), text.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn collect_translations_ignores_unrequested_id() {
+        let items = vec![
+            json!({"block_id": "a", "translation": "Bonjour"}),
+            json!({"block_id": "zzz", "translation": "Intrus"}),
+        ];
+        let (kept, failed) =
+            collect_translations(&items, &requested(&["a"]), &sources(&[("a", "Hello")]));
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].block_id, "a");
+        assert!(failed.is_empty());
+    }
+
+    #[test]
+    fn collect_translations_fails_missing_id() {
+        let items = vec![json!({"block_id": "a", "translation": "Bonjour"})];
+        let (kept, failed) = collect_translations(
+            &items,
+            &requested(&["a", "c", "b"]),
+            &sources(&[("a", "Hello"), ("b", "Bye"), ("c", "Yes")]),
+        );
+        assert_eq!(kept.len(), 1);
+        assert_eq!(failed, vec!["b".to_string(), "c".to_string()]);
+    }
+
+    #[test]
+    fn collect_translations_drops_duplicated_content() {
+        let items = vec![
+            json!({"block_id": "a", "translation": "Une phrase assez longue"}),
+            json!({"block_id": "b", "translation": "Une phrase assez longue"}),
+            json!({"block_id": "c", "translation": "Autre chose"}),
+        ];
+        let (kept, failed) = collect_translations(
+            &items,
+            &requested(&["a", "b", "c"]),
+            &sources(&[("a", "One"), ("b", "Two"), ("c", "Three")]),
+        );
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].block_id, "c");
+        assert_eq!(failed, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn collect_translations_preserves_response_order() {
+        let items = vec![
+            json!({"block_id": "b", "translation": "Deux"}),
+            json!({"block_id": "a", "translation": "Un"}),
+        ];
+        let (kept, _) = collect_translations(
+            &items,
+            &requested(&["a", "b"]),
+            &sources(&[("a", "One"), ("b", "Two")]),
+        );
+        let ids: Vec<&str> = kept.iter().map(|t| t.block_id.as_str()).collect();
+        assert_eq!(ids, vec!["b", "a"]);
     }
 }

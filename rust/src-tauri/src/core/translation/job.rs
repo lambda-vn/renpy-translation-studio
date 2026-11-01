@@ -400,18 +400,20 @@ fn verify_quality(
 /// What is retried is the unit that was actually sent, never the ones
 /// waiting on its answer — retrying those would mean sending the same
 /// text again, which `group_by_source` exists to avoid.
-#[allow(clippy::too_many_arguments)]
 async fn retry_failed_units(
     failed_ids: Vec<String>,
-    units_by_id: &HashMap<String, TranslationUnitPayload>,
-    followers: &HashMap<String, Vec<String>>,
+    ctx: &ChunkContext<'_>,
     provider: &mut dyn TranslationProvider,
-    source_lang: &str,
-    target_lang: &str,
-    cancel: &CancelToken,
-    tx: &UnboundedSender<JobEvent>,
     progress: &mut JobProgress,
 ) {
+    let ChunkContext {
+        units_by_id,
+        followers,
+        source_lang,
+        target_lang,
+        cancel,
+        tx,
+    } = *ctx;
     let mut remaining = failed_ids;
 
     'passes: for &chunk_size in &RETRY_CHUNK_SIZES {
@@ -504,26 +506,7 @@ pub async fn run_job(
         emit(&tx, JobEvent::Event(JobMessage::SharedSource { n: shared }));
     }
 
-    if !skipped.is_empty() {
-        let spread = TranslateBatchResult {
-            translations: skipped
-                .iter()
-                .map(|u| TranslatedUnit {
-                    block_id: u.block_id.clone(),
-                    translated_text: u.source_text.clone(),
-                })
-                .collect(),
-            failed_ids: Vec::new(),
-            stopped: None,
-        };
-        progress.done += skipped.len();
-        emit(&tx, JobEvent::Chunk(spread));
-        emit(
-            &tx,
-            JobEvent::Event(JobMessage::NothingToTranslate { n: skipped.len() }),
-        );
-        emit(&tx, JobEvent::Progress(progress.clone()));
-    }
+    emit_skipped(&skipped, &mut progress, &tx);
 
     let mut failed_ids: Vec<String> = Vec::new();
     let mut provider_error: Option<ProviderError> = None;
@@ -539,48 +522,22 @@ pub async fn run_job(
         }
     }
 
-    'main: for chunk in translatable.chunks(CHUNK_SIZE) {
+    let ctx = ChunkContext {
+        units_by_id: &units_by_id,
+        followers: &followers,
+        source_lang,
+        target_lang,
+        cancel: &cancel,
+        tx: &tx,
+    };
+
+    for chunk in translatable.chunks(CHUNK_SIZE) {
         if cancel.is_cancelled() || provider_error.is_some() {
             break;
         }
-        let mut result = match provider
-            .translate_batch(chunk, source_lang, target_lang)
-            .await
+        if let ChunkOutcome::Stop(err) =
+            process_chunk(&ctx, provider, chunk, &mut progress, &mut failed_ids).await
         {
-            Ok(result) => result,
-            Err(err) => {
-                log::warn!("Translation job stopped: {err}");
-                provider_error = Some(err);
-                break 'main;
-            }
-        };
-        let stopped = result.stopped.take();
-        log::debug!(
-            "Chunk of {} unit(s): {} translated, {} failed by the provider",
-            chunk.len(),
-            result.translations.len(),
-            result.failed_ids.len()
-        );
-        let provider_failed = result.failed_ids.len();
-        let (result, events) = verify_quality(chunk, result);
-        if provider_failed > 0 {
-            emit(
-                &tx,
-                JobEvent::Event(JobMessage::ProviderFailed { n: provider_failed }),
-            );
-        }
-        for event in events {
-            emit(&tx, JobEvent::Event(event));
-        }
-        // Only representatives are retried: `units_by_id` holds no follower.
-        failed_ids.extend(result.failed_ids.iter().cloned());
-        let spread = spread_to_followers(result, &followers);
-        progress.done += spread.translations.len();
-        progress.failed += spread.failed_ids.len();
-        emit(&tx, JobEvent::Chunk(spread));
-        emit(&tx, JobEvent::Progress(progress.clone()));
-        if let Some(err) = stopped {
-            log::warn!("Translation job stopped after a partial chunk: {err}");
             provider_error = Some(err);
         }
     }
@@ -588,18 +545,7 @@ pub async fn run_job(
     if provider_error.is_some() {
         progress.error = provider_error;
     } else if !failed_ids.is_empty() && !cancel.is_cancelled() {
-        retry_failed_units(
-            failed_ids,
-            &units_by_id,
-            &followers,
-            provider,
-            source_lang,
-            target_lang,
-            &cancel,
-            &tx,
-            &mut progress,
-        )
-        .await;
+        retry_failed_units(failed_ids, &ctx, provider, &mut progress).await;
     }
 
     progress.running = false;
@@ -614,6 +560,108 @@ pub async fn run_job(
     progress
 }
 
+/// What stays the same from one chunk of a job to the next.
+struct ChunkContext<'a> {
+    units_by_id: &'a HashMap<String, TranslationUnitPayload>,
+    followers: &'a HashMap<String, Vec<String>>,
+    source_lang: &'a str,
+    target_lang: &'a str,
+    cancel: &'a CancelToken,
+    tx: &'a UnboundedSender<JobEvent>,
+}
+
+/// Whether the job goes on after a chunk.
+enum ChunkOutcome {
+    Continue,
+    /// The provider gave up; the job stops and reports this error.
+    Stop(ProviderError),
+}
+
+/// Copy verbatim the units that have no text to translate, and report
+/// them as done.
+fn emit_skipped(
+    skipped: &[TranslationUnitPayload],
+    progress: &mut JobProgress,
+    tx: &UnboundedSender<JobEvent>,
+) {
+    if skipped.is_empty() {
+        return;
+    }
+    let spread = TranslateBatchResult {
+        translations: skipped
+            .iter()
+            .map(|u| TranslatedUnit {
+                block_id: u.block_id.clone(),
+                translated_text: u.source_text.clone(),
+            })
+            .collect(),
+        failed_ids: Vec::new(),
+        stopped: None,
+    };
+    progress.done += skipped.len();
+    emit(tx, JobEvent::Chunk(spread));
+    emit(
+        tx,
+        JobEvent::Event(JobMessage::NothingToTranslate { n: skipped.len() }),
+    );
+    emit(tx, JobEvent::Progress(progress.clone()));
+}
+
+/// Translate one chunk, verify it, and report it.
+///
+/// A provider that fails the whole call stops the job with nothing to
+/// persist; one that stops after a partial answer has what it translated
+/// persisted first, then stops the job.
+async fn process_chunk(
+    ctx: &ChunkContext<'_>,
+    provider: &mut dyn TranslationProvider,
+    chunk: &[TranslationUnitPayload],
+    progress: &mut JobProgress,
+    failed_ids: &mut Vec<String>,
+) -> ChunkOutcome {
+    let mut result = match provider
+        .translate_batch(chunk, ctx.source_lang, ctx.target_lang)
+        .await
+    {
+        Ok(result) => result,
+        Err(err) => {
+            log::warn!("Translation job stopped: {err}");
+            return ChunkOutcome::Stop(err);
+        }
+    };
+    let stopped = result.stopped.take();
+    log::debug!(
+        "Chunk of {} unit(s): {} translated, {} failed by the provider",
+        chunk.len(),
+        result.translations.len(),
+        result.failed_ids.len()
+    );
+    let provider_failed = result.failed_ids.len();
+    let (result, events) = verify_quality(chunk, result);
+    if provider_failed > 0 {
+        emit(
+            ctx.tx,
+            JobEvent::Event(JobMessage::ProviderFailed { n: provider_failed }),
+        );
+    }
+    for event in events {
+        emit(ctx.tx, JobEvent::Event(event));
+    }
+    // Only representatives are retried: `units_by_id` holds no follower.
+    failed_ids.extend(result.failed_ids.iter().cloned());
+    let spread = spread_to_followers(result, ctx.followers);
+    progress.done += spread.translations.len();
+    progress.failed += spread.failed_ids.len();
+    emit(ctx.tx, JobEvent::Chunk(spread));
+    emit(ctx.tx, JobEvent::Progress(progress.clone()));
+    match stopped {
+        Some(err) => {
+            log::warn!("Translation job stopped after a partial chunk: {err}");
+            ChunkOutcome::Stop(err)
+        }
+        None => ChunkOutcome::Continue,
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

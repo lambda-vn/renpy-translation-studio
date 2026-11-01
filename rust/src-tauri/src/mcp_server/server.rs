@@ -226,13 +226,15 @@ impl RtsServer {
         let page_size = args.page_size.clamp(1, MAX_PAGE_SIZE);
         let (units, total) = repositories::get_page(
             session.conn(),
-            &source_file,
-            page,
-            page_size,
-            args.status.as_deref(),
-            &args.search,
-            args.speaker.as_deref(),
-            args.needs_review,
+            &repositories::UnitQuery {
+                source_file: &source_file,
+                page,
+                page_size,
+                status_filter: args.status.as_deref(),
+                search_query: &args.search,
+                character: args.speaker.as_deref(),
+                needs_review: args.needs_review,
+            },
         )
         .map_err(|e| e.to_string())?;
         Ok(Json(ListUnitsResult {

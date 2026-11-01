@@ -22,7 +22,7 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 use crate::app_state::AppState;
-use crate::core::review_actions::{self, UnitFilter};
+use crate::core::review_actions::{self, JobScope, UnitFilter};
 use crate::core::storage::repositories;
 use crate::core::translation::job::{self, CancelToken, JobEvent, JobMessage, JobProgress};
 use crate::core::translation::providers::base::{
@@ -41,11 +41,11 @@ const JOB_EVENT_NAME: &str = "translation-job";
 #[serde(rename_all = "camelCase")]
 pub struct StartJobArgs {
     pub provider_id: String,
-    /// "project" translates every `not_translated` unit in the project;
-    /// "file" limits that to one source file (`source_file`, relative,
-    /// as returned by `list_files`); "filter" translates the lines the
+    /// `Project` translates every `not_translated` unit in the project;
+    /// `File` limits that to one source file (`source_file`, relative,
+    /// as returned by `list_files`); `Filter` translates the lines the
     /// review filters in `filter` select, minus the validated ones.
-    pub scope: String,
+    pub scope: JobScope,
     pub source_file: Option<String>,
     /// Also retranslate (and overwrite) existing drafts in a "project" or
     /// "file" scope. The caller asks the user first when the scope holds
@@ -180,16 +180,10 @@ pub async fn start_translation_job(
     args: StartJobArgs,
 ) -> Result<(), CommandError> {
     let cancel = CancelToken::new();
-    {
-        let mut slot = state.job.lock().await;
-        if slot.is_some() {
-            return Err(CommandError::message("translation.job_running"));
-        }
-        *slot = Some(cancel.clone());
-    }
+    let slot = JobSlot::acquire(&state.job, cancel.clone()).await?;
 
     let prepared = JobContext::load(&state, &args.provider_id, |session| {
-        let selected = select_units(session, &args)?;
+        let selected = select_for_job(session, &args)?;
         if selected.is_empty() {
             return Err(CommandError::message("errors.nothing_to_translate"));
         }
@@ -206,14 +200,13 @@ pub async fn start_translation_job(
     } = match prepared {
         Ok(ready) => ready,
         Err(e) => {
-            *state.job.lock().await = None;
+            slot.release().await;
             return Err(e);
         }
     };
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let current = state.current.clone();
-    let job_slot = state.job.clone();
     let stop = cancel.clone();
 
     tauri::async_runtime::spawn(async move {
@@ -237,7 +230,7 @@ pub async fn start_translation_job(
             log::error!("the translation job stopped abnormally: {error}");
         }
         let _ = receiver.await;
-        *job_slot.lock().await = None;
+        slot.release().await;
     });
 
     Ok(())
@@ -274,73 +267,6 @@ fn spawn_event_pump(
             }
         }
     })
-}
-
-/// The lines a job scope sends. The two simple scopes read the
-/// `not_translated` lines (drafts appended on request); the filter scope
-/// takes the lines the filter matches and drops the validated ones, a
-/// suggestion never replacing work a human signed off on.
-fn select_units(
-    session: &ProjectSession,
-    args: &StartJobArgs,
-) -> Result<Vec<repositories::TranslationUnit>, String> {
-    let conn = session.conn();
-    let db = |e: rusqlite::Error| e.to_string();
-    match args.scope.as_str() {
-        "filter" => {
-            let filter = args
-                .filter
-                .as_ref()
-                .ok_or_else(|| "filter is required for scope \"filter\".".to_string())?;
-            let source_file = session.absolute(&filter.source_file);
-            let units = review_actions::filtered_units(
-                conn,
-                &source_file,
-                &UnitFilter {
-                    status: filter.status.clone(),
-                    search: filter.search.clone(),
-                    speaker: filter.speaker.clone(),
-                    needs_review: filter.needs_review,
-                    errors_only: filter.errors_only,
-                },
-            )
-            .map_err(db)?;
-            Ok(units
-                .into_iter()
-                .filter(|u| u.status != repositories::STATUS_HUMAN_VALIDATED)
-                .collect())
-        }
-        scope @ ("file" | "project") => {
-            let source_file = if scope == "file" {
-                Some(
-                    args.source_file
-                        .as_deref()
-                        .map(|f| session.absolute(f))
-                        .ok_or_else(|| "source_file is required for scope \"file\".".to_string())?,
-                )
-            } else {
-                None
-            };
-            let mut units = repositories::get_all(
-                conn,
-                Some(repositories::STATUS_NOT_TRANSLATED),
-                source_file.as_deref(),
-            )
-            .map_err(db)?;
-            if args.include_drafts {
-                units.extend(
-                    repositories::get_all(
-                        conn,
-                        Some(repositories::STATUS_DRAFT),
-                        source_file.as_deref(),
-                    )
-                    .map_err(db)?,
-                );
-            }
-            Ok(units)
-        }
-        other => Err(format!("Unknown scope: {other}")),
-    }
 }
 
 /// What became of a translated chunk.
@@ -470,6 +396,69 @@ pub async fn cancel_translation_job(state: State<'_, AppState>) -> Result<(), St
 #[tauri::command]
 pub async fn is_translation_job_running(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(state.job.lock().await.is_some())
+}
+
+/// The job slot of [`AppState`], held from the reservation until
+/// [`JobSlot::release`].
+///
+/// There is no `Drop`: releasing needs to await a tokio mutex, which a
+/// destructor cannot do. Each path out of a job therefore ends in an
+/// explicit `release`.
+struct JobSlot {
+    slot: Arc<Mutex<Option<CancelToken>>>,
+}
+
+impl JobSlot {
+    /// Reserve the slot for the job `cancel` stops.
+    ///
+    /// # Errors
+    ///
+    /// Returns `translation.job_running` when a job already holds it.
+    async fn acquire(
+        slot: &Arc<Mutex<Option<CancelToken>>>,
+        cancel: CancelToken,
+    ) -> Result<JobSlot, CommandError> {
+        let mut held = slot.lock().await;
+        if held.is_some() {
+            return Err(CommandError::message("translation.job_running"));
+        }
+        *held = Some(cancel);
+        Ok(JobSlot { slot: slot.clone() })
+    }
+
+    async fn release(self) {
+        *self.slot.lock().await = None;
+    }
+}
+
+/// Resolve the paths of `args` against the open project and pick the
+/// lines of its scope.
+fn select_for_job(
+    session: &ProjectSession,
+    args: &StartJobArgs,
+) -> Result<Vec<repositories::TranslationUnit>, String> {
+    let source_file = args.source_file.as_deref().map(|f| session.absolute(f));
+    let filter = args.filter.as_ref().map(|filter| {
+        (
+            session.absolute(&filter.source_file),
+            UnitFilter {
+                status: filter.status.clone(),
+                search: filter.search.clone(),
+                speaker: filter.speaker.clone(),
+                needs_review: filter.needs_review,
+                errors_only: filter.errors_only,
+            },
+        )
+    });
+    review_actions::select_units(
+        session.conn(),
+        args.scope,
+        source_file.as_deref(),
+        args.include_drafts,
+        filter
+            .as_ref()
+            .map(|(file, filter)| (file.as_str(), filter)),
+    )
 }
 
 #[cfg(test)]

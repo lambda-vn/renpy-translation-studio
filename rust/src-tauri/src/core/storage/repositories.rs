@@ -225,23 +225,16 @@ pub const MAX_PAGE_SIZE: i64 = 500;
 /// One page of a file's units plus the total matching row count, filtered
 /// like the review screen: status, a search substring across source and
 /// translation, a speaker, and the "needs another look" flag.
-#[allow(clippy::too_many_arguments)]
 pub fn get_page(
     conn: &Connection,
-    source_file: &str,
-    page: i64,
-    page_size: i64,
-    status_filter: Option<&str>,
-    search_query: &str,
-    character: Option<&str>,
-    needs_review: bool,
+    query: &UnitQuery,
 ) -> rusqlite::Result<(Vec<TranslationUnit>, i64)> {
     let (where_clause, params) = page_filters(
-        source_file,
-        status_filter,
-        search_query,
-        character,
-        needs_review,
+        query.source_file,
+        query.status_filter,
+        query.search_query,
+        query.character,
+        query.needs_review,
     );
     let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
@@ -251,9 +244,9 @@ pub fn get_page(
         |row| row.get(0),
     )?;
 
-    let page_size = page_size.clamp(1, MAX_PAGE_SIZE);
+    let page_size = query.page_size.clamp(1, MAX_PAGE_SIZE);
     let mut page_params = bound;
-    let offset = page.max(0).saturating_mul(page_size);
+    let offset = query.page.max(0).saturating_mul(page_size);
     let page_size_box: Box<dyn rusqlite::ToSql> = Box::new(page_size);
     let offset_box: Box<dyn rusqlite::ToSql> = Box::new(offset);
     page_params.push(page_size_box.as_ref());
@@ -1054,6 +1047,20 @@ fn begin_immediate(conn: &Connection) -> rusqlite::Result<Option<Transaction<'_>
         .transpose()
 }
 
+/// What [`get_page`] asks for: a file, a page of it and the review
+/// filters. `page_size` is clamped to `1..=MAX_PAGE_SIZE` and a negative
+/// `page` reads as the first.
+#[derive(Debug, Clone, Copy)]
+pub struct UnitQuery<'a> {
+    pub source_file: &'a str,
+    pub page: i64,
+    pub page_size: i64,
+    pub status_filter: Option<&'a str>,
+    pub search_query: &'a str,
+    pub character: Option<&'a str>,
+    pub needs_review: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::database::Database;
@@ -1255,18 +1262,53 @@ mod tests {
         )
         .unwrap();
 
-        let (page, total) = get_page(db.conn(), "script.rpy", 0, 2, None, "", None, false).unwrap();
+        let (page, total) = get_page(
+            db.conn(),
+            &UnitQuery {
+                source_file: "script.rpy",
+                page: 0,
+                page_size: 2,
+                status_filter: None,
+                search_query: "",
+                character: None,
+                needs_review: false,
+            },
+        )
+        .unwrap();
         assert_eq!(total, 3);
         assert_eq!(page.len(), 2);
         assert_eq!(page[0].block_id, "a");
 
-        let (page, total) = get_page(db.conn(), "script.rpy", 1, 2, None, "", None, false).unwrap();
+        let (page, total) = get_page(
+            db.conn(),
+            &UnitQuery {
+                source_file: "script.rpy",
+                page: 1,
+                page_size: 2,
+                status_filter: None,
+                search_query: "",
+                character: None,
+                needs_review: false,
+            },
+        )
+        .unwrap();
         assert_eq!(total, 3);
         assert_eq!(page.len(), 1);
         assert_eq!(page[0].block_id, "c");
 
-        let (page, total) =
-            get_page(db.conn(), "script.rpy", 0, 50, None, "", Some("e"), false).unwrap();
+        let (page, total) = get_page(
+            db.conn(),
+            &UnitQuery {
+                source_file: "script.rpy",
+                page: 0,
+                page_size: 50,
+                status_filter: None,
+                search_query: "",
+                character: Some("e"),
+                needs_review: false,
+            },
+        )
+        .unwrap();
         assert_eq!(total, 2);
         assert!(page
             .iter()
@@ -1274,13 +1316,15 @@ mod tests {
 
         let (page, total) = get_page(
             db.conn(),
-            "script.rpy",
-            0,
-            50,
-            None,
-            "farewell",
-            None,
-            false,
+            &UnitQuery {
+                source_file: "script.rpy",
+                page: 0,
+                page_size: 50,
+                status_filter: None,
+                search_query: "farewell",
+                character: None,
+                needs_review: false,
+            },
         )
         .unwrap();
         assert_eq!(total, 1);
@@ -1292,20 +1336,33 @@ mod tests {
         let db = open_temp();
         seed(db.conn());
 
-        let (page, total) =
-            get_page(db.conn(), "script.rpy", 0, -1, None, "", None, false).unwrap();
+        let (page, total) = get_page(
+            db.conn(),
+            &UnitQuery {
+                source_file: "script.rpy",
+                page: 0,
+                page_size: -1,
+                status_filter: None,
+                search_query: "",
+                character: None,
+                needs_review: false,
+            },
+        )
+        .unwrap();
         assert_eq!(total, 2);
         assert_eq!(page.len(), 1);
 
         let (page, _) = get_page(
             db.conn(),
-            "script.rpy",
-            i64::MAX,
-            i64::MAX,
-            None,
-            "",
-            None,
-            false,
+            &UnitQuery {
+                source_file: "script.rpy",
+                page: i64::MAX,
+                page_size: i64::MAX,
+                status_filter: None,
+                search_query: "",
+                character: None,
+                needs_review: false,
+            },
         )
         .unwrap();
         assert!(page.is_empty());
@@ -1326,8 +1383,19 @@ mod tests {
         )
         .unwrap();
 
-        let (page, total) =
-            get_page(db.conn(), "script.rpy", 0, 50, None, "100%", None, false).unwrap();
+        let (page, total) = get_page(
+            db.conn(),
+            &UnitQuery {
+                source_file: "script.rpy",
+                page: 0,
+                page_size: 50,
+                status_filter: None,
+                search_query: "100%",
+                character: None,
+                needs_review: false,
+            },
+        )
+        .unwrap();
         assert_eq!(total, 1);
         assert_eq!(page.len(), 1);
     }

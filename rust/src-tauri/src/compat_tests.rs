@@ -132,21 +132,27 @@ fn progress_filters_and_search_agree_with_the_data() {
         .unwrap();
     assert_eq!(file.total, 5);
 
-    let (page, total) = repositories::get_page(
-        conn,
-        &file.source_file,
-        0,
-        50,
-        None,
-        "cr\u{e8}me",
-        None,
-        false,
-    )
-    .unwrap();
+    let query = repositories::UnitQuery {
+        source_file: &file.source_file,
+        page: 0,
+        page_size: 50,
+        status_filter: None,
+        search_query: "cr\u{e8}me",
+        character: None,
+        needs_review: false,
+    };
+    let (page, total) = repositories::get_page(conn, &query).unwrap();
     assert_eq!((page.len(), total), (1, 1));
 
-    let (flagged, _) =
-        repositories::get_page(conn, &file.source_file, 0, 50, None, "", None, true).unwrap();
+    let (flagged, _) = repositories::get_page(
+        conn,
+        &repositories::UnitQuery {
+            search_query: "",
+            needs_review: true,
+            ..query
+        },
+    )
+    .unwrap();
     assert_eq!(flagged.len(), 1);
     assert_eq!(flagged[0].block_id, "start_a5");
 }

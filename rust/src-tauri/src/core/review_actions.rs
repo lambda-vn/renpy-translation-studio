@@ -7,6 +7,7 @@
 use std::collections::{HashMap, HashSet};
 
 use rusqlite::Connection;
+use serde::Deserialize;
 
 use crate::core::storage::repositories::{self, TranslationUnit};
 use crate::core::translation::providers::base::TranslateBatchResult;
@@ -85,13 +86,15 @@ pub fn page_of_units(
     if !filter.errors_only {
         return repositories::get_page(
             conn,
-            source_file,
-            page,
-            page_size,
-            filter.status.as_deref(),
-            &filter.search,
-            filter.speaker.as_deref(),
-            filter.needs_review,
+            &repositories::UnitQuery {
+                source_file,
+                page,
+                page_size,
+                status_filter: filter.status.as_deref(),
+                search_query: &filter.search,
+                character: filter.speaker.as_deref(),
+                needs_review: filter.needs_review,
+            },
         );
     }
     let matching = filtered_units(conn, source_file, filter)?;
@@ -272,6 +275,71 @@ pub fn screen_submission<'a>(
         warnings,
         text,
     })
+}
+
+/// Which lines a translation job sends. `Project` is every
+/// `not_translated` line, `File` limits that to one source file, and
+/// `Filter` takes the lines the review filters select.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum JobScope {
+    Project,
+    File,
+    Filter,
+}
+
+/// The lines a job scope sends. The two simple scopes read the
+/// `not_translated` lines (drafts appended on request); the filter scope
+/// takes the lines the filter matches and drops the validated ones, a
+/// suggestion never replacing work a human signed off on.
+///
+/// `source_file` is the absolute file of the `File` scope; `filter` pairs
+/// the absolute file with the filters for the `Filter` scope.
+/// `include_drafts` is ignored by `Filter`.
+///
+/// # Errors
+///
+/// Returns a message when the scope needs a file or a filter that was not
+/// given, or when the database read fails.
+pub fn select_units(
+    conn: &Connection,
+    scope: JobScope,
+    source_file: Option<&str>,
+    include_drafts: bool,
+    filter: Option<(&str, &UnitFilter)>,
+) -> Result<Vec<TranslationUnit>, String> {
+    let db = |e: rusqlite::Error| e.to_string();
+    match scope {
+        JobScope::Filter => {
+            let (filter_file, filter) =
+                filter.ok_or_else(|| "filter is required for scope \"filter\".".to_string())?;
+            Ok(filtered_units(conn, filter_file, filter)
+                .map_err(db)?
+                .into_iter()
+                .filter(|u| u.status != repositories::STATUS_HUMAN_VALIDATED)
+                .collect())
+        }
+        JobScope::File | JobScope::Project => {
+            let source_file = if scope == JobScope::File {
+                Some(
+                    source_file
+                        .ok_or_else(|| "source_file is required for scope \"file\".".to_string())?,
+                )
+            } else {
+                None
+            };
+            let mut units =
+                repositories::get_all(conn, Some(repositories::STATUS_NOT_TRANSLATED), source_file)
+                    .map_err(db)?;
+            if include_drafts {
+                units.extend(
+                    repositories::get_all(conn, Some(repositories::STATUS_DRAFT), source_file)
+                        .map_err(db)?,
+                );
+            }
+            Ok(units)
+        }
+    }
 }
 
 #[cfg(test)]
