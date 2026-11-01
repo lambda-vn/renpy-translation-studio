@@ -53,11 +53,7 @@ pub fn fill_from_memory(
 /// Returns the number of characters the scan found, whether or not each
 /// was already stored.
 pub fn detect_and_store_characters(conn: &Connection, project: &Path) -> rusqlite::Result<usize> {
-    let detected = character_detector::detect(project);
-    for character in &detected {
-        repositories::upsert_character(conn, &character.variable, &character.display_name)?;
-    }
-    Ok(detected.len())
+    store_characters(conn, &character_detector::detect(project))
 }
 
 /// What a recent-projects card shows about a game, read from its own
@@ -142,6 +138,19 @@ pub fn delete_project_data(registry: &Path, project: &Path) -> std::io::Result<(
     }
     recent_projects::remove(registry, &project);
     Ok(())
+}
+
+/// Save what [`character_detector::detect`] found, as
+/// [`detect_and_store_characters`] does: for a caller that scans the
+/// sources apart, without holding the project. Returns how many there were.
+pub fn store_characters(
+    conn: &Connection,
+    detected: &[character_detector::DetectedCharacter],
+) -> rusqlite::Result<usize> {
+    for character in detected {
+        repositories::upsert_character(conn, &character.variable, &character.display_name)?;
+    }
+    Ok(detected.len())
 }
 
 #[cfg(test)]

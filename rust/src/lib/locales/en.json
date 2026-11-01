@@ -624,6 +624,7 @@
     "nothing_to_translate": "Nothing to translate in this scope.",
     "validate_first": "Validate the line first.",
     "unsupported_target_language": "Unsupported target language: {language}",
-    "delete_data_failed": "Could not delete the saved data: {detail}"
+    "delete_data_failed": "Could not delete the saved data: {detail}",
+    "project_changed": "The project was closed or changed during the operation."
   }
 }

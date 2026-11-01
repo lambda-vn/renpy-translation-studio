@@ -69,30 +69,38 @@ pub async fn export_interchange(
     path: String,
     source_file: Option<String>,
 ) -> Result<usize, CommandError> {
-    let guard = state.current.lock().await;
-    let session = require_session(&guard)?;
-    let absolute = source_file.as_deref().map(|file| session.absolute(file));
-    let mut units = repositories::get_all(session.conn(), None, absolute.as_deref())
+    let (units, source_language, target_language) = {
+        let guard = state.current.lock().await;
+        let session = require_session(&guard)?;
+        let absolute = source_file.as_deref().map(|file| session.absolute(file));
+        let mut units = repositories::get_all(session.conn(), None, absolute.as_deref())
+            .map_err(|e| e.to_string())?;
+        for unit in &mut units {
+            unit.source_file = session.relative(&unit.source_file);
+        }
+        (units, session.source_language(), session.target_language())
+    };
+    tokio::task::spawn_blocking(move || {
+        interchange::write_interchange(
+            Path::new(&path),
+            &units,
+            &source_language,
+            &target_language,
+        )
         .map_err(|e| e.to_string())?;
-    for unit in &mut units {
-        unit.source_file = session.relative(&unit.source_file);
-    }
-    interchange::write_interchange(
-        Path::new(&path),
-        &units,
-        &session.source_language(),
-        &session.target_language(),
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(units.len())
+        Ok(units.len())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-fn plan_for(
-    session: &crate::mcp_server::session::ProjectSession,
-    path: &str,
-) -> Result<ImportPlan, String> {
-    let units = interchange::read_interchange(Path::new(path)).map_err(|e| e.to_string())?;
-    interchange::plan_import(&units, session.conn()).map_err(|e| e.to_string())
+/// Read and parse a bilingual file without holding the project, so a
+/// large file does not stall a translation job's chunks.
+async fn read_units(path: String) -> Result<Vec<interchange::InterchangeUnit>, CommandError> {
+    tokio::task::spawn_blocking(move || interchange::read_interchange(Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| CommandError::from(e.to_string()))
 }
 
 /// Read a file and report what importing it would change, writing nothing.
@@ -101,10 +109,12 @@ pub async fn plan_interchange_import(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<ImportPreview, CommandError> {
+    let units = read_units(path).await?;
     let guard = state.current.clone().lock_owned().await;
     tokio::task::spawn_blocking(move || {
         let session = require_session(&guard)?;
-        Ok(ImportPreview::from(&plan_for(session, &path)?))
+        let plan = interchange::plan_import(&units, session.conn()).map_err(|e| e.to_string())?;
+        Ok(ImportPreview::from(&plan))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -116,10 +126,11 @@ pub async fn apply_interchange_import(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<ImportOutcome, CommandError> {
+    let units = read_units(path).await?;
     let guard = state.current.clone().lock_owned().await;
     tokio::task::spawn_blocking(move || {
         let session = require_session(&guard)?;
-        let plan = plan_for(session, &path)?;
+        let plan = interchange::plan_import(&units, session.conn()).map_err(|e| e.to_string())?;
         let applied = interchange::apply_plan(&plan, session.conn()).map_err(|e| e.to_string())?;
         Ok(ImportOutcome {
             applied,

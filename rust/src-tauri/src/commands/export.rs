@@ -35,6 +35,10 @@ fn tl_dir(
 /// Write every stored translation back to the `.rpy` files and record the
 /// save, which is what resets the "not written" counter and the export
 /// warning. Returns how many lines hold a translation.
+///
+/// Unlike the export, the project stays held for the whole write: the save
+/// time recorded afterwards must not cover a line edited while the files
+/// were being written, which would then count as saved without being so.
 #[tauri::command]
 pub async fn save_project(state: State<'_, AppState>) -> Result<usize, CommandError> {
     let guard = state.current.clone().lock_owned().await;
@@ -147,45 +151,50 @@ pub async fn export_project(
     output_path: String,
     game_name: Option<String>,
 ) -> Result<(), CommandError> {
-    let guard = state.current.clone().lock_owned().await;
-    tokio::task::spawn_blocking(move || export_blocking(&guard, &output_path, game_name))
-        .await
-        .map_err(|e| e.to_string())?
-}
+    // Only the checks need the project: zipping reads `tl/` from disk, and
+    // holding the project through it would stall a translation job's chunks.
+    let (project, tl, target_language, game_name) = {
+        let guard = state.current.lock().await;
+        let session = super::require_session(&guard)?;
+        let target_language = session.target_language();
+        if target_language.is_empty() {
+            return Err(CommandError::message("errors.no_target_language"));
+        }
 
-fn export_blocking(
-    guard: &Option<ProjectSession>,
-    output_path: &str,
-    game_name: Option<String>,
-) -> Result<(), CommandError> {
-    let session = super::require_session(guard)?;
-    let target_language = session.target_language();
-    if target_language.is_empty() {
-        return Err(CommandError::message("errors.no_target_language"));
-    }
+        let by_status = repositories::count_by_status(session.conn()).map_err(|e| e.to_string())?;
+        if by_status.values().sum::<i64>() == 0 {
+            return Err(CommandError::message("errors.nothing_extracted"));
+        }
 
-    let by_status = repositories::count_by_status(session.conn()).map_err(|e| e.to_string())?;
-    if by_status.values().sum::<i64>() == 0 {
-        return Err(CommandError::message("errors.nothing_extracted"));
-    }
-
-    let game_name = match game_name {
-        Some(name) if !name.trim().is_empty() => name.trim().to_string(),
-        Some(_) => "game".to_string(),
-        None => exporter::resolve_game_name(&session.path),
+        let game_name = match game_name {
+            Some(name) if !name.trim().is_empty() => name.trim().to_string(),
+            Some(_) => "game".to_string(),
+            None => exporter::resolve_game_name(&session.path),
+        };
+        (
+            session.path.clone(),
+            tl_dir(session, &target_language),
+            target_language,
+            game_name,
+        )
     };
-    exporter::export(
-        &tl_dir(session, &target_language),
-        &game_name,
-        &target_language,
-        std::path::Path::new(output_path),
-    )
-    .map_err(|e| e.to_string())?;
 
-    // Best effort: the export is done, and a source the game or an editor
-    // still has open must not turn it into a reported failure.
-    if let Err(error) = crate::core::renpy::unpacker::remove_unpacked_sources(&session.path) {
-        log::warn!("could not remove the unpacked sources after export: {error}");
-    }
-    Ok(())
+    tokio::task::spawn_blocking(move || -> Result<(), CommandError> {
+        exporter::export(
+            &tl,
+            &game_name,
+            &target_language,
+            std::path::Path::new(&output_path),
+        )
+        .map_err(|e| e.to_string())?;
+
+        // Best effort: the export is done, and a source the game or an editor
+        // still has open must not turn it into a reported failure.
+        if let Err(error) = crate::core::renpy::unpacker::remove_unpacked_sources(&project) {
+            log::warn!("could not remove the unpacked sources after export: {error}");
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

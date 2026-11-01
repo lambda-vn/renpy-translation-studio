@@ -5,6 +5,8 @@
 use tauri::State;
 
 use crate::app_state::AppState;
+use crate::core::project_actions;
+use crate::core::renpy::character_detector;
 use crate::core::storage::repositories;
 
 use super::dto::CharacterEntry;
@@ -30,19 +32,26 @@ pub async fn list_characters(
 
 /// Scan the game's sources for `Character()` definitions and store them.
 /// Returns the glossary as it now stands.
+///
+/// The scan walks every source file without holding the project, so a
+/// translation job's chunks keep landing meanwhile; storing then refuses a
+/// project opened in between.
 #[tauri::command]
 pub async fn detect_characters(
     state: State<'_, AppState>,
 ) -> Result<Vec<CharacterEntry>, CommandError> {
-    let guard = state.current.clone().lock_owned().await;
-    tokio::task::spawn_blocking(move || {
-        let session = super::require_session(&guard)?;
-        crate::core::project_actions::detect_and_store_characters(session.conn(), &session.path)
-            .map_err(|e| e.to_string())?;
-        characters(session)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    let project = super::require_session(&*state.current.lock().await)?
+        .path
+        .clone();
+    let scanned = project.clone();
+    let detected = tokio::task::spawn_blocking(move || character_detector::detect(&scanned))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let guard = state.current.lock().await;
+    let session = super::require_session_at(&guard, &project)?;
+    project_actions::store_characters(session.conn(), &detected).map_err(|e| e.to_string())?;
+    characters(session)
 }
 
 #[tauri::command]

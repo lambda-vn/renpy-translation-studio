@@ -76,6 +76,20 @@ pub(crate) fn require_unit(
         .ok_or_else(|| format!("Unknown block_id: {block_id}"))
 }
 
+/// The open session, provided it is still the project at `project`: for a
+/// command that let go of the lock during slow file work and must not write
+/// what it found into a project opened in the meantime.
+pub(crate) fn require_session_at<'a>(
+    guard: &'a Option<ProjectSession>,
+    project: &std::path::Path,
+) -> Result<&'a ProjectSession, CommandError> {
+    let session = require_session(guard)?;
+    if session.path != project {
+        return Err(CommandError::message("errors.project_changed"));
+    }
+    Ok(session)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,5 +103,32 @@ mod tests {
         );
         let text = serde_json::to_value(CommandError::from("disk full".to_string())).unwrap();
         assert_eq!(text, serde_json::json!("disk full"));
+    }
+
+    #[test]
+    fn a_session_is_only_returned_for_the_project_it_holds() {
+        use crate::core::storage::Database;
+
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let project = std::env::temp_dir().join(format!("rts-session-at-{nanos}"));
+        let db_path = Database::path_for(&project);
+        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+        Database::open(&db_path).unwrap();
+        let guard = Some(crate::mcp_server::session::open_project(&project).unwrap());
+
+        assert!(require_session_at(&guard, &guard.as_ref().unwrap().path).is_ok());
+        let other = serde_json::to_value(
+            require_session_at(&guard, &project.join("elsewhere"))
+                .err()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(other["key"], "errors.project_changed");
+        let none =
+            serde_json::to_value(require_session_at(&None, &project).err().unwrap()).unwrap();
+        assert_eq!(none["key"], "errors.no_project_open");
     }
 }

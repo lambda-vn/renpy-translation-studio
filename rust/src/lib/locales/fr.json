@@ -631,6 +631,7 @@
     "nothing_to_translate": "Rien à traduire dans cette sélection.",
     "validate_first": "Validez d'abord la ligne.",
     "unsupported_target_language": "Langue cible non prise en charge : {language}",
-    "delete_data_failed": "Impossible de supprimer les données enregistrées : {detail}"
+    "delete_data_failed": "Impossible de supprimer les données enregistrées : {detail}",
+    "project_changed": "Le projet a été fermé ou changé pendant l'opération."
   }
 }
