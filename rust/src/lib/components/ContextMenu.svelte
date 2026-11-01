@@ -62,6 +62,8 @@
 			opener = document.activeElement;
 		}
 		const target = anchor?.getBoundingClientRect();
+		// Never narrower than its anchor: a list under a wide field lines up with it.
+		menu.style.setProperty('--anchor-width', `${target?.width ?? 0}px`);
 		const box = menu.getBoundingClientRect();
 		let left = target ? target.left : x;
 		let top = target ? target.bottom + 4 : y;
@@ -197,8 +199,8 @@
 	.menu {
 		position: fixed;
 		z-index: 800;
-		min-width: 230px;
-		max-width: 340px;
+		min-width: max(230px, var(--anchor-width, 0px));
+		max-width: max(340px, var(--anchor-width, 0px));
 		max-height: min(420px, calc(100vh - 16px));
 		overflow-y: auto;
 		list-style: none;

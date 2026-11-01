@@ -2,6 +2,7 @@
 	import { open as pickFile, save as pickDestination } from '@tauri-apps/plugin-dialog';
 	import { api, type ImportPreview } from '$lib/api';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import Select from '$lib/components/Select.svelte';
 	import { t } from '$lib/i18n';
 	import { errorText } from '$lib/messages';
 	import { project } from '$lib/stores';
@@ -129,19 +130,25 @@
 
 		<div>
 			<label class="lbl" for="interchange-format">{$t('interchange.format_label')}</label>
-			<select id="interchange-format" bind:value={format}>
-				{#each FORMATS as f (f.id)}
-					<option value={f.id}>{$t(f.label)}</option>
-				{/each}
-			</select>
+			<Select
+				id="interchange-format"
+				label={$t('interchange.format_label')}
+				bind:value={format}
+				options={FORMATS.map((f) => ({ value: f.id, label: $t(f.label) }))}
+			/>
 		</div>
 
 		<div>
 			<label class="lbl" for="interchange-scope">{$t('interchange.scope_label')}</label>
-			<select id="interchange-scope" bind:value={scope}>
-				<option value="file" disabled={!selectedFile}>{$t('translation.scope_file')}</option>
-				<option value="project">{$t('translation.scope_all')}</option>
-			</select>
+			<Select
+				id="interchange-scope"
+				label={$t('interchange.scope_label')}
+				bind:value={scope}
+				options={[
+					{ value: 'file', label: $t('translation.scope_file'), disabled: !selectedFile },
+					{ value: 'project', label: $t('translation.scope_all') }
+				]}
+			/>
 		</div>
 
 		{#if error}<p class="error" role="alert">{error}</p>{/if}

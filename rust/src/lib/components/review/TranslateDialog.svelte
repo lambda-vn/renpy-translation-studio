@@ -3,6 +3,7 @@
 	import type { FileEntry, StartJobArgs } from '$lib/api';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import Kbd from '$lib/components/Kbd.svelte';
+	import Select from '$lib/components/Select.svelte';
 	import StatusGlyph from '$lib/components/StatusGlyph.svelte';
 	import { t } from '$lib/i18n';
 	import { baseName, providerLabel, untranslatedOf } from './labels';
@@ -74,11 +75,12 @@
 		{:else}
 			<div>
 				<label class="lbl" for="job-provider">{$t('translation.choose_provider_label')}</label>
-				<select id="job-provider" bind:value={providerId}>
-					{#each providers as id (id)}
-						<option value={id}>{providerLabel(id)}</option>
-					{/each}
-				</select>
+				<Select
+					id="job-provider"
+					label={$t('translation.choose_provider_label')}
+					bind:value={providerId}
+					options={providers.map((id) => ({ value: id, label: providerLabel(id) }))}
+				/>
 			</div>
 
 			<fieldset>

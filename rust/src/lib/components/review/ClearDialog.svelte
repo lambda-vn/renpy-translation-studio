@@ -3,6 +3,7 @@
 	// confirmation: it says how many lines go and that it cannot be undone.
 	import type { ClearScope, FileEntry } from '$lib/api';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import Select from '$lib/components/Select.svelte';
 	import { t } from '$lib/i18n';
 	import { baseName, clearableOf } from './labels';
 
@@ -46,10 +47,15 @@
 	<form id="clear-form" onsubmit={submit}>
 		<div>
 			<label class="lbl" for="clear-target">{$t('review.clear_where')}</label>
-			<select id="clear-target" bind:value={target}>
-				<option value="file">{$t('translation.scope_file')} · {baseName(file)}</option>
-				<option value="project">{$t('translation.scope_all')}</option>
-			</select>
+			<Select
+				id="clear-target"
+				label={$t('review.clear_where')}
+				bind:value={target}
+				options={[
+					{ value: 'file', label: `${$t('translation.scope_file')} · ${baseName(file)}` },
+					{ value: 'project', label: $t('translation.scope_all') }
+				]}
+			/>
 		</div>
 		<fieldset>
 			<legend class="lbl">{$t('review.clear_status_label')}</legend>

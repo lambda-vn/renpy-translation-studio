@@ -356,6 +356,7 @@
 		align-items: center;
 		gap: 10px;
 		min-height: 26px;
+		padding-bottom: 6px;
 	}
 
 	.speaker {

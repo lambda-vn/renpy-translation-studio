@@ -14,6 +14,7 @@
 	import { parseTheme, setTheme, themePreference, THEME_PREFERENCES } from '$lib/theme';
 	import { toast } from '$lib/toast';
 	import Dialog from './Dialog.svelte';
+	import Select from './Select.svelte';
 
 	const LOCALES = [
 		{ code: 'fr', name: 'Français' },
@@ -44,14 +45,13 @@
 		}
 	}
 
-	async function changeLocale(event: Event) {
-		const value = (event.currentTarget as HTMLSelectElement).value;
+	async function changeLocale(value: string) {
 		$locale = value;
 		await persist('locale', value);
 	}
 
-	async function changeTheme(event: Event) {
-		const value = parseTheme((event.currentTarget as HTMLSelectElement).value);
+	async function changeTheme(choice: string) {
+		const value = parseTheme(choice);
 		setTheme(value);
 		await persist('theme', value);
 	}
@@ -131,20 +131,24 @@
 
 	<div>
 		<label class="lbl" for="set-lang">{$t('settings.language_label')}</label>
-		<select id="set-lang" value={$locale} onchange={changeLocale}>
-			{#each LOCALES as option (option.code)}
-				<option value={option.code}>{option.name}</option>
-			{/each}
-		</select>
+		<Select
+			id="set-lang"
+			label={$t('settings.language_label')}
+			value={$locale}
+			options={LOCALES.map((option) => ({ value: option.code, label: option.name }))}
+			onchange={changeLocale}
+		/>
 	</div>
 
 	<div>
 		<label class="lbl" for="set-theme">{$t('settings.theme_label')}</label>
-		<select id="set-theme" value={$themePreference} onchange={changeTheme}>
-			{#each THEME_PREFERENCES as value (value)}
-				<option {value}>{$t(`themes.${value}`)}</option>
-			{/each}
-		</select>
+		<Select
+			id="set-theme"
+			label={$t('settings.theme_label')}
+			value={$themePreference}
+			options={THEME_PREFERENCES.map((value) => ({ value, label: $t(`themes.${value}`) }))}
+			onchange={changeTheme}
+		/>
 	</div>
 
 	<div class="switch-row">

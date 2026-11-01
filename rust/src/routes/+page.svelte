@@ -13,6 +13,7 @@
 		type ProjectEntry
 	} from '$lib/api';
 	import Dialog from '$lib/components/Dialog.svelte';
+	import Select from '$lib/components/Select.svelte';
 	import { confirmDialog } from '$lib/confirm';
 	import { t } from '$lib/i18n';
 	import { errorText } from '$lib/messages';
@@ -71,6 +72,10 @@
 		const localized = $t(key);
 		return localized === key ? entry.label : localized;
 	}
+
+	const languageOptions = $derived(
+		languages.map((entry) => ({ value: entry.code, label: languageLabel(entry) }))
+	);
 
 	function percent(entry: ProjectEntry): number {
 		const resume = entry.resume;
@@ -389,26 +394,26 @@
 			<div class="langs">
 				<div>
 					<label class="lbl" for="np-src">{$t('project_setup.source_lang')}</label>
-					<select id="np-src" bind:value={sourceLanguage} disabled={extracting}>
-						{#each languages as entry (entry.code)}
-							<option value={entry.code}>{languageLabel(entry)}</option>
-						{/each}
-					</select>
+					<Select
+						id="np-src"
+						label={$t('project_setup.source_lang')}
+						bind:value={sourceLanguage}
+						options={languageOptions}
+						disabled={extracting}
+					/>
 				</div>
 				<div>
 					<label class="lbl" for="np-tgt">{$t('project_setup.target_lang')}</label>
-					<select
+					<Select
 						id="np-tgt"
+						label={$t('project_setup.target_lang')}
 						bind:value={targetLanguage}
+						options={languageOptions}
+						placeholder={$t('project_setup.target_placeholder')}
 						disabled={extracting}
 						onchange={inspect}
-						aria-describedby="np-tgt-help"
-					>
-						<option value="" disabled>{$t('project_setup.target_placeholder')}</option>
-						{#each languages as entry (entry.code)}
-							<option value={entry.code}>{languageLabel(entry)}</option>
-						{/each}
-					</select>
+						describedby="np-tgt-help"
+					/>
 				</div>
 				<p id="np-tgt-help" class="help span">{$t('project_setup.target_hint')}</p>
 			</div>
