@@ -124,31 +124,25 @@ pub fn validate_translation(
     unit: &TranslationUnit,
     translated_text: &str,
 ) -> Result<Validation, String> {
-    let translated = translated_text.trim();
-    if translated.is_empty() {
-        return Err("Empty translation.".to_string());
-    }
-    let (blocking, warnings): (Vec<_>, Vec<_>) = quality::check(&unit.source_text, translated)
-        .into_iter()
-        .partition(|i| i.kind.blocks_validation());
-    if !blocking.is_empty() {
+    let screening = screen_submission(&unit.source_text, translated_text)?;
+    if !screening.blocking.is_empty() {
         return Ok(Validation {
-            blocking,
-            warnings,
+            blocking: screening.blocking,
+            warnings: screening.warnings,
             stored: None,
         });
     }
     repositories::update_translation(
         conn,
         &unit.block_id,
-        translated,
+        screening.text,
         repositories::STATUS_HUMAN_VALIDATED,
     )
     .map_err(|e| e.to_string())?;
     Ok(Validation {
-        blocking,
-        warnings,
-        stored: Some(translated.to_string()),
+        blocking: screening.blocking,
+        warnings: screening.warnings,
+        stored: Some(screening.text.to_string()),
     })
 }
 
@@ -243,6 +237,41 @@ pub fn chunk_entries(
             )
         })
         .collect()
+}
+
+/// A submitted translation after the shared screening.
+#[derive(Debug)]
+pub struct Screening<'a> {
+    /// Quality problems that refuse the translation.
+    pub blocking: Vec<QualityIssue>,
+    /// The length suspicion, advisory only.
+    pub warnings: Vec<QualityIssue>,
+    /// The trimmed text to store when nothing blocks.
+    pub text: &'a str,
+}
+
+/// Screen a translation before it is stored, whoever submits it: trim it,
+/// refuse an empty one, and run the quality check on the trimmed text.
+///
+/// # Errors
+///
+/// Returns `"Empty translation."` when nothing is left after trimming.
+pub fn screen_submission<'a>(
+    source_text: &str,
+    translation: &'a str,
+) -> Result<Screening<'a>, String> {
+    let text = translation.trim();
+    if text.is_empty() {
+        return Err("Empty translation.".to_string());
+    }
+    let (blocking, warnings) = quality::check(source_text, text)
+        .into_iter()
+        .partition(|i| i.kind.blocks_validation());
+    Ok(Screening {
+        blocking,
+        warnings,
+        text,
+    })
 }
 
 #[cfg(test)]
@@ -514,5 +543,38 @@ mod tests {
         let (dialogue, old_to_new) = save_maps(&units);
         assert_eq!(dialogue["d1"], "Hello.");
         assert_eq!(old_to_new["Yes"], "Yes");
+    }
+
+    #[test]
+    fn screening_refuses_empty_and_whitespace_only_text() {
+        assert_eq!(
+            screen_submission("Hi.", "").unwrap_err(),
+            "Empty translation."
+        );
+        assert_eq!(
+            screen_submission("Hi.", " \t\n ").unwrap_err(),
+            "Empty translation."
+        );
+    }
+
+    #[test]
+    fn screening_blocks_an_added_interpolation() {
+        let screening = screen_submission("Hi.", "Salut [x].").unwrap();
+        assert!(!screening.blocking.is_empty());
+    }
+
+    #[test]
+    fn screening_hands_back_the_trimmed_text() {
+        let screening = screen_submission("Hi [name].", "  Salut [name].\n").unwrap();
+        assert!(screening.blocking.is_empty());
+        assert_eq!(screening.text, "Salut [name].");
+    }
+
+    #[test]
+    fn screening_keeps_a_warning_apart_from_blocking_issues() {
+        let long = "x".repeat(400);
+        let screening = screen_submission("Hi.", &long).unwrap();
+        assert!(screening.blocking.is_empty());
+        assert!(!screening.warnings.is_empty());
     }
 }

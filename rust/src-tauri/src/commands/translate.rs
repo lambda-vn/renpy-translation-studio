@@ -14,7 +14,7 @@
 //! there is nothing to review.
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ use crate::core::review_actions::{self, UnitFilter};
 use crate::core::storage::repositories;
 use crate::core::translation::job::{self, CancelToken, JobEvent, JobMessage, JobProgress};
 use crate::core::translation::providers::base::{
-    ProviderError, TranslateBatchResult, TranslationUnitPayload,
+    ProviderError, TranslateBatchResult, TranslationProvider, TranslationUnitPayload,
 };
 use crate::core::translation::providers::registry;
 use crate::core::validators::is_recognized_language;
@@ -87,6 +87,92 @@ impl From<&JobProgress> for JobEventPayload {
     }
 }
 
+/// Everything a job needs, read once from the open project and the
+/// settings. Shared by the batch job and the one-line translation so the
+/// two cannot drift on what they check.
+struct JobContext {
+    project: PathBuf,
+    units: Vec<TranslationUnitPayload>,
+    symbol_only: HashSet<String>,
+    source_lang: String,
+    target_lang: String,
+    provider: Box<dyn TranslationProvider>,
+}
+
+impl JobContext {
+    /// Read the units `select` picks from the open project, then build the
+    /// provider. The `current` lock is released before `settings` is taken.
+    ///
+    /// Refuses a target language the app does not recognise, since the
+    /// provider could not be asked for it.
+    async fn load(
+        state: &AppState,
+        provider_id: &str,
+        select: impl FnOnce(&ProjectSession) -> Result<Vec<repositories::TranslationUnit>, CommandError>,
+    ) -> Result<JobContext, CommandError> {
+        let (project, units, symbol_only, source_lang, target_lang, universe_summary, characters) = {
+            let guard = state.current.lock().await;
+            let session = super::require_session(&guard)?;
+            let selected = select(session)?;
+            let target_lang = session.target_language();
+            if !is_recognized_language(&target_lang) {
+                return Err(CommandError::Message {
+                    key: "errors.unsupported_target_language",
+                    params: serde_json::json!({ "language": target_lang }),
+                });
+            }
+            let (units, symbol_only) = to_payloads(selected);
+            let universe_summary =
+                repositories::get_project_meta(session.conn(), "universe_summary")
+                    .map_err(|e| e.to_string())?;
+            let characters =
+                repositories::get_all_characters(session.conn()).map_err(|e| e.to_string())?;
+            (
+                session.path.clone(),
+                units,
+                symbol_only,
+                session.source_language(),
+                target_lang,
+                universe_summary,
+                characters,
+            )
+        };
+        let provider = {
+            let mut settings = state.settings.lock().await;
+            registry::get(&mut settings, provider_id, universe_summary, characters)?
+        };
+        Ok(JobContext {
+            project,
+            units,
+            symbol_only,
+            source_lang,
+            target_lang,
+            provider,
+        })
+    }
+}
+
+/// The payloads a provider receives, and the block ids whose source has
+/// nothing to translate (the job copies those verbatim).
+fn to_payloads(
+    selected: Vec<repositories::TranslationUnit>,
+) -> (Vec<TranslationUnitPayload>, HashSet<String>) {
+    let symbol_only = selected
+        .iter()
+        .filter(|u| !job::needs_translation(&u.source_text))
+        .map(|u| u.block_id.clone())
+        .collect();
+    let units = selected
+        .into_iter()
+        .map(|u| TranslationUnitPayload {
+            block_id: u.block_id,
+            source_text: u.source_text,
+            character_variable: u.character_variable,
+        })
+        .collect();
+    (units, symbol_only)
+}
+
 #[tauri::command]
 pub async fn start_translation_job(
     app: AppHandle,
@@ -102,73 +188,22 @@ pub async fn start_translation_job(
         *slot = Some(cancel.clone());
     }
 
-    let prepared =
-        async {
-            let (
-                project,
-                units,
-                symbol_only,
-                source_lang,
-                target_lang,
-                universe_summary,
-                characters,
-            ) = {
-                let guard = state.current.lock().await;
-                let session = super::require_session(&guard)?;
-                let selected = select_units(session, &args)?;
-                let symbol_only: HashSet<String> = selected
-                    .iter()
-                    .filter(|u| !job::needs_translation(&u.source_text))
-                    .map(|u| u.block_id.clone())
-                    .collect();
-                let units: Vec<TranslationUnitPayload> = selected
-                    .into_iter()
-                    .map(|u| TranslationUnitPayload {
-                        block_id: u.block_id,
-                        source_text: u.source_text,
-                        character_variable: u.character_variable,
-                    })
-                    .collect();
-                let universe_summary =
-                    repositories::get_project_meta(session.conn(), "universe_summary")
-                        .map_err(|e| e.to_string())?;
-                let characters =
-                    repositories::get_all_characters(session.conn()).map_err(|e| e.to_string())?;
-                (
-                    session.path.clone(),
-                    units,
-                    symbol_only,
-                    session.source_language(),
-                    session.target_language(),
-                    universe_summary,
-                    characters,
-                )
-            };
-
-            if units.is_empty() {
-                return Err(CommandError::message("errors.nothing_to_translate"));
-            }
-
-            let provider = {
-                let mut settings = state.settings.lock().await;
-                registry::get(
-                    &mut settings,
-                    &args.provider_id,
-                    universe_summary,
-                    characters,
-                )?
-            };
-            Ok::<_, CommandError>((
-                project,
-                units,
-                symbol_only,
-                source_lang,
-                target_lang,
-                provider,
-            ))
+    let prepared = JobContext::load(&state, &args.provider_id, |session| {
+        let selected = select_units(session, &args)?;
+        if selected.is_empty() {
+            return Err(CommandError::message("errors.nothing_to_translate"));
         }
-        .await;
-    let (project, units, symbol_only, source_lang, target_lang, mut provider) = match prepared {
+        Ok(selected)
+    })
+    .await;
+    let JobContext {
+        project,
+        units,
+        symbol_only,
+        source_lang,
+        target_lang,
+        mut provider,
+    } = match prepared {
         Ok(ready) => ready,
         Err(e) => {
             *state.job.lock().await = None;
@@ -176,38 +211,13 @@ pub async fn start_translation_job(
         }
     };
 
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let current = state.current.clone();
     let job_slot = state.job.clone();
-    let symbol_only = Arc::new(symbol_only);
     let stop = cancel.clone();
 
     tauri::async_runtime::spawn(async move {
-        let app_for_events = app.clone();
-        let receiver = tokio::spawn(async move {
-            while let Some(event) = rx.recv().await {
-                match event {
-                    JobEvent::Chunk(result) => {
-                        match persist_chunk(&current, &project, &result, &symbol_only).await {
-                            Persisted::Stored => {
-                                let _ = app_for_events
-                                    .emit(JOB_EVENT_NAME, JobEventPayload::ChunkPersisted);
-                            }
-                            Persisted::Failed => {}
-                            Persisted::ProjectGone => stop.cancel(),
-                        }
-                    }
-                    JobEvent::Progress(progress) | JobEvent::Complete(progress) => {
-                        let _ =
-                            app_for_events.emit(JOB_EVENT_NAME, JobEventPayload::from(&progress));
-                    }
-                    JobEvent::Event(message) => {
-                        let _ =
-                            app_for_events.emit(JOB_EVENT_NAME, JobEventPayload::Event { message });
-                    }
-                }
-            }
-        });
+        let receiver = spawn_event_pump(app, rx, current, project, Arc::new(symbol_only), stop);
 
         // The job runs in its own task so that a panic in it or in a
         // provider ends up in the join result instead of skipping the
@@ -231,6 +241,39 @@ pub async fn start_translation_job(
     });
 
     Ok(())
+}
+
+/// Persist each translated chunk and forward the job's events to the UI.
+/// Cancels the job through `stop` when the project it runs on is gone.
+fn spawn_event_pump(
+    app: AppHandle,
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<JobEvent>,
+    current: Arc<Mutex<Option<ProjectSession>>>,
+    project: PathBuf,
+    symbol_only: Arc<HashSet<String>>,
+    stop: CancelToken,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                JobEvent::Chunk(result) => {
+                    match persist_chunk(&current, &project, &result, &symbol_only).await {
+                        Persisted::Stored => {
+                            let _ = app.emit(JOB_EVENT_NAME, JobEventPayload::ChunkPersisted);
+                        }
+                        Persisted::Failed => {}
+                        Persisted::ProjectGone => stop.cancel(),
+                    }
+                }
+                JobEvent::Progress(progress) | JobEvent::Complete(progress) => {
+                    let _ = app.emit(JOB_EVENT_NAME, JobEventPayload::from(&progress));
+                }
+                JobEvent::Event(message) => {
+                    let _ = app.emit(JOB_EVENT_NAME, JobEventPayload::Event { message });
+                }
+            }
+        }
+    })
 }
 
 /// The lines a job scope sends. The two simple scopes read the
@@ -366,44 +409,17 @@ pub async fn translate_unit(
     provider_id: String,
     block_id: String,
 ) -> Result<UnitTranslation, CommandError> {
-    let (project, payload, source_lang, target_lang, universe_summary, characters) = {
-        let guard = state.current.lock().await;
-        let session = super::require_session(&guard)?;
-        let unit = super::require_unit(session, &block_id)?;
-        let target_lang = session.target_language();
-        if !is_recognized_language(&target_lang) {
-            return Err(CommandError::Message {
-                key: "errors.unsupported_target_language",
-                params: serde_json::json!({ "language": target_lang }),
-            });
-        }
-        let universe_summary = repositories::get_project_meta(session.conn(), "universe_summary")
-            .map_err(|e| e.to_string())?;
-        let characters =
-            repositories::get_all_characters(session.conn()).map_err(|e| e.to_string())?;
-        (
-            session.path.clone(),
-            TranslationUnitPayload {
-                block_id: unit.block_id,
-                source_text: unit.source_text,
-                character_variable: unit.character_variable,
-            },
-            session.source_language(),
-            target_lang,
-            universe_summary,
-            characters,
-        )
-    };
-    let symbol_only: HashSet<String> = if job::needs_translation(&payload.source_text) {
-        HashSet::new()
-    } else {
-        [payload.block_id.clone()].into()
-    };
-
-    let mut provider = {
-        let mut settings = state.settings.lock().await;
-        registry::get(&mut settings, &provider_id, universe_summary, characters)?
-    };
+    let JobContext {
+        project,
+        units,
+        symbol_only,
+        source_lang,
+        target_lang,
+        mut provider,
+    } = JobContext::load(&state, &provider_id, |session| {
+        Ok(vec![super::require_unit(session, &block_id)?])
+    })
+    .await?;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let current = state.current.clone();
@@ -422,7 +438,7 @@ pub async fn translate_unit(
     };
     let (progress, events) = tokio::join!(
         job::run_job(
-            std::slice::from_ref(&payload),
+            &units,
             provider.as_mut(),
             &source_lang,
             &target_lang,
@@ -511,5 +527,27 @@ mod tests {
 
         let outcome = persist_chunk(&current, &opened, &result, &HashSet::new()).await;
         assert!(matches!(outcome, Persisted::Stored));
+    }
+
+    #[test]
+    fn symbol_only_lines_are_flagged_and_payloads_keep_order() {
+        let unit = |block_id: &str, source_text: &str| repositories::TranslationUnit {
+            id: 0,
+            block_id: block_id.into(),
+            source_file: "game/script.rpy".into(),
+            source_line: 1,
+            character_variable: None,
+            source_text: source_text.into(),
+            translated_text: String::new(),
+            status: repositories::STATUS_NOT_TRANSLATED.into(),
+            needs_review: false,
+            note: None,
+        };
+
+        let (payloads, symbol_only) = to_payloads(vec![unit("a", "..."), unit("b", "Hello.")]);
+
+        let ids: Vec<&str> = payloads.iter().map(|p| p.block_id.as_str()).collect();
+        assert_eq!(ids, ["a", "b"]);
+        assert_eq!(symbol_only, HashSet::from(["a".to_string()]));
     }
 }

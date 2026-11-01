@@ -21,8 +21,8 @@ use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
 use rmcp::{tool, tool_handler, tool_router, ServerHandler};
 use tokio::sync::Mutex;
 
+use crate::core::review_actions;
 use crate::core::storage::{repositories, Database};
-use crate::core::translation::quality;
 
 use super::dto::*;
 use super::session::{ProjectSession, ServerState};
@@ -306,22 +306,26 @@ impl RtsServer {
                 });
                 continue;
             };
-            if item.translation.trim().is_empty() {
+            let screening =
+                match review_actions::screen_submission(&unit.source_text, &item.translation) {
+                    Ok(screening) => screening,
+                    Err(reason) => {
+                        rejected.push(SubmissionRejection {
+                            block_id: item.block_id,
+                            reason,
+                        });
+                        continue;
+                    }
+                };
+            if !screening.blocking.is_empty() {
+                let details: Vec<String> = screening
+                    .blocking
+                    .into_iter()
+                    .map(|issue| issue.detail)
+                    .collect();
                 rejected.push(SubmissionRejection {
                     block_id: item.block_id,
-                    reason: "Empty translation.".to_string(),
-                });
-                continue;
-            }
-            let issues: Vec<String> = quality::check(&unit.source_text, &item.translation)
-                .into_iter()
-                .filter(|issue| issue.kind.blocks_validation())
-                .map(|issue| issue.detail)
-                .collect();
-            if !issues.is_empty() {
-                rejected.push(SubmissionRejection {
-                    block_id: item.block_id,
-                    reason: issues.join(" "),
+                    reason: details.join(" "),
                 });
                 continue;
             }
@@ -335,12 +339,16 @@ impl RtsServer {
                     });
                     continue;
                 }
-                repositories::mark_as_draft(session.conn(), &item.block_id, &item.translation)
+                repositories::mark_as_draft(session.conn(), &item.block_id, screening.text)
                     .map_err(|e| e.to_string())?;
                 drafted.push(item.block_id);
                 continue;
             }
-            accepted.push((item.block_id, item.translation, "ai_suggested".to_string()));
+            accepted.push((
+                item.block_id,
+                screening.text.to_string(),
+                "ai_suggested".to_string(),
+            ));
         }
 
         let applied = repositories::update_translations(session.conn(), &accepted)
