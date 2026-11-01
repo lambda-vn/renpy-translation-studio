@@ -40,8 +40,10 @@ that the Ren'Py engine executes. The interesting boundaries are:
   what that assistant reads is the game's own text, written by somebody
   else. A line of dialogue asking for translations to be dropped must
   therefore not be a request it can grant itself: the two destructive
-  permissions, `--allow-overwrite-validated` and `--allow-clear`, are
-  command-line flags and nothing said over the protocol turns them on.
+  permissions, `--allow-overwrite-validated` and `--allow-clear`, and
+  `--allow-edit-glossary`, which guards the character glossary and the
+  universe summary that every later translation reads, are command-line
+  flags and nothing said over the protocol turns them on.
   It opens only projects already set up in the application, never an
   arbitrary folder, and everything it submits goes through the checks
   above.

@@ -21,12 +21,14 @@ struct Args {
     project: Option<PathBuf>,
     allow_overwrite_validated: bool,
     allow_clear: bool,
+    allow_edit_glossary: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut project = None;
     let mut allow_overwrite_validated = false;
     let mut allow_clear = false;
+    let mut allow_edit_glossary = false;
 
     let mut raw = std::env::args().skip(1);
     while let Some(arg) = raw.next() {
@@ -37,6 +39,7 @@ fn parse_args() -> Result<Args, String> {
             }
             "--allow-overwrite-validated" => allow_overwrite_validated = true,
             "--allow-clear" => allow_clear = true,
+            "--allow-edit-glossary" => allow_edit_glossary = true,
             "-h" | "--help" => {
                 println!(
                     "rts-mcp: serve the Ren'Py projects of this machine over MCP.\n\n\
@@ -46,7 +49,9 @@ fn parse_args() -> Result<Args, String> {
                      the application.\n  \
                      --allow-overwrite-validated    Let a submission replace a line a human \
                      already validated. The replacement lands as a draft, never as validated.\n  \
-                     --allow-clear                  Allow deleting translations in bulk."
+                     --allow-clear                  Allow deleting translations in bulk.\n  \
+                     --allow-edit-glossary          Allow changing the character glossary and \
+                     the universe summary."
                 );
                 std::process::exit(0);
             }
@@ -58,6 +63,7 @@ fn parse_args() -> Result<Args, String> {
         project,
         allow_overwrite_validated,
         allow_clear,
+        allow_edit_glossary,
     })
 }
 
@@ -74,6 +80,7 @@ async fn main() -> ExitCode {
     let mut state = ServerState::new();
     state.allow_overwrite_validated = args.allow_overwrite_validated;
     state.allow_clear = args.allow_clear;
+    state.allow_edit_glossary = args.allow_edit_glossary;
 
     if let Some(project) = &args.project {
         if let Err(error) = state.pin(project) {

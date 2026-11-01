@@ -97,12 +97,14 @@ wrote, and those rows are updated in place. Close the application and
 it keeps translating, the notification being a bonus rather than a
 dependency.
 
-Two things it cannot do unless you say so on the command line:
+Three things it cannot do unless you say so on the command line:
 `--allow-overwrite-validated` lets a submission replace a line you
 validated, landing it as a draft; `--allow-clear` allows deleting
-translations in bulk. Both are flags rather than tool arguments on
+translations in bulk; `--allow-edit-glossary` allows changing the
+character glossary and the universe summary, which feed every later
+translation. All three are flags rather than tool arguments on
 purpose: the assistant reads the game's own text, so a line of dialogue
-asking for either must not be a request it can grant itself. It also
+asking for any of them must not be a request it can grant itself. It also
 only opens games already set up in the application, never an arbitrary
 folder.
 

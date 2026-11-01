@@ -111,6 +111,7 @@ impl ProjectSession {
 pub struct ServerState {
     pub allow_overwrite_validated: bool,
     pub allow_clear: bool,
+    pub allow_edit_glossary: bool,
     pub pinned: Option<PathBuf>,
     pub current: Option<ProjectSession>,
     pub registry: PathBuf,
@@ -130,6 +131,7 @@ impl ServerState {
         Self {
             allow_overwrite_validated: false,
             allow_clear: false,
+            allow_edit_glossary: false,
             pinned: None,
             current: None,
             registry: recent_projects::default_path(),

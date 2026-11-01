@@ -101,13 +101,16 @@ lesquelles il vient d'écrire, et ces lignes-là sont mises à jour sur
 place. Fermez l'application et il continue de traduire, la notification
 étant un bonus et non une dépendance.
 
-Deux choses lui restent interdites sauf mention explicite sur la ligne
+Trois choses lui restent interdites sauf mention explicite sur la ligne
 de commande : `--allow-overwrite-validated` autorise une soumission à
 remplacer une ligne que vous avez validée, en la faisant retomber en
-brouillon ; `--allow-clear` autorise l'effacement en masse. Ce sont des
-drapeaux et non des arguments d'outil à dessein : l'assistant lit le
-texte du jeu, donc une réplique réclamant l'un ou l'autre ne doit pas
-être une demande qu'il puisse s'accorder lui-même. Il n'ouvre par
+brouillon ; `--allow-clear` autorise l'effacement en masse ;
+`--allow-edit-glossary` autorise la modification du glossaire des
+personnages et du résumé d'univers, qui nourrissent toutes les
+traductions suivantes. Ce sont des drapeaux et non des arguments
+d'outil à dessein : l'assistant lit le texte du jeu, donc une réplique
+réclamant l'une de ces actions ne doit pas être une demande qu'il
+puisse s'accorder lui-même. Il n'ouvre par
 ailleurs que des jeux déjà configurés dans l'application, jamais un
 dossier arbitraire.
 

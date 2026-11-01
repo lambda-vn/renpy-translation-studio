@@ -314,9 +314,11 @@ officiel), en stdio comme `rts-mcp` en 1.x. Tout vit sous
   l'appelant de les relayer vers une interface plus tard.
 - `mcp_server::{session, server}` — port de `mcp_server/session.py` et
   `server.py`. `ServerState`/`ProjectSession` portent les mêmes règles :
-  les deux permissions destructrices (`--allow-overwrite-validated`,
-  `--allow-clear`) sont des drapeaux de ligne de commande et rien
-  d'autre, `use_project` ne rouvre qu'un projet que le registre connaît
+  les trois permissions sensibles (`--allow-overwrite-validated`,
+  `--allow-clear`, et `--allow-edit-glossary` qui garde l'écriture du
+  glossaire des personnages et du résumé d'univers) sont des drapeaux de
+  ligne de commande et rien d'autre, `use_project` ne rouvre qu'un
+  projet que le registre connaît
   déjà (ou le seul projet épinglé par `--project`). Les 15 outils
   read/write de la révision sont exposés via `#[tool_router]`/`#[tool]`
   de `rmcp` ; chaque tool renvoie `Result<Json<T>, String>`, l'erreur
