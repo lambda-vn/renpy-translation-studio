@@ -12,13 +12,11 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::parser::{NEW_LINE, OLD_LINE, STRINGS_HEADER};
+use super::parser::{NEW_LINE, OLD_LINE, STRINGS_HEADER, TRANSLATE_HEADER};
 use super::say_line::{block_lines, find_say, split_say_line};
 
 static UNESCAPED_QUOTE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(\\*)""#).unwrap());
 static TRAILING_BACKSLASHES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\\+$").unwrap());
-static HEADER: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^translate \w+ (\w+):\s*$").unwrap());
 
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError {
@@ -79,7 +77,7 @@ impl TranslateBlockWriter {
             return Ok(());
         }
         self.backup(path)?;
-        std::fs::write(path, modified).map_err(|e| WriteError::Write(path.to_path_buf(), e))
+        write_atomically(path, &modified).map_err(|e| WriteError::Write(path.to_path_buf(), e))
     }
 
     fn backup(&self, path: &Path) -> Result<(), WriteError> {
@@ -155,7 +153,7 @@ fn apply_translations(
             continue;
         }
 
-        if let Some(caps) = HEADER.captures(line) {
+        if let Some(caps) = TRANSLATE_HEADER.captures(line) {
             in_strings = false;
             pending_old = None;
             let block_id = caps[1].to_string();
@@ -265,6 +263,18 @@ fn replace_quoted(line: &str, new_text: &str) -> String {
         ),
         None => line.to_string(),
     }
+}
+
+/// Write through a neighbouring temporary file and a rename, so a crash
+/// mid-write never leaves a truncated `.rpy` behind.
+fn write_atomically(path: &Path, content: &str) -> std::io::Result<()> {
+    let mut temporary = path.as_os_str().to_owned();
+    temporary.push(".tmp");
+    let temporary = PathBuf::from(temporary);
+    std::fs::write(&temporary, content)?;
+    std::fs::rename(&temporary, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temporary);
+    })
 }
 
 #[cfg(test)]
@@ -492,5 +502,33 @@ translate french start_x:\n    # e \"Hi\"\n    e \"\"\n",
         assert_eq!(split_keepends("a\nb\r\nc"), vec!["a\n", "b\r\n", "c"]);
         assert_eq!(split_keepends("a\n"), vec!["a\n"]);
         assert_eq!(split_keepends(""), Vec::<String>::new());
+    }
+
+    #[test]
+    fn writes_a_block_whose_header_only_the_parser_used_to_accept() {
+        let tl_dir = temp_tl_dir();
+        let path = tl_dir.join("script.rpy");
+        std::fs::write(
+            &path,
+            "translate  pt-br start_x :\n    # e \"Hi\"\n    e \"\"\n",
+        )
+        .unwrap();
+        let parsed = crate::core::renpy::parser::parse_file(&path).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].block_id, "start_x");
+
+        let writer = TranslateBlockWriter::new(tl_dir.clone(), tl_dir.join("backup"));
+        writer
+            .write_all(&translations(&[("start_x", "Salut")]), &HashMap::new())
+            .unwrap();
+
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            written,
+            "translate  pt-br start_x :\n    # e \"Hi\"\n    e \"Salut\"\n"
+        );
+        let reparsed = crate::core::renpy::parser::parse_file(&path).unwrap();
+        assert_eq!(reparsed[0].block_id, "start_x");
+        assert!(!tl_dir.join("script.rpy.tmp").exists());
     }
 }

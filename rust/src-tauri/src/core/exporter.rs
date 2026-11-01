@@ -101,7 +101,26 @@ pub fn export(
     }
     entries.sort();
 
-    let file = File::create(output_path)?;
+    let mut temporary = output_path.as_os_str().to_owned();
+    temporary.push(".tmp");
+    let temporary = PathBuf::from(temporary);
+    let result = write_archive(&entries, tl_dir, game_name, language, &temporary)
+        .and_then(|()| std::fs::rename(&temporary, output_path).map_err(ExportError::from));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
+}
+
+/// Write the zip at `target`; `export` owns the temporary file's cleanup.
+fn write_archive(
+    entries: &[PathBuf],
+    tl_dir: &Path,
+    game_name: &str,
+    language: &str,
+    target: &Path,
+) -> Result<(), ExportError> {
+    let file = File::create(target)?;
     let mut zip = zip::ZipWriter::new(file);
     let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
@@ -110,7 +129,9 @@ pub fn export(
         if src.extension().is_some_and(|ext| ext == "rpyc") {
             continue;
         }
-        let rel = src.strip_prefix(tl_dir).expect("walked under tl_dir");
+        let rel = src
+            .strip_prefix(tl_dir)
+            .map_err(|_| ExportError::PathTraversal(src.display().to_string()))?;
         if rel.components().any(|c| c.as_os_str() == "..") {
             return Err(ExportError::PathTraversal(rel.display().to_string()));
         }
@@ -122,7 +143,7 @@ pub fn export(
 
         zip.start_file(&arc_name, options)?;
         let mut content = Vec::new();
-        File::open(&src)
+        File::open(src)
             .and_then(|mut f| f.read_to_end(&mut content))
             .map_err(|e| ExportError::Read(src.clone(), e))?;
         zip.write_all(&content)?;
@@ -201,7 +222,7 @@ mod tests {
         let file = File::open(&output).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
         let mut names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().to_string())
             .collect();
         names.sort();
         assert_eq!(
@@ -238,5 +259,32 @@ mod tests {
             );
         }
         assert!(!output.exists());
+        assert!(!output.with_extension("zip.tmp").exists());
+    }
+
+    #[test]
+    fn export_leaves_no_temporary_file_and_replaces_an_existing_zip() {
+        let tl_dir = temp_dir("atomic-src");
+        std::fs::write(tl_dir.join("script.rpy"), "translate french start_x:\n").unwrap();
+        let output = temp_dir("atomic-out").join("game_french.zip");
+        std::fs::write(&output, b"old content").unwrap();
+
+        export(&tl_dir, "Game", "french", &output).unwrap();
+
+        assert!(zip::ZipArchive::new(File::open(&output).unwrap()).is_ok());
+        assert!(!output.with_extension("zip.tmp").exists());
+    }
+
+    #[test]
+    fn export_removes_the_temporary_file_when_the_final_rename_fails() {
+        let tl_dir = temp_dir("rename-src");
+        std::fs::write(tl_dir.join("script.rpy"), "translate french start_x:\n").unwrap();
+        let output = temp_dir("rename-out").join("game_french.zip");
+        std::fs::create_dir_all(&output).unwrap();
+
+        assert!(export(&tl_dir, "Game", "french", &output).is_err());
+
+        assert!(output.is_dir());
+        assert!(!output.with_extension("zip.tmp").exists());
     }
 }

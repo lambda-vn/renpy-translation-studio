@@ -11,7 +11,10 @@ use regex::Regex;
 
 use super::say_line::{block_lines, find_say};
 
-static TRANSLATE_HEADER: LazyLock<Regex> =
+/// Shared with the writer, so both accept exactly the same headers.
+/// Not anchored at the end: the writer matches lines that still carry
+/// their line ending.
+pub(crate) static TRANSLATE_HEADER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^translate\s+\S+\s+(\w+)\s*:").unwrap());
 /// Shared with the writer. Not anchored at the end: the writer matches
 /// lines that still carry their line ending.
