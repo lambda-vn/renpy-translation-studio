@@ -297,6 +297,7 @@ pub fn spread_to_followers(
     TranslateBatchResult {
         translations,
         failed_ids,
+        stopped: None,
     }
 }
 
@@ -385,6 +386,7 @@ fn verify_quality(
         TranslateBatchResult {
             translations: verified,
             failed_ids,
+            stopped: None,
         },
         events,
     )
@@ -431,7 +433,7 @@ async fn retry_failed_units(
             if cancel.is_cancelled() {
                 break;
             }
-            let result = match provider
+            let mut result = match provider
                 .translate_batch(chunk, source_lang, target_lang)
                 .await
             {
@@ -442,6 +444,7 @@ async fn retry_failed_units(
                     break 'passes;
                 }
             };
+            let stopped = result.stopped.take();
             let (result, events) = verify_quality(chunk, result);
             for event in events {
                 emit(tx, JobEvent::Event(event));
@@ -453,6 +456,11 @@ async fn retry_failed_units(
             progress.failed = progress.failed.saturating_sub(recovered);
             emit(tx, JobEvent::Chunk(spread));
             emit(tx, JobEvent::Progress(progress.clone()));
+            if let Some(err) = stopped {
+                log::warn!("Retry stopped after a partial chunk: {err}");
+                progress.error = Some(err);
+                break 'passes;
+            }
         }
     }
 }
@@ -506,6 +514,7 @@ pub async fn run_job(
                 })
                 .collect(),
             failed_ids: Vec::new(),
+            stopped: None,
         };
         progress.done += skipped.len();
         emit(&tx, JobEvent::Chunk(spread));
@@ -534,7 +543,7 @@ pub async fn run_job(
         if cancel.is_cancelled() || provider_error.is_some() {
             break;
         }
-        let result = match provider
+        let mut result = match provider
             .translate_batch(chunk, source_lang, target_lang)
             .await
         {
@@ -545,6 +554,7 @@ pub async fn run_job(
                 break 'main;
             }
         };
+        let stopped = result.stopped.take();
         log::debug!(
             "Chunk of {} unit(s): {} translated, {} failed by the provider",
             chunk.len(),
@@ -569,6 +579,10 @@ pub async fn run_job(
         progress.failed += spread.failed_ids.len();
         emit(&tx, JobEvent::Chunk(spread));
         emit(&tx, JobEvent::Progress(progress.clone()));
+        if let Some(err) = stopped {
+            log::warn!("Translation job stopped after a partial chunk: {err}");
+            provider_error = Some(err);
+        }
     }
 
     if provider_error.is_some() {
@@ -698,6 +712,7 @@ mod tests {
                     })
                     .collect(),
                 failed_ids: Vec::new(),
+                stopped: None,
             })
         }
     }
@@ -712,6 +727,7 @@ mod tests {
                 })
                 .collect(),
             failed_ids: Vec::new(),
+            stopped: None,
         })
     }
 
@@ -746,6 +762,7 @@ mod tests {
                 translated_text: "...".to_string(),
             }],
             failed_ids: vec!["b".to_string()],
+            stopped: None,
         };
         let spread = spread_to_followers(result, &followers);
         let ids: Vec<&str> = spread
@@ -927,6 +944,7 @@ mod tests {
                     translated_text: "Bonjour.".to_string(),
                 }],
                 failed_ids: vec!["b".to_string()],
+                stopped: None,
             }),
             // Retry pass (chunk size 8): "b" succeeds this time.
             ok(&[("b", "Au revoir.")]),
@@ -953,6 +971,7 @@ mod tests {
         let always_fails = TranslateBatchResult {
             translations: Vec::new(),
             failed_ids: vec!["a".to_string()],
+            stopped: None,
         };
         // Main pass + one retry pass per RETRY_CHUNK_SIZES entry.
         let mut provider = ScriptedProvider::new(vec![
@@ -988,6 +1007,7 @@ mod tests {
             Ok(TranslateBatchResult {
                 translations: Vec::new(),
                 failed_ids: vec!["a".to_string()],
+                stopped: None,
             }),
             Err(quota.clone()),
         ]);
@@ -1042,6 +1062,7 @@ mod tests {
                         })
                         .collect(),
                     failed_ids: Vec::new(),
+                    stopped: None,
                 })
             }
         }
@@ -1169,6 +1190,7 @@ mod tests {
             Ok(TranslateBatchResult {
                 translations: Vec::new(),
                 failed_ids: vec!["a".to_string()],
+                stopped: None,
             }),
             ok(&[("a", "Continuer")]),
         ]);
@@ -1202,9 +1224,50 @@ mod tests {
                     translated_text: "Bonjour [player].".to_string(),
                 }],
                 failed_ids: Vec::new(),
+                stopped: None,
             },
         );
         assert!(result.translations.is_empty());
         assert_eq!(result.failed_ids, vec!["a".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn fatal_stop_mid_chunk_keeps_what_was_translated() {
+        let units: Vec<TranslationUnitPayload> = (0..=CHUNK_SIZE)
+            .map(|i| unit(&format!("u{i}"), &format!("Line {i}.")))
+            .collect();
+        let rate_limited = ProviderError::Network {
+            status: Some(429),
+            detail: "rate limited".to_string(),
+        };
+        let mut partial = ok(&[("u0", "Ligne 0.")]).unwrap();
+        partial.stopped = Some(rate_limited.clone());
+        let mut provider = ScriptedProvider::new(vec![Ok(partial)]);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let progress = run_job(
+            &units,
+            &mut provider,
+            "english",
+            "french",
+            CancelToken::new(),
+            tx,
+        )
+        .await;
+
+        assert_eq!(progress.error, Some(rate_limited));
+        assert_eq!(progress.done, 1);
+        assert_eq!(progress.failed, 0);
+        assert_eq!(provider.calls.len(), 1);
+        let written: Vec<String> = drain(&mut rx)
+            .into_iter()
+            .filter_map(|event| match event {
+                JobEvent::Chunk(chunk) => Some(chunk.translations),
+                _ => None,
+            })
+            .flatten()
+            .map(|t| t.block_id)
+            .collect();
+        assert_eq!(written, vec!["u0".to_string()]);
     }
 }

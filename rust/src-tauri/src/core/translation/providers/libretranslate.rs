@@ -162,7 +162,8 @@ impl LibreTranslateProvider {
                 Err(error) => {
                     log::warn!("LibreTranslate failed on {}: {error}", unit.block_id);
                     if let Some(fatal) = fatal_status_error(error) {
-                        return Err(fatal);
+                        result.stopped = Some(fatal);
+                        break;
                     }
                     result.failed_ids.push(unit.block_id.clone());
                 }
@@ -192,7 +193,7 @@ impl TranslationProvider for LibreTranslateProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{body_partial_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
@@ -273,9 +274,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fatal_status_stops_the_batch_with_an_error() {
+    async fn fatal_status_stops_the_batch_and_keeps_what_was_translated() {
         for status in [403, 429] {
             let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/translate"))
+                .and(body_partial_json(serde_json::json!({"q": "Hello."})))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "translatedText": "Bonjour."
+                })))
+                .mount(&server)
+                .await;
             Mock::given(method("POST"))
                 .and(path("/translate"))
                 .respond_with(ResponseTemplate::new(status))
@@ -283,14 +292,30 @@ mod tests {
                 .await;
 
             let provider = LibreTranslateProvider::new(&server.uri(), None).unwrap();
-            let error = provider
-                .translate_batch(&[unit("a", "Hello.")], "english", "french")
+            let result = provider
+                .translate_batch(
+                    &[
+                        unit("a", "Hello."),
+                        unit("b", "Goodbye."),
+                        unit("c", "Never sent."),
+                    ],
+                    "english",
+                    "french",
+                )
                 .await
-                .unwrap_err();
+                .unwrap();
 
+            assert_eq!(
+                result.translations,
+                vec![TranslatedUnit {
+                    block_id: "a".to_string(),
+                    translated_text: "Bonjour.".to_string(),
+                }]
+            );
+            assert!(result.failed_ids.is_empty());
             assert!(matches!(
-                error,
-                ProviderError::Network { status: Some(code), .. } if code == status
+                result.stopped,
+                Some(ProviderError::Network { status: Some(code), .. }) if code == status
             ));
         }
     }

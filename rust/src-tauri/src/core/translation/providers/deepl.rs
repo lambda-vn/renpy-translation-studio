@@ -332,7 +332,8 @@ impl DeepLProvider {
                 Err(error) => {
                     log::warn!("DeepL chunk of {} unit(s) failed: {error}", chunk.len());
                     if let Some(fatal) = fatal_status_error(error) {
-                        return Err(fatal);
+                        result.stopped = Some(fatal);
+                        break;
                     }
                     result
                         .failed_ids
@@ -456,7 +457,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn translate_batch_errs_on_fatal_statuses() {
+    async fn translate_batch_stops_on_fatal_statuses() {
         for status in [403, 456] {
             let server = MockServer::start().await;
             Mock::given(method("POST"))
@@ -468,14 +469,16 @@ mod tests {
             let mut provider = DeepLProvider::new("test-key".to_string(), &[])
                 .unwrap()
                 .with_base_url(server.uri());
-            let error = provider
+            let result = provider
                 .translate_batch(&[unit("a", "Hello.")], "english", "french")
                 .await
-                .unwrap_err();
+                .unwrap();
 
+            assert!(result.translations.is_empty());
+            assert!(result.failed_ids.is_empty());
             assert!(matches!(
-                error,
-                ProviderError::Network { status: Some(code), .. } if code == status
+                result.stopped,
+                Some(ProviderError::Network { status: Some(code), .. }) if code == status
             ));
         }
     }

@@ -55,6 +55,11 @@ pub struct TranslatedUnit {
 pub struct TranslateBatchResult {
     pub translations: Vec<TranslatedUnit>,
     pub failed_ids: Vec<String>,
+    /// Set when a fatal error stopped the provider partway through the
+    /// batch: what it translated before is kept, the job then stops. The
+    /// units it never sent are in neither list. An error before anything
+    /// was translated is an `Err` instead.
+    pub stopped: Option<ProviderError>,
 }
 
 /// What can stop a provider, as a message key and its parameters rather

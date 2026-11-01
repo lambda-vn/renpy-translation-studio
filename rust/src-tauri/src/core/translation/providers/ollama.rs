@@ -449,10 +449,16 @@ impl OllamaProvider {
         );
         let mut result = TranslateBatchResult::default();
         for batch in batches {
-            let (translations, failed) =
-                self.translate_single_batch(&batch, &system_prompt).await?;
-            result.translations.extend(translations);
-            result.failed_ids.extend(failed);
+            match self.translate_single_batch(&batch, &system_prompt).await {
+                Ok((translations, failed)) => {
+                    result.translations.extend(translations);
+                    result.failed_ids.extend(failed);
+                }
+                Err(fatal) => {
+                    result.stopped = Some(fatal);
+                    break;
+                }
+            }
         }
         Ok(result)
     }
@@ -1000,14 +1006,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn translate_batch_errs_on_a_fatal_chat_status() {
-        let error = translate_with_chat_status(403).await.unwrap_err();
+    async fn translate_batch_stops_on_a_fatal_chat_status() {
+        let result = translate_with_chat_status(403).await.unwrap();
+        assert!(result.failed_ids.is_empty());
         assert!(matches!(
-            error,
-            ProviderError::Network {
+            result.stopped,
+            Some(ProviderError::Network {
                 status: Some(403),
                 ..
-            }
+            })
         ));
     }
 
