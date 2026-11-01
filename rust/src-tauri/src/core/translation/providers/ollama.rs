@@ -17,8 +17,8 @@ use serde_json::{json, Value};
 use crate::core::translation::job::JobMessage;
 
 use super::base::{
-    fatal_status_error, ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
-    TranslationUnitPayload,
+    fatal_status_error, send_with_backoff, ProviderError, TranslateBatchResult, TranslatedUnit,
+    TranslationProvider, TranslationUnitPayload,
 };
 use crate::core::storage::repositories::Character;
 use crate::core::translation::context_builder::{
@@ -507,26 +507,25 @@ impl OllamaProvider {
             batch.len()
         );
 
-        let response = self
-            .client
-            .post(format!("{}/api/chat", self.endpoint))
-            .json(&json!({
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "stream": false,
-                "format": build_response_schema(batch.len()),
-                "options": {
-                    "num_ctx": self.num_ctx,
-                    "truncate": false,
-                    "temperature": TRANSLATION_TEMPERATURE,
-                },
-            }))
-            .send()
-            .await
-            .and_then(reqwest::Response::error_for_status);
+        let response = send_with_backoff(
+            self.client
+                .post(format!("{}/api/chat", self.endpoint))
+                .json(&json!({
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "stream": false,
+                    "format": build_response_schema(batch.len()),
+                    "options": {
+                        "num_ctx": self.num_ctx,
+                        "truncate": false,
+                        "temperature": TRANSLATION_TEMPERATURE,
+                    },
+                })),
+        )
+        .await;
 
         let response = match response {
             Ok(response) => response,

@@ -11,8 +11,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use super::base::{
-    fatal_status_error, ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
-    TranslationUnitPayload,
+    fatal_status_error, send_with_backoff, ProviderError, TranslateBatchResult, TranslatedUnit,
+    TranslationProvider, TranslationUnitPayload,
 };
 use crate::core::languages::get_language;
 use crate::core::storage::repositories::Character;
@@ -288,19 +288,18 @@ impl DeepLProvider {
 
         for chunk in units.chunks(DEEPL_BATCH_SIZE) {
             let texts: Vec<&str> = chunk.iter().map(|u| u.source_text.as_str()).collect();
-            let response = self
-                .client
-                .post(format!("{}/v2/translate", self.base_url))
-                .header("Authorization", self.auth_header())
-                .json(&TranslateRequest {
-                    text: &texts,
-                    source_lang: &source,
-                    target_lang: &target,
-                    glossary_id: self.glossary_id.as_deref(),
-                })
-                .send()
-                .await
-                .and_then(reqwest::Response::error_for_status);
+            let response = send_with_backoff(
+                self.client
+                    .post(format!("{}/v2/translate", self.base_url))
+                    .header("Authorization", self.auth_header())
+                    .json(&TranslateRequest {
+                        text: &texts,
+                        source_lang: &source,
+                        target_lang: &target,
+                        glossary_id: self.glossary_id.as_deref(),
+                    }),
+            )
+            .await;
 
             match response {
                 Ok(resp) => match resp.json::<TranslateResponse>().await {

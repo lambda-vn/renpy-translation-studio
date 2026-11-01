@@ -6,8 +6,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use super::base::{
-    fatal_status_error, ProviderError, TranslateBatchResult, TranslatedUnit, TranslationProvider,
-    TranslationUnitPayload,
+    fatal_status_error, send_with_backoff, ProviderError, TranslateBatchResult, TranslatedUnit,
+    TranslationProvider, TranslationUnitPayload,
 };
 use crate::core::languages::get_language;
 
@@ -132,13 +132,12 @@ impl LibreTranslateProvider {
                 format: "text",
                 api_key: self.api_key.as_deref().filter(|k| !k.is_empty()),
             };
-            let outcome = self
-                .client
-                .post(format!("{}/translate", self.endpoint))
-                .json(&payload)
-                .send()
-                .await
-                .and_then(reqwest::Response::error_for_status);
+            let outcome = send_with_backoff(
+                self.client
+                    .post(format!("{}/translate", self.endpoint))
+                    .json(&payload),
+            )
+            .await;
 
             match outcome {
                 Ok(resp) => match resp.json::<TranslateResponse>().await {
@@ -287,7 +286,7 @@ mod tests {
                 .await;
             Mock::given(method("POST"))
                 .and(path("/translate"))
-                .respond_with(ResponseTemplate::new(status))
+                .respond_with(ResponseTemplate::new(status).insert_header("Retry-After", "0"))
                 .mount(&server)
                 .await;
 
