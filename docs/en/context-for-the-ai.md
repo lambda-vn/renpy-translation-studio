@@ -5,7 +5,7 @@
 *[Version française](../fr/context-for-the-ai.md)*
 
 Two screens feed the LLM providers what the text alone cannot tell them.
-Both are reached from the review toolbar, and both are worth ten minutes
+Both are reached from the **Characters** and **Universe** entries in the header, and both are worth ten minutes
 before starting a long translation job.
 
 ## Character glossary
@@ -13,12 +13,16 @@ before starting a long translation job.
 ![The character glossary](../images/05-characters-en.png)
 
 **Auto-detect** scans the game's `.rpy` sources for `Character()`
-definitions and fills the list. It is a heuristic scan, so read what it
-found. Running it again overwrites display names with whatever the source
-says, but leaves your notes alone.
+definitions and fills the list; new entries are flagged *Found by
+auto-detect — to complete* until you leave the screen. It is a heuristic
+scan, so read what it found. Running it again overwrites display names with
+whatever the source says, but leaves your notes alone. **Add manually**
+creates an entry by hand, and **Delete all** removes every character after
+a confirmation: auto-detect can find the characters again, but never the
+notes, which are lost for good.
 
 Each entry has a variable (`s`), a display name (`Sylvie`) and a free-form
-note. The notes do the real work:
+note, saved as soon as you leave the field. The notes do the real work:
 
 ```
 Sylvie -> Sylvie (do not translate)
@@ -30,8 +34,8 @@ They are used three ways:
 - They tell the model **who is speaking**, so a line lands with the right
   gender and the right level of politeness.
 - They keep a name **translated the same way everywhere**. With DeepL,
-  notes written as `Name -> Translation` become an actual server-side
-  glossary.
+  notes written as `Name -> Translation` (one per line) become an actual
+  server-side glossary.
 - They carry **what the text never says out loud**: register,
   relationships, a character's own turns of phrase.
 
@@ -39,7 +43,7 @@ They are used three ways:
 
 ![The universe summary](../images/06-universe-en.png)
 
-Free text, sent to the LLM before every batch. Three things belong in it:
+Free text, sent to the LLM before every batch. It is saved automatically as you type. Three things belong in it:
 
 - **The tone and register.** A solemn game and a comedy do not translate
   alike, and a batch of ten disconnected lines gives the model no way to
@@ -48,18 +52,20 @@ Free text, sent to the LLM before every batch. Three things belong in it:
 - **The game's own vocabulary** — places, items, factions — which no model
   can guess.
 
-**Generate with AI** sends a sample of the game's dialogue to the
-configured LLM provider and drafts a first version. It replaces the field;
-nothing is stored until you press Save. The button is disabled until an
-LLM provider is configured, since machine translation services cannot do
-it.
+**Generate with AI…** sends a sample of the game's dialogue (up to 200
+lines) to the configured LLM provider and drafts a first version. It
+replaces the field; the generated text is not stored until you press
+**Save**. The button is disabled until an LLM provider is configured
+(Ollama is the only one), since machine translation services cannot do it,
+and it needs some extracted text to work from.
 
-> Generating sends game text to a third-party service, and the
-> application asks you to confirm that every time.
+> Generating sends game text to the provider you configured, and the
+> application asks you to confirm that every time. With a local Ollama model
+> the text stays on your machine; with a `-cloud` model it does not.
 
 ### About a terms glossary
 
 There is no separate glossary of terms beyond characters, on purpose: no
 measured need justified one yet. If you want recurring terminology
 respected, write it into the universe summary — it already goes into the
-system prompt of all three LLMs.
+system prompt of the LLM provider (Ollama).

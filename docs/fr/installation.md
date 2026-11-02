@@ -6,10 +6,9 @@
 
 ## Ce qu'il faut
 
-- **Python 3.12 ou plus récent.**
-- **[uv](https://docs.astral.sh/uv/)**, qui gère les dépendances et
-  l'environnement virtuel. Ne jamais appeler `pip` directement dans ce
-  projet.
+- **L'installateur de votre système**, ou le code source si vous préférez
+  compiler l'application vous-même (voir la fin de cette page). Rien
+  d'autre à installer avant : ni Python, ni environnement d'exécution.
 - **Un moteur Ren'Py pour extraire.** Vous en avez sans doute déjà un :
   voir plus bas.
 - **Un compte ou un point d'accès de fournisseur**, seulement si vous
@@ -42,22 +41,29 @@ dialogue des paramètres, si un jeu finit par le réclamer.
 > que vous lanceriez pour jouer. N'extrayez que des jeux que vous
 > accepteriez de lancer.
 
-## Installer
+## Obtenir l'application
 
-```bash
-git clone https://github.com/lambda-vn/renpy-translation-studio.git
-cd renpy-translation-studio
-uv sync
-```
+Les installateurs sont produits par le workflow **Rust** du dépôt, un
+runner par système, et publiés en artefacts de son exécution (onglet
+Actions du dépôt). Un artefact par système :
 
-`uv` crée `.venv` à la racine au premier `uv sync` ou `uv run`. Ne
-l'activez pas à la main et ne le committez pas.
+| Système | Artefact  | Contenu                                   |
+|---------|-----------|-------------------------------------------|
+| Windows | `windows` | un installateur NSIS (`.exe`)             |
+| macOS   | `macos`   | une image disque (`.dmg`)                 |
+| Linux   | `linux`   | un paquet Debian (`.deb`) et une AppImage |
 
-## Lancer
+L'application installée s'appelle **Renpy Translation Studio** (le titre
+de la fenêtre garde l'apostrophe : Ren'Py Translation Studio). Elle
+embarque `rts-mcp`, le serveur MCP, à côté de son propre exécutable : voir
+[Serveur MCP](mcp-server.md).
 
-```bash
-uv run flet run src/main.py
-```
+Sous Linux, l'AppImage doit être rendue de nouveau exécutable après le
+téléchargement (`chmod +x`), le téléchargement d'un artefact perdant les
+droits d'accès.
+
+Ces installateurs ne sont pas signés : le système d'exploitation peut vous
+avertir la première fois que vous les lancez.
 
 ## Premier lancement
 
@@ -67,23 +73,87 @@ Deux choses sont demandées, et les deux se changent ensuite :
 
 - **Langue de l'interface** — anglais ou français.
 - **Chemin du SDK Ren'Py** — facultatif, comme expliqué plus haut.
-  Laissez-le vide jusqu'à ce qu'un jeu en ait besoin.
+  Laissez-le vide jusqu'à ce qu'un jeu en ait besoin. Le champ indique si
+  le chemin désigne bien un exécutable Ren'Py (*SDK trouvé* ou *Aucun
+  exécutable Ren'Py trouvé à ce chemin*).
 
-Tout le reste se règle depuis l'icône d'engrenage en haut à droite, sur
-tous les écrans.
+Cliquez sur **Commencer** pour continuer.
+
+Tout le reste se règle depuis l'icône d'engrenage (**Paramètres**) dans
+l'en-tête.
 
 ![Le dialogue des paramètres](../images/09-settings-fr.png)
 
-Le réglage **Apparence** bascule entre sombre, clair et suivi du système,
-et s'applique immédiatement. Les clés API ne sont pas stockées dans ce
-fichier : elles vont dans le trousseau du système d'exploitation.
+Le dialogue contient :
 
-## Ou bien un binaire packagé
+- **Langue de l'interface**.
+- **Apparence** — *Sombre*, *Clair* ou *Comme le système*, appliqué
+  immédiatement.
+- **Journalisation détaillée** — écrit plus de détails dans le journal,
+  pour le diagnostic. **Ouvrir le journal** le montre dans votre
+  explorateur de fichiers.
+- **Chemin du SDK Ren'Py**.
+- **Mémoire de traduction** — les traductions validées conservées d'un
+  projet à l'autre sur cette machine, par paire de langues, que vous
+  pouvez oublier une paire à la fois.
 
-Les binaires Windows, macOS et Linux sont produits par le workflow
-**Build** du dépôt, un runner par cible, et publiés en artefacts. C'est le
-chemin normal pour obtenir une application packagée ; compiler en local
-avec `uv run python scripts/build.py` ne produit jamais que la cible du
-système courant, `flet build` ne sachant pas compiler en croisé.
+Les clés API ne sont pas stockées dans le fichier des paramètres : elles
+vont dans le trousseau du système d'exploitation (Gestionnaire
+d'identifiants de Windows, Trousseau d'accès de macOS, Secret Service sous
+Linux). Sans trousseau, l'application ne peut pas enregistrer de clé.
 
-Ces binaires ne sont pas signés : SmartScreen et Gatekeeper avertiront.
+## Où se trouvent les fichiers
+
+| Quoi                                                        | Où                                                        |
+|-------------------------------------------------------------|-----------------------------------------------------------|
+| Paramètres, projets récents, mémoire de traduction, journal | le dossier de configuration de l'application (ci-dessous) |
+| Les traductions d'un projet                                 | `<jeu>/.rts/translations.db`                              |
+
+Le dossier de configuration est :
+
+- **Windows** : `%LOCALAPPDATA%\renpy-translation-studio\`
+- **macOS** : `~/Library/Application Support/renpy-translation-studio/`
+- **Linux** : `~/.config/renpy-translation-studio/`
+
+On y trouve `settings.json`, `projects.json` (les projets récents, qui
+sont aussi ceux que le serveur MCP a le droit d'ouvrir) et
+`renpy-translation-studio.log`. Le journal ne reçoit que les diagnostics
+de l'application elle-même, jamais de clé API, et passe dans
+`renpy-translation-studio.log.1` dès qu'il dépasse 5 Mo.
+
+### Venant de la 1.x
+
+Les paramètres, les projets et la mémoire de traduction de la version 1.x
+sont relus tels quels : ouvrez l'application et vos projets récents sont
+là. Claude et Mistral, que la 1.0.0 avait déjà retirés, ne reviennent pas ;
+DeepL, Ollama et LibreTranslate sont les trois fournisseurs.
+
+## Compiler depuis les sources
+
+Il vous faut [Node.js](https://nodejs.org/) 22, une chaîne
+[Rust](https://rustup.rs/) stable et, sous Linux, les bibliothèques dont
+Tauri a besoin (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`,
+`librsvg2-dev`, `libxdo-dev`, `libssl-dev`, `libdbus-1-dev`,
+`pkg-config`, `patchelf`).
+
+```bash
+git clone https://github.com/lambda-vn/renpy-translation-studio.git
+cd renpy-translation-studio/rust
+npm install
+```
+
+Lancer l'application en mode développement :
+
+```bash
+npm run tauri dev
+```
+
+Construire l'installateur du système sur lequel vous êtes (long : il
+compile en mode release et construit aussi `rts-mcp`) :
+
+```bash
+npm run bundle
+```
+
+Tauri ne compile pas en croisé : chaque système construit son propre
+installateur, d'où un runner par système dans le workflow.

@@ -6,9 +6,9 @@
 
 ## What you need
 
-- **Python 3.12 or newer.**
-- **[uv](https://docs.astral.sh/uv/)**, which manages the dependencies and
-  the virtual environment. Never call `pip` directly in this project.
+- **The installer for your system**, or the source code if you prefer to
+  build the application yourself (see the end of this page). Nothing else
+  has to be installed first: no Python, no runtime.
 - **A Ren'Py engine to extract with.** Usually you already have one: see
   below.
 - **A provider account or endpoint**, only if you want machine or LLM
@@ -41,22 +41,28 @@ if a game ever asks for it.
 > executable you would launch to play. Only extract games you would be
 > willing to run.
 
-## Install
+## Get the application
 
-```bash
-git clone https://github.com/lambda-vn/renpy-translation-studio.git
-cd renpy-translation-studio
-uv sync
-```
+The installers are built by the repository's **Rust** workflow, one runner
+per system, and published as artifacts of its run (Actions tab of the
+repository). One artifact per system:
 
-`uv` creates `.venv` at the root on the first `uv sync` or `uv run`. Do not
-activate it by hand and do not commit it.
+| System  | Artifact  | What it contains                           |
+|---------|-----------|--------------------------------------------|
+| Windows | `windows` | an NSIS installer (`.exe`)                 |
+| macOS   | `macos`   | a disk image (`.dmg`)                      |
+| Linux   | `linux`   | a Debian package (`.deb`) and an AppImage |
 
-## Run
+The installed application is called **Renpy Translation Studio** (the
+window title keeps the apostrophe: Ren'Py Translation Studio). It carries
+`rts-mcp`, the MCP server, next to its own executable: see
+[MCP server](mcp-server.md).
 
-```bash
-uv run flet run src/main.py
-```
+On Linux, the AppImage must be made executable again after the download
+(`chmod +x`), since downloading an artifact drops the permission bits.
+
+These installers are unsigned, so the operating system may warn you the
+first time you run them.
 
 ## First launch
 
@@ -66,24 +72,83 @@ Two things are asked, and both can be changed later:
 
 - **Interface language** — English or French.
 - **Ren'Py SDK path** — optional, as explained above. Leave it empty
-  until a game needs it.
+  until a game needs it. The field tells you whether the path holds a
+  Ren'Py executable (*SDK found* or *No Ren'Py executable found at this
+  path*).
 
-Everything else is set from the gear icon in the top-right corner, on
-every screen.
+Click **Get started** to continue.
+
+Everything else is set from the gear icon (**Settings**) in the header.
 
 ![The settings dialog](../images/09-settings-en.png)
 
-The **Appearance** setting switches between dark, light and following the
-system, and applies immediately. API keys are not stored in this file:
-they go to the operating system's keyring.
+The dialog holds:
 
-## A packaged binary instead
+- **Interface language**.
+- **Appearance** — *Dark*, *Light* or *Same as the system*, applied
+  immediately.
+- **Verbose logging** — writes more detail in the log, for diagnosis.
+  **Open the log** shows the log file in your file manager.
+- **Ren'Py SDK path**.
+- **Translation memory** — the validated translations kept from one
+  project to the next on this machine, per language pair, which you can
+  forget one pair at a time.
 
-Builds for Windows, macOS and Linux are produced by the repository's
-**Build** workflow, one runner per target, and published as artifacts.
-That is the normal way to get a packaged application; building locally
-with `uv run python scripts/build.py` only ever builds for the system it
-runs on, since `flet build` does not cross-compile.
+API keys are not stored in the settings file: they go to the operating
+system's keyring (Windows Credential Manager, macOS Keychain, Secret
+Service on Linux). Without a keyring, the application cannot save a key.
 
-Those binaries are unsigned, so SmartScreen and Gatekeeper will warn about
-them.
+## Where things live
+
+| What                                               | Where                                          |
+|----------------------------------------------------|------------------------------------------------|
+| Settings, recent projects, translation memory, log | the application's configuration folder (below) |
+| A project's translations                           | `<game>/.rts/translations.db`                  |
+
+The configuration folder is:
+
+- **Windows**: `%LOCALAPPDATA%\renpy-translation-studio\`
+- **macOS**: `~/Library/Application Support/renpy-translation-studio/`
+- **Linux**: `~/.config/renpy-translation-studio/`
+
+In it: `settings.json`, `projects.json` (the recent projects, also what the
+MCP server may open) and `renpy-translation-studio.log`. The log only
+receives the application's own diagnostics, never an API key, and is moved
+to `renpy-translation-studio.log.1` once it passes 5 MB.
+
+### Coming from 1.x
+
+The settings, projects and translation memory of version 1.x are read as
+they are: open the application and your recent projects are there. Claude
+and Mistral, which 1.0.0 had already removed, are not coming back; DeepL,
+Ollama and LibreTranslate are the three providers.
+
+## Building from source
+
+You need [Node.js](https://nodejs.org/) 22, a stable
+[Rust](https://rustup.rs/) toolchain, and on Linux the libraries Tauri
+needs (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`,
+`librsvg2-dev`, `libxdo-dev`, `libssl-dev`, `libdbus-1-dev`,
+`pkg-config`, `patchelf`).
+
+```bash
+git clone https://github.com/lambda-vn/renpy-translation-studio.git
+cd renpy-translation-studio/rust
+npm install
+```
+
+Run the application in development mode:
+
+```bash
+npm run tauri dev
+```
+
+Build the installer for the system you are on (long: it compiles in
+release mode and also builds `rts-mcp`):
+
+```bash
+npm run bundle
+```
+
+Tauri does not cross-compile: each system builds its own installer, which
+is why the workflow uses one runner per system.
