@@ -1,8 +1,7 @@
-//! The application log. Port of `core/logging_config.py`.
+//! The application log.
 //!
-//! Python wrote to the console, which a packaged desktop application does
-//! not have: this writes to `<config_dir>/renpy-translation-studio.log`
-//! instead. As in 1.0.0, only this application's own modules are logged,
+//! A packaged desktop application has no console, so this writes to
+//! `<config_dir>/renpy-translation-studio.log` instead. As in 1.0.0, only this application's own modules are logged,
 //! never the libraries (reqwest, tauri...), so verbose mode shows its
 //! diagnostics rather than framework traffic. `verbose_logging` set: DEBUG
 //! and up; unset: warnings and errors only. [`set_verbose`] applies a

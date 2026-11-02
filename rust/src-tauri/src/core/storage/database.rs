@@ -1,13 +1,11 @@
 //! SQLite connection management for a single project.
 //!
-//! Port of `core/storage/database.py`, targeting the schema already
-//! frozen by the 1.0.0 release: the final column set (`needs_review`,
-//! `note`) and the five-status CHECK constraint. The two migrations
-//! Python carries for pre-1.0 databases (`_migrate_status_check`,
-//! `_migrate_review_columns`) are deliberately not ported — the
-//! compatibility policy in `CLAUDE.md` promises reading what 1.0.0
-//! wrote, not re-deriving the upgrade path from 0.x, which a user
-//! already crossed by going through 1.x first.
+//! Targets the schema frozen by the 1.0.0 release: the final column set
+//! (`needs_review`, `note`) and the five-status CHECK constraint. No
+//! migration from pre-1.0 databases is carried: the compatibility policy
+//! in `CLAUDE.md` promises reading what 1.0.0 wrote, not re-deriving the
+//! upgrade path from 0.x, which a user already crossed by going through
+//! 1.x first.
 
 use std::path::{Path, PathBuf};
 
@@ -67,9 +65,9 @@ CREATE TABLE IF NOT EXISTS project_meta (
 );
 ";
 
-// See database.py's own comment: the indexes are created last since a
-// migration rebuild (not ported here, but the ordering is kept in case
-// one returns) would drop every index attached to the table it replaces.
+// The indexes are created last since a migration rebuild (none exists
+// now, but the ordering is kept in case one returns) would drop every
+// index attached to the table it replaces.
 const CREATE_INDEXES: &str = "
 CREATE INDEX IF NOT EXISTS idx_status ON translation_units(status);
 CREATE INDEX IF NOT EXISTS idx_file_line
@@ -81,6 +79,7 @@ CREATE INDEX IF NOT EXISTS idx_pending ON translation_units(updated_at)
     WHERE translated_text != '' OR created_at != updated_at;
 ";
 
+/// A project database: one SQLite connection onto `<project>/.rts/translations.db`.
 pub struct Database {
     conn: Connection,
 }
@@ -93,6 +92,10 @@ impl Database {
     }
 
     /// Open the connection, switch to WAL, and create tables if needed.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the file cannot be opened or the schema cannot be created.
     pub fn open(db_path: &Path) -> rusqlite::Result<Self> {
         let conn = Connection::open(db_path)?;
         enable_wal(&conn, db_path);
@@ -109,6 +112,10 @@ impl Database {
     /// Meant for cheap, side-effect-free inspection. Unlike `open()`,
     /// this never creates missing tables, so callers must tolerate a
     /// database that predates one of them.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the file does not exist or cannot be opened.
     pub fn open_readonly(db_path: &Path) -> rusqlite::Result<Self> {
         let conn = Connection::open_with_flags(
             db_path,
@@ -117,6 +124,7 @@ impl Database {
         Ok(Self { conn })
     }
 
+    /// The underlying connection.
     pub fn conn(&self) -> &Connection {
         &self.conn
     }

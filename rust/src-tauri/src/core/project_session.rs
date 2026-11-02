@@ -14,21 +14,25 @@ use crate::core::storage::{repositories, Database};
 /// Why a project could not be opened.
 #[derive(Debug, thiserror::Error)]
 pub enum OpenError {
+    /// The project has no database yet: it was never extracted.
     #[error(
         "No project database at {0}. Open this game in the application and extract it once first."
     )]
     NoDatabase(String),
+    /// The database exists but could not be opened.
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
 }
 
 /// An open project and the connection reading it.
 pub struct ProjectSession {
+    /// Project root folder.
     pub path: PathBuf,
     db: Database,
 }
 
 impl ProjectSession {
+    /// The connection to the project database.
     pub fn conn(&self) -> &Connection {
         self.db.conn()
     }

@@ -1,7 +1,5 @@
 //! Opening a project and listing the ones the application already knows
-//! about. Port of the relevant slice of `app/views/project_setup.py` —
-//! resuming an already-extracted project only; running the Ren'Py
-//! extraction itself is not ported on this branch (see `rust/README.md`).
+//! about. Running the extraction itself belongs to `commands::extract`.
 
 use tauri::State;
 
@@ -13,6 +11,7 @@ use crate::core::storage::{recent_projects, repositories, Database};
 use super::dto::{ProjectEntry, ProjectInfo};
 use super::CommandError;
 
+/// The summary of `session` sent to the frontend when a project opens.
 pub(super) fn project_info(session: &ProjectSession) -> Result<ProjectInfo, String> {
     let by_status = repositories::count_by_status(session.conn()).map_err(|e| e.to_string())?;
     Ok(ProjectInfo {
@@ -25,6 +24,10 @@ pub(super) fn project_info(session: &ProjectSession) -> Result<ProjectInfo, Stri
 }
 
 /// Games the application has opened before, most recent first.
+///
+/// # Errors
+///
+/// Never fails; the `Result` is the command signature.
 #[tauri::command]
 pub async fn list_recent_projects() -> Result<Vec<ProjectEntry>, String> {
     let registry = recent_projects::default_path();
@@ -48,6 +51,10 @@ pub async fn list_recent_projects() -> Result<Vec<ProjectEntry>, String> {
 
 /// Drop a game from the recent list without touching it: no file of the
 /// game and nothing under its `.rts/` is deleted.
+///
+/// # Errors
+///
+/// Never fails; the `Result` is the command signature.
 #[tauri::command]
 pub async fn forget_project(path: String) -> Result<(), String> {
     recent_projects::remove(
@@ -62,6 +69,12 @@ pub async fn forget_project(path: String) -> Result<(), String> {
 /// backups) and forget the entry. The game's own files are not touched.
 /// Closes the project first when it is the one open. Irreversible; the
 /// caller owns the confirmation.
+///
+/// # Errors
+///
+/// Fails with `errors.delete_data_failed` (the cause in `detail`) when the
+/// `.rts/` folder cannot be deleted. A path missing from the recent list
+/// is left alone.
 #[tauri::command]
 pub async fn delete_project_data(
     state: State<'_, AppState>,
@@ -87,6 +100,11 @@ pub async fn delete_project_data(
 
 /// Open a project already extracted (by this app or another 1.x/2.x
 /// install), registering it in the recent-projects list.
+///
+/// # Errors
+///
+/// Fails when the project has never been extracted (no database) or its
+/// database cannot be opened or read.
 #[tauri::command]
 pub async fn open_project(state: State<'_, AppState>, path: String) -> Result<ProjectInfo, String> {
     let target = std::path::Path::new(&path);
@@ -100,6 +118,10 @@ pub async fn open_project(state: State<'_, AppState>, path: String) -> Result<Pr
 /// The project currently open, if any — lets a route re-entered without
 /// a fresh `open_project` call (navigating back from another screen)
 /// recover its context.
+///
+/// # Errors
+///
+/// Fails when the open project's database cannot be read.
 #[tauri::command]
 pub async fn current_project(state: State<'_, AppState>) -> Result<Option<ProjectInfo>, String> {
     match state.current.lock().await.as_ref() {

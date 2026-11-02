@@ -1,5 +1,4 @@
 //! Generates a universe summary from sampled game dialogue using an LLM.
-//! Port of `core/translation/universe_generator.py`.
 //!
 //! The budget replaces an earlier "3-5 sentences" instruction, which small
 //! models read as licence to answer with one. It is worth what it costs:
@@ -21,9 +20,8 @@
 //! prohibition on translating, continuing or answering that dialogue is
 //! stated there too rather than at the top where it would be out of sight.
 //!
-//! The prompt below is copied as it stands in Python. Like the other LLM
-//! prompts it encodes workarounds for small-model behaviour and is not to
-//! be reworded without a test against a real model.
+//! Like the other LLM prompts, the prompt below encodes workarounds for
+//! small-model behaviour and is not to be reworded without a test against a real model.
 
 use crate::core::languages::get_language;
 use crate::core::storage::repositories::TranslationUnit;
@@ -31,7 +29,9 @@ use crate::core::storage::repositories::TranslationUnit;
 use super::providers::base::ProviderError;
 use super::providers::ollama::OllamaProvider;
 
+/// Number of dialogue lines sampled for the prompt.
 pub const SAMPLE_SIZE: usize = 200;
+/// Length, in characters, the summary is asked to stay within.
 pub const SUMMARY_CHAR_BUDGET: usize = 1500;
 const MIN_SAMPLE_LENGTH: usize = 30;
 const NON_STORY_FILES: [&str; 4] = ["screens.rpy", "options.rpy", "gui.rpy", "common.rpy"];
@@ -160,6 +160,11 @@ pub fn build_prompt(units: &[TranslationUnit], target_lang: &str) -> String {
 /// Generate a universe summary.
 ///
 /// Only called on explicit user action, never automatically.
+///
+/// # Errors
+///
+/// Any [`ProviderError`] of [`OllamaProvider::complete`]: the model is
+/// missing or unreachable, or the chat request fails.
 pub async fn generate(
     units: &[TranslationUnit],
     provider: &mut OllamaProvider,

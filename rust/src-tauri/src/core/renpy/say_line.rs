@@ -1,6 +1,6 @@
 //! Locating the spoken string inside a Ren'Py say statement.
 //!
-//! Port of `core/renpy/say_line.py`. A say statement is not just a
+//! A say statement is not just a
 //! quoted string on a line — it can carry a speaker, image attributes,
 //! a transition, an id or keyword arguments:
 //!
@@ -17,13 +17,13 @@
 //! answer.
 //!
 //! Every scan here works over `Vec<char>` rather than byte-indexed
-//! `&str` slicing: Python's indices are Unicode codepoints, and a
-//! speaker name or a translated line can carry non-ASCII text, so a
-//! byte-indexed port would panic or misalign on the very first accented
-//! character.
+//! `&str` slicing: a speaker name or a translated line can carry
+//! non-ASCII text, so byte indices would panic or misalign on the very
+//! first accented character.
 
 const HEAD_TOKEN_EXTRA: [char; 2] = ['@', '.'];
 
+/// A say statement split around its spoken string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SayLine {
     /// Everything before the opening quote, verbatim: indentation, the

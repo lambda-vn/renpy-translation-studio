@@ -1,5 +1,4 @@
-//! Setting a game up: inspecting a folder and extracting its texts. Port
-//! of the new-project half of `app/views/project_setup.py`; the work
+//! Setting a game up: inspecting a folder and extracting its texts. The work
 //! itself lives in `core::extraction`, nothing here decides anything about
 //! Ren'Py.
 //!
@@ -28,8 +27,10 @@ use crate::core::validators::validate_project_dir;
 use super::dto::ProjectInfo;
 use super::project::project_info;
 
+/// Name of the event reporting the extraction's progress to the frontend.
 const STAGE_EVENT: &str = "extraction-stage";
 
+/// A language the setup form offers, from the central language list.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageEntry {
@@ -37,6 +38,7 @@ pub struct LanguageEntry {
     pub label: &'static str,
 }
 
+/// What the setup form learns about a game folder.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameInspection {
@@ -53,6 +55,7 @@ pub struct GameInspection {
     pub existing_languages: Vec<String>,
 }
 
+/// A finished extraction: the project now open and what was extracted.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtractionOutcome {
@@ -60,10 +63,13 @@ pub struct ExtractionOutcome {
     pub report: ExtractionReport,
 }
 
+/// Why an extraction failed, for the interface to word in its own language.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtractionFailure {
+    /// Stable identifier of the failure.
     pub code: &'static str,
+    /// The English message, fallback for a `code` the interface does not know.
     pub message: String,
     /// What the engine printed, when it failed.
     pub detail: Option<String>,
@@ -117,6 +123,7 @@ impl Drop for Running<'_> {
     }
 }
 
+/// The languages the setup form can offer.
 #[tauri::command]
 pub fn list_languages() -> Vec<LanguageEntry> {
     LANGUAGES
@@ -157,6 +164,14 @@ pub async fn inspect_game(path: String, target_language: String) -> GameInspecti
 ///
 /// Any project currently open is closed first: it may be this very game,
 /// and the extraction rewrites the database under it.
+///
+/// # Errors
+///
+/// Fails with an [`ExtractionFailure`]: code `busy` when another extraction
+/// is running, `internal` when the worker task fails, `database` when the
+/// extracted project cannot be opened, otherwise the code of the
+/// [`ExtractionError`] (engine missing or unable to run, parse failure,
+/// and so on).
 #[tauri::command]
 pub async fn extract_project(
     app: AppHandle,

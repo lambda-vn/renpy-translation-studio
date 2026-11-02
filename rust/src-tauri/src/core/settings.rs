@@ -1,8 +1,8 @@
 //! Persistent application settings stored as JSON.
 //!
-//! Port of `core/settings.py`. Settings are stored as `settings.json` in
-//! the machine-wide config directory, the same one the 1.0.0 Python
-//! application already writes to — this file is part of the frozen
+//! Settings are stored as `settings.json` in the machine-wide config
+//! directory, the same one the 1.x application writes to — this file is
+//! part of the frozen
 //! contract in `CLAUDE.md`'s compatibility policy, not a fresh format.
 //!
 //! API keys are stored in the OS keyring (Windows Credential Manager,
@@ -18,6 +18,7 @@ use std::path::PathBuf;
 #[cfg(not(test))]
 use keyring::Entry;
 
+/// Name of the application's folder under the config directory.
 pub const APP_NAME: &str = "renpy-translation-studio";
 
 const DEFAULTS: &[(&str, Option<&str>)] = &[
@@ -34,13 +35,17 @@ const DEFAULTS: &[(&str, Option<&str>)] = &[
 
 const KEYRING_KEYS: &[&str] = &["deepl_api_key", "libretranslate_api_key"];
 
+/// Why a setting could not be stored.
 #[derive(Debug, thiserror::Error)]
 pub enum SettingsError {
+    /// The key is neither a known setting nor an API key.
     #[error("unknown setting key: {0}")]
     UnknownKey(String),
+    /// An API key was set but the OS keyring cannot hold it.
     #[error("no OS keyring backend available to store '{0}'")]
     #[cfg_attr(test, allow(dead_code))]
     KeyringUnavailable(String),
+    /// `settings.json` could not be written.
     #[error("could not write the settings file: {0}")]
     Write(String),
 }
@@ -226,6 +231,12 @@ impl Settings {
     /// Update a setting and persist it immediately.
     ///
     /// API keys are written to the OS keyring rather than `settings.json`.
+    ///
+    /// # Errors
+    ///
+    /// [`SettingsError::UnknownKey`] for an unknown key,
+    /// [`SettingsError::KeyringUnavailable`] when an API key cannot be
+    /// stored, [`SettingsError::Write`] when the file cannot be written.
     pub fn set(&mut self, key: &str, value: Option<&str>) -> Result<(), SettingsError> {
         if KEYRING_KEYS.contains(&key) {
             return self.keyring_set(key, value);
@@ -282,6 +293,11 @@ impl Settings {
 /// A game ships the engine that extracts it, so leaving with no SDK at all
 /// is the ordinary case. A path that was picked and does not name a
 /// Ren'Py launcher is a mistake made on that screen and is refused.
+///
+/// # Errors
+///
+/// `Not a Ren'Py SDK: <path>` for a path that is not a launcher, or the
+/// text of the [`SettingsError`] that stopped a write.
 pub fn finish_onboarding(
     settings: &mut Settings,
     locale: &str,
@@ -304,13 +320,16 @@ pub fn finish_onboarding(
 /// The directory holding the machine-wide application files: settings,
 /// the recent-project registry, and the translation memory.
 ///
-/// Matches the 1.0.0 Python application's `platformdirs.user_config_dir(
-/// APP_NAME, appauthor=False)` exactly — no separate author segment —
-/// since this directory, and everything in it, is part of the frozen
-/// data contract:
+/// Matches the directory the 1.x application used exactly — no separate
+/// author segment — since this directory, and everything in it, is part
+/// of the frozen data contract:
 ///   - Linux   : `~/.config/renpy-translation-studio/`
 ///   - Windows : `%LOCALAPPDATA%/renpy-translation-studio/`
 ///   - macOS   : `~/Library/Application Support/renpy-translation-studio/`
+///
+/// # Panics
+///
+/// When the platform has no config directory.
 pub fn config_dir() -> PathBuf {
     dirs::config_local_dir()
         .expect("no config directory on this platform")

@@ -1,4 +1,5 @@
-//! Translation providers. Port of `core/translation/providers/`.
+//! Translation providers: DeepL, Ollama and LibreTranslate, plus the
+//! registry that builds them from settings.
 
 pub mod base;
 pub mod deepl;

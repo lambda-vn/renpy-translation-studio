@@ -1,9 +1,8 @@
-//! Writing translations to disk and zipping them up. Port of the save
-//! action in `app/views/review_view.py` and of `app/views/export_view.py`.
-//! Save is unconditional over every unit regardless of status, matching
-//! Python: an unvalidated suggestion is still strictly better than the
-//! untouched source text the SDK generated, and a cleared unit is written
-//! back as its source text so it does not stay alive in the file.
+//! Writing translations to disk and zipping them up. Save is
+//! unconditional over every unit regardless of status: an unvalidated
+//! suggestion is still strictly better than the untouched source text the
+//! engine generated, and a cleared unit is written back as its source text
+//! so it does not stay alive in the file.
 //!
 //! The pre-export warning of 1.0.0 (files out of sync, untranslated lines,
 //! lines a quality check refuses) is `export_info`; the dialog showing it
@@ -39,6 +38,13 @@ fn tl_dir(
 /// Unlike the export, the project stays held for the whole write: the save
 /// time recorded afterwards must not cover a line edited while the files
 /// were being written, which would then count as saved without being so.
+///
+/// # Errors
+///
+/// Fails when no project is open, when it has no target language
+/// (`errors.no_target_language`), when nothing is translated
+/// (`errors.nothing_to_save`), or when reading the database or writing the
+/// files fails.
 #[tauri::command]
 pub async fn save_project(state: State<'_, AppState>) -> Result<usize, CommandError> {
     let guard = state.current.clone().lock_owned().await;
@@ -77,6 +83,11 @@ fn save_blocking(guard: &Option<ProjectSession>) -> Result<usize, CommandError> 
 /// name and file name, how many lines would ship untranslated, which files
 /// hold lines a quality check refuses (worst first), and the gap between
 /// the database and the `tl/` files.
+///
+/// # Errors
+///
+/// Fails when no project is open or when the database or the `tl/` folder
+/// cannot be read.
 #[tauri::command]
 pub async fn export_info(state: State<'_, AppState>) -> Result<ExportInfo, CommandError> {
     let guard = state.current.lock().await;
@@ -129,6 +140,10 @@ pub async fn export_info(state: State<'_, AppState>) -> Result<ExportInfo, Comma
 
 /// The zip file name proposed for an edited game name, so the preview
 /// under the field follows the typing with the same rules as the export.
+///
+/// # Errors
+///
+/// Fails when no project is open.
 #[tauri::command]
 pub async fn zip_file_name(
     state: State<'_, AppState>,
@@ -145,6 +160,13 @@ pub async fn zip_file_name(
 /// Zip `game/tl/<language>/`. `gameName` is the archive's top folder, as
 /// edited on the export screen (blank falls back to `game`, as in 1.0.0);
 /// left out, the name resolved from the project is used.
+///
+/// # Errors
+///
+/// Fails when no project is open, when it has no target language
+/// (`errors.no_target_language`), when nothing was extracted
+/// (`errors.nothing_extracted`), or when reading the database or writing
+/// the zip at `output_path` fails.
 #[tauri::command]
 pub async fn export_project(
     state: State<'_, AppState>,

@@ -1,28 +1,31 @@
-//! Types shared by all translation providers. Port of the data half of
-//! `core/translation/providers/base.py`.
+//! Types shared by all translation providers.
 //!
-//! The Python `TranslateBatchRequest` also carries `on_batch_start`,
-//! `is_cancelled` and `on_event` callbacks threaded into each provider's
-//! *own* internal sub-batching (Ollama's context-window splitting,
-//! DeepL's 50-text chunks) — so cancellation takes effect after the
-//! request currently in flight rather than waiting for the whole job
-//! chunk. `translation::job`, added in `2.0.0-alpha.3`, drives
+//! A batch request carries no progress or cancellation callbacks into a
+//! provider's own internal sub-batching (Ollama's context-window
+//! splitting, DeepL's 50-text chunks). `translation::job` drives
 //! cancellation and progress at its own chunk boundary (`CHUNK_SIZE`)
-//! instead; a provider here still just answers one batch, uninterrupted
-//! once started. Finer-grained mid-provider cancellation is deferred —
+//! instead; a provider just answers one batch, uninterrupted once
+//! started. Finer-grained mid-provider cancellation is not available —
 //! see `translation::job`'s module docs.
 
 use std::time::{Duration, SystemTime};
 
 use crate::core::translation::job::JobMessage;
 
+/// A service that translates batches of units.
 #[async_trait::async_trait]
 pub trait TranslationProvider: Send {
+    /// The provider id used in settings: `deepl`, `ollama` or `libretranslate`.
     fn id(&self) -> &'static str;
 
     /// Get ready before the first batch of a job, saying what is going on
     /// through `notify` (a local model loading can take half a minute).
     /// Most providers have nothing to do.
+    ///
+    /// # Errors
+    ///
+    /// The provider cannot serve the job at all, for instance an
+    /// unreachable server or a model that is not installed.
     async fn warm_up(
         &mut self,
         _notify: &mut (dyn FnMut(JobMessage) + Send),
@@ -30,6 +33,17 @@ pub trait TranslationProvider: Send {
         Ok(())
     }
 
+    /// Translate one batch of units.
+    ///
+    /// Units the provider could not translate are listed in
+    /// `failed_ids` rather than failing the call.
+    ///
+    /// # Errors
+    ///
+    /// A fatal failure before anything was translated (rejected
+    /// credentials, exhausted quota, unreachable server, missing model).
+    /// A fatal failure after a partial answer is reported through
+    /// [`TranslateBatchResult::stopped`] instead.
     async fn translate_batch(
         &mut self,
         units: &[TranslationUnitPayload],
@@ -38,6 +52,7 @@ pub trait TranslationProvider: Send {
     ) -> Result<TranslateBatchResult, ProviderError>;
 }
 
+/// A unit sent to a provider.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranslationUnitPayload {
     pub block_id: String,
@@ -47,15 +62,19 @@ pub struct TranslationUnitPayload {
     pub character_variable: Option<String>,
 }
 
+/// A translated unit, paired with its source by `block_id`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranslatedUnit {
     pub block_id: String,
     pub translated_text: String,
 }
 
+/// What a provider returned for one batch.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TranslateBatchResult {
+    /// The units translated.
     pub translations: Vec<TranslatedUnit>,
+    /// `block_id`s of the units the provider could not translate.
     pub failed_ids: Vec<String>,
     /// Set when a fatal error stopped the provider partway through the
     /// batch: what it translated before is kept, the job then stops. The
@@ -73,15 +92,19 @@ pub enum ProviderError {
     /// A transport or HTTP failure; `status` is set when the server answered.
     #[error("network error: {detail}")]
     Network { status: Option<u16>, detail: String },
+    /// The configured model is absent from the Ollama server.
     #[error("The Ollama model {model} is not installed on {endpoint} (ollama pull {model})")]
     OllamaModelMissing { model: String, endpoint: String },
+    /// The Ollama server did not answer.
     #[error("Cannot reach the Ollama server ({endpoint})")]
     OllamaUnreachable { endpoint: String },
+    /// The Ollama server answered with a failure.
     #[error("The request to the Ollama server ({endpoint}) failed.")]
     OllamaRequestFailed { endpoint: String },
     /// `provider` is a provider id: `deepl`, `ollama` or `libretranslate`.
     #[error("{provider} is not configured.")]
     NotConfigured { provider: &'static str },
+    /// No provider has this id.
     #[error("Unknown provider: {id}")]
     UnknownProvider { id: String },
 }

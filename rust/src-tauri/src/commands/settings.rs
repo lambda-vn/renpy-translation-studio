@@ -1,8 +1,6 @@
-//! Provider credentials and app-wide settings. Port of
-//! `app/views/provider_config.py`'s backend calls. Connection tests take
-//! the value currently typed in a field rather than what's saved, since
-//! Python's own "Test connection" button works the same way — nothing
-//! here writes settings.json until "Save" is pressed. An empty key field
+//! Provider credentials and app-wide settings. Connection tests take
+//! the value currently typed in a field rather than what's saved, so
+//! nothing here writes settings.json until "Save" is pressed. An empty key field
 //! falls back on the saved key: keys are never read back into the field,
 //! so without it a saved key could not be tested at all.
 
@@ -25,6 +23,12 @@ use crate::core::validators::is_valid_sdk_path;
 use super::dto::{MemoryPair, SettingsPayload, TestConnectionResult};
 use super::CommandError;
 
+/// The settings for the frontend; API keys are reported only as set or not,
+/// never returned.
+///
+/// # Errors
+///
+/// Never fails; the `Result` is the command signature.
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsPayload, String> {
     let mut settings = state.settings.lock().await;
@@ -62,12 +66,20 @@ fn check_value(key: &str, value: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
+/// Apply a setting that takes effect immediately.
 fn apply_value(key: &str, value: Option<&str>) {
     if key == "verbose_logging" {
         logging::set_verbose(value.is_some_and(|v| !v.is_empty()));
     }
 }
 
+/// Save one setting (`None` clears it) and apply it when it takes effect at
+/// once, as `verbose_logging` does.
+///
+/// # Errors
+///
+/// Fails when `sdk_path` is given a path that is not a Ren'Py SDK, or
+/// when settings.json cannot be written.
 #[tauri::command]
 pub async fn set_setting(
     state: State<'_, AppState>,
@@ -87,6 +99,11 @@ pub async fn set_setting(
 
 /// Save several settings together, as the provider screen's "Save" does,
 /// so a refused value leaves every one of them as it was.
+///
+/// # Errors
+///
+/// Fails when `sdk_path` is given a path that is not a Ren'Py SDK, or
+/// when settings.json cannot be written.
 #[tauri::command]
 pub async fn set_settings(
     state: State<'_, AppState>,
@@ -113,6 +130,10 @@ pub async fn set_settings(
 
 /// Show the log file in the system file manager, or its folder while
 /// nothing has been logged yet.
+///
+/// # Errors
+///
+/// Fails when the file manager cannot be opened.
 #[tauri::command]
 pub async fn reveal_log() -> Result<(), String> {
     let path = logging::log_path();
@@ -122,6 +143,10 @@ pub async fn reveal_log() -> Result<(), String> {
 
 /// Whether this is the first launch (no settings file existed at startup
 /// and the onboarding has not been finished since).
+///
+/// # Errors
+///
+/// Never fails; the `Result` is the command signature.
 #[tauri::command]
 pub async fn is_first_launch(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(state.first_launch.load(Ordering::SeqCst))
@@ -129,6 +154,10 @@ pub async fn is_first_launch(state: State<'_, AppState>) -> Result<bool, String>
 
 /// Whether a path names a Ren'Py launcher (or a folder holding one), for
 /// the SDK field of the onboarding and settings screens.
+///
+/// # Errors
+///
+/// Never fails; the `Result` is the command signature.
 #[tauri::command]
 pub async fn validate_sdk_path(path: String) -> Result<bool, String> {
     Ok(is_valid_sdk_path(std::path::Path::new(path.trim())))
@@ -137,6 +166,11 @@ pub async fn validate_sdk_path(path: String) -> Result<bool, String> {
 /// Finish the onboarding: refuse an SDK path that is not a Ren'Py
 /// launcher, then write the UI language (and the SDK path when given) so
 /// the screen does not come back.
+///
+/// # Errors
+///
+/// Fails when the SDK path is not a Ren'Py launcher, or when
+/// settings.json cannot be written.
 #[tauri::command]
 pub async fn complete_onboarding(
     state: State<'_, AppState>,
@@ -154,6 +188,10 @@ pub async fn complete_onboarding(
 
 /// What the machine-wide translation memory holds, per language pair,
 /// largest first. Empty when it cannot be read.
+///
+/// # Errors
+///
+/// Never fails; an unreadable memory yields an empty list.
 #[tauri::command]
 pub async fn memory_stats() -> Result<Vec<MemoryPair>, String> {
     let stats = translation_memory::open(&translation_memory::default_path())
@@ -171,6 +209,10 @@ pub async fn memory_stats() -> Result<Vec<MemoryPair>, String> {
 
 /// Drop everything the memory stores for one language pair; returns how
 /// many entries went. Irreversible; the caller owns the confirmation.
+///
+/// # Errors
+///
+/// Fails when the memory cannot be opened or written.
 #[tauri::command]
 pub async fn forget_memory(
     source_language: String,
@@ -181,6 +223,14 @@ pub async fn forget_memory(
         .map_err(|e| e.to_string())
 }
 
+/// Test DeepL with the typed key, or the saved one when the field is empty.
+/// An unreachable or refusing service is reported as `ok: false`, not as
+/// an error; `characters_left` is set when the account has a limit.
+///
+/// # Errors
+///
+/// Fails with `NotConfigured` when no key is typed or saved, and when
+/// the provider cannot be built.
 #[tauri::command]
 pub async fn test_deepl_connection(
     state: State<'_, AppState>,
@@ -212,6 +262,12 @@ pub async fn test_deepl_connection(
     })
 }
 
+/// Test an Ollama endpoint (the default local one when blank) and list its
+/// models. An unreachable service is reported as `ok: false`.
+///
+/// # Errors
+///
+/// Fails when the provider cannot be built from `endpoint`.
 #[tauri::command]
 pub async fn test_ollama_connection(endpoint: String) -> Result<TestConnectionResult, String> {
     let endpoint = if endpoint.trim().is_empty() {
@@ -236,6 +292,12 @@ pub async fn test_ollama_connection(endpoint: String) -> Result<TestConnectionRe
     })
 }
 
+/// Test a LibreTranslate instance with the typed key, or the saved one when
+/// the field is empty. An unreachable service is reported as `ok: false`.
+///
+/// # Errors
+///
+/// Fails when the provider cannot be built from `url`.
 #[tauri::command]
 pub async fn test_libretranslate_connection(
     state: State<'_, AppState>,

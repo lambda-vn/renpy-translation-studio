@@ -1,6 +1,6 @@
 //! Parser for Ren'Py translation (`.rpy`) files.
 //!
-//! Port of `core/renpy/parser.py`. Reads only what Ren'Py itself
+//! Reads only what Ren'Py itself
 //! generates under `tl/<language>/` — this is not a parser for game
 //! source, and CLAUDE.md is explicit that it must never become one.
 
@@ -20,8 +20,10 @@ pub(crate) static TRANSLATE_HEADER: LazyLock<Regex> =
 /// lines that still carry their line ending.
 pub(crate) static STRINGS_HEADER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^translate\s+\S+\s+strings\s*:").unwrap());
+/// A `strings:` block's `old "..."` line, capturing the escaped text.
 pub(crate) static OLD_LINE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^    old "((?:[^"\\]|\\.)*)""#).unwrap());
+/// A `strings:` block's `new "..."` line, capturing the escaped text.
 pub(crate) static NEW_LINE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^    new "((?:[^"\\]|\\.)*)""#).unwrap());
 static COMMENT_LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^    #(?: (.*))?$").unwrap());
@@ -29,14 +31,18 @@ static SRC_MULTILINE_START: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^(?:(\w+) )?"""$"#).unwrap());
 static FILE_REF: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[\w./\-]+\.rpy:\d+$").unwrap());
 
+/// Why translation files could not be parsed.
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
+    /// A file could not be read.
     #[error("cannot read {0}: {1}")]
     Io(PathBuf, std::io::Error),
+    /// The `tl/` directory could not be traversed.
     #[error("cannot walk {0}: {1}")]
     Walk(PathBuf, walkdir::Error),
 }
 
+/// One translatable line read from a `tl/` file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranslationBlock {
     pub block_id: String,
@@ -61,6 +67,10 @@ pub fn is_translated(block: &TranslationBlock) -> bool {
 }
 
 /// Parse all translation blocks in a single `.rpy` file.
+///
+/// # Errors
+///
+/// [`ParseError::Io`] when the file cannot be read as UTF-8 text.
 pub fn parse_file(path: &Path) -> Result<Vec<TranslationBlock>, ParseError> {
     let text = std::fs::read_to_string(path).map_err(|e| ParseError::Io(path.to_path_buf(), e))?;
     let source_file = path.to_string_lossy().into_owned();
@@ -91,6 +101,11 @@ pub fn parse_file(path: &Path) -> Result<Vec<TranslationBlock>, ParseError> {
 
 /// Parse all translation blocks in a directory of `.rpy` files (e.g.
 /// `tl/french/`), sorted by file path then line number.
+///
+/// # Errors
+///
+/// [`ParseError::Walk`] when the directory cannot be traversed,
+/// [`ParseError::Io`] when a file cannot be read.
 pub fn parse_directory(tl_dir: &Path) -> Result<Vec<TranslationBlock>, ParseError> {
     let mut rpy_files: Vec<PathBuf> = Vec::new();
     for entry in walkdir::WalkDir::new(tl_dir) {

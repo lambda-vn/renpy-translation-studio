@@ -1,4 +1,4 @@
-//! Input validation. Port of `core/validators.py`.
+//! Input validation.
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -33,6 +33,7 @@ pub fn validate_project_dir(path: &Path) -> bool {
     path.is_dir() && path.join("game").is_dir()
 }
 
+/// A path escaped the directory it was confined to; holds the offending path.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[error("Path traversal detected: {0}")]
 pub struct PathTraversal(pub String);
@@ -41,6 +42,11 @@ pub struct PathTraversal(pub String);
 ///
 /// The path need not exist: the longest existing ancestor is resolved and
 /// the rest is appended, so a member about to be created is checked too.
+///
+/// # Errors
+///
+/// [`PathTraversal`] when `base` is given and the resolved path is not
+/// inside it.
 pub fn resolve_safe_path(user_path: &Path, base: Option<&Path>) -> Result<PathBuf, PathTraversal> {
     let resolved = resolve_lexically(user_path);
     if let Some(base) = base {

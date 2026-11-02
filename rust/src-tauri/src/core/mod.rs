@@ -1,5 +1,6 @@
-//! Domain logic, ported module-by-module from the Python `src/core/`
-//! package. Each submodule's doc comment names its Python source.
+//! Domain logic of the application, independent of the Tauri layer:
+//! extraction, review actions, import/export, settings, Ren'Py access,
+//! storage and translation providers.
 
 pub mod export_sync;
 pub mod exporter;

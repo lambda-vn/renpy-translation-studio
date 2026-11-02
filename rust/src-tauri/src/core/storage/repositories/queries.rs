@@ -66,6 +66,10 @@ fn page_filters(
 /// Exists for the one filter SQL cannot express: a quality error is
 /// computed from the source and the translation, so the whole file has
 /// to be handed over and sliced afterwards.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn get_matching(
     conn: &Connection,
     source_file: &str,
@@ -96,6 +100,10 @@ pub const MAX_PAGE_SIZE: i64 = 500;
 /// One page of a file's units plus the total matching row count, filtered
 /// like the review screen: status, a search substring across source and
 /// translation, a speaker, and the "needs another look" flag.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn get_page(
     conn: &Connection,
     query: &UnitQuery,
@@ -137,6 +145,10 @@ pub fn get_page(
 /// Answers what the paginated, filtered review list hides by
 /// construction: the point is to show the lines around a given one,
 /// whatever page or filter the caller was looking at.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn get_neighbours(
     conn: &Connection,
     source_file: &str,
@@ -177,6 +189,10 @@ pub fn get_neighbours(
 /// bound. A row still holding its insertion timestamp and no text was
 /// never edited; a cleared translation still counts, since the source
 /// text has to be written back to the `.rpy` file just like a new one.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn count_modified_since(conn: &Connection, timestamp: Option<&str>) -> rusqlite::Result<i64> {
     conn.query_row(
         "SELECT COUNT(*) FROM translation_units \
@@ -194,6 +210,10 @@ pub fn count_modified_since(conn: &Connection, timestamp: Option<&str>) -> rusql
 ///
 /// Empty when nothing narrows the project down (no search, no speaker, no
 /// flag), since the panel then has no count to show.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn count_matches_by_file(
     conn: &Connection,
     search_query: &str,
@@ -226,6 +246,10 @@ pub struct DuplicateStats {
 /// Occurrence counts for several source texts at once, restricted to the
 /// texts occurring more than once. Answered for a whole page in one query
 /// rather than one per displayed line.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn count_duplicates(
     conn: &Connection,
     source_texts: &[String],
@@ -265,6 +289,10 @@ pub fn count_duplicates(
 /// order. Units already `human_validated` are left out: they carry
 /// reviewed work that must not be replaced, and [`update_translations`]
 /// would refuse them anyway.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn find_duplicate_block_ids(
     conn: &Connection,
     source_text: &str,
@@ -281,6 +309,10 @@ pub fn find_duplicate_block_ids(
 
 /// Every Ren'Py character variable speaking in the project, sorted; lines
 /// with no speaker are left out.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn character_variables(conn: &Connection) -> rusqlite::Result<Vec<String>> {
     let mut stmt = conn.prepare(
         "SELECT DISTINCT character_variable FROM translation_units \
@@ -294,6 +326,10 @@ pub fn character_variables(conn: &Connection) -> rusqlite::Result<Vec<String>> {
 /// Every unit holding a translation, whatever its status, in file order.
 /// Asked for by the checks that weigh a translation against its source
 /// and have nothing to say about a line with no translation at all.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn get_translated(conn: &Connection) -> rusqlite::Result<Vec<TranslationUnit>> {
     let mut stmt = conn.prepare(&format!(
         "SELECT {SELECT_COLUMNS} FROM translation_units WHERE translated_text != '' \
@@ -304,6 +340,10 @@ pub fn get_translated(conn: &Connection) -> rusqlite::Result<Vec<TranslationUnit
 }
 
 /// Row count per status, e.g. `{"not_translated": 500, "human_validated": 12}`.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn count_by_status(
     conn: &Connection,
 ) -> rusqlite::Result<std::collections::HashMap<String, i64>> {
@@ -315,6 +355,7 @@ pub fn count_by_status(
     rows.collect()
 }
 
+/// Line and word counts of the whole project, validated ones apart.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProjectProgress {
     pub lines: i64,
@@ -328,6 +369,10 @@ pub struct ProjectProgress {
 /// The word count is the number of space-separated runs in the source
 /// text — an estimate, not a billing-grade figure, since Ren'Py markup
 /// (`{i}`, `[name]`) counts as text.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn project_progress(conn: &Connection) -> rusqlite::Result<ProjectProgress> {
     const WORDS: &str = "CASE WHEN TRIM(source_text) = '' THEN 0 ELSE \
          LENGTH(TRIM(source_text)) - LENGTH(REPLACE(TRIM(source_text), ' ', '')) + 1 END";
@@ -358,10 +403,12 @@ pub fn project_progress(conn: &Connection) -> rusqlite::Result<ProjectProgress> 
     })
 }
 
+/// One source file with its unit counts per status.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FileStats {
     pub source_file: String,
     pub total: i64,
+    /// Units in `human_validated`.
     pub validated: i64,
     pub ai_suggested: i64,
     pub draft: i64,
@@ -370,6 +417,10 @@ pub struct FileStats {
 
 /// All distinct source files with their block and status counts, sorted
 /// by `source_file`.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn get_files(conn: &Connection) -> rusqlite::Result<Vec<FileStats>> {
     let mut stmt = conn.prepare(
         "SELECT \

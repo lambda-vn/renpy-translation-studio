@@ -1,19 +1,21 @@
 //! Builds structured LLM prompts for translation with surrounding
-//! context. Port of `core/translation/context_builder.py`.
+//! context.
 //!
 //! CLAUDE.md is explicit: the prompt text here and the JSON response
 //! schema in `providers::ollama` encode hard-won workarounds for small
 //! quantized model bugs, and must not be "improved" or paraphrased
 //! without a real test against a small model. Every string in
-//! `build_system_prompt` and `build_batch_prompt` is copied verbatim
-//! from the Python original, not re-derived from its English meaning.
+//! `build_system_prompt` and `build_batch_prompt` is kept verbatim,
+//! not re-derived from its English meaning.
 
 use crate::core::storage::repositories::Character;
 
 const TOKENS_PER_CHAR_ESTIMATE: f64 = 0.25;
 const OUTPUT_MARGIN_RATIO: f64 = 0.20;
+/// Default cap on units per LLM request, see [`split_into_batches`].
 pub const MAX_UNITS_PER_BATCH: usize = 8;
 
+/// A unit to translate with the neighbouring lines the model sees as context.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContextualUnit {
     pub block_id: String,

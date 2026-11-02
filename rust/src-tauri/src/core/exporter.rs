@@ -1,4 +1,4 @@
-//! Translation zip exporter. Port of `core/exporter.py`.
+//! Translation zip exporter.
 
 use std::fs::File;
 use std::io::{Read, Write};
@@ -52,20 +52,28 @@ fn read_build_name(project_path: &Path) -> Option<String> {
         .map(|caps| caps[1].to_string())
 }
 
+/// Why an export was refused or failed.
 #[derive(Debug, thiserror::Error)]
 pub enum ExportError {
+    /// A file would get a zip entry name escaping the archive's prefix.
     #[error("path traversal detected: {0}")]
     PathTraversal(String),
+    /// The game name is unusable as a zip entry component.
     #[error("invalid game name: {0}")]
     InvalidGameName(String),
+    /// The language is not a valid language code.
     #[error("invalid language: {0}")]
     InvalidLanguage(String),
+    /// The `tl/` directory could not be traversed.
     #[error("cannot walk {0}: {1}")]
     Walk(PathBuf, walkdir::Error),
+    /// A file to archive could not be read.
     #[error("cannot read {0}: {1}")]
     Read(PathBuf, std::io::Error),
+    /// The zip writer failed.
     #[error(transparent)]
     Zip(#[from] zip::result::ZipError),
+    /// The output file could not be created, written or moved into place.
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -80,6 +88,16 @@ pub enum ExportError {
 /// dotted name, one holding a separator, a drive colon or a control
 /// character, and an invalid language code are refused: a player
 /// extracting the zip would otherwise be written outside the target.
+///
+/// The zip is written to `<output_path>.tmp` and renamed on success, so a
+/// failed export leaves no partial archive.
+///
+/// # Errors
+///
+/// [`ExportError::InvalidGameName`] or [`ExportError::InvalidLanguage`] for
+/// unsafe names, [`ExportError::PathTraversal`] for an unsafe entry,
+/// [`ExportError::Walk`] / [`ExportError::Read`] / [`ExportError::Zip`] /
+/// [`ExportError::Io`] when reading `tl_dir` or writing the archive fails.
 pub fn export(
     tl_dir: &Path,
     game_name: &str,

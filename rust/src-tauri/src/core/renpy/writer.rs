@@ -1,6 +1,6 @@
 //! Writes validated translations back into Ren'Py `.rpy` files.
 //!
-//! Port of `core/renpy/writer.py`. Always backs up a file to
+//! Always backs up a file to
 //! `backup_dir` before touching it, and only ever rewrites the one line
 //! per block a translation belongs on — `say_line::find_say` is the same
 //! lookup `core::renpy::parser` uses to read it, so the two modules
@@ -18,14 +18,19 @@ use super::say_line::{block_lines, find_say, split_say_line};
 static UNESCAPED_QUOTE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(\\*)""#).unwrap());
 static TRAILING_BACKSLASHES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\\+$").unwrap());
 
+/// Why translations could not be written back.
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError {
+    /// A `.rpy` file could not be read.
     #[error("cannot read {0}: {1}")]
     Read(PathBuf, std::io::Error),
+    /// A rewritten file could not be saved.
     #[error("cannot write {0}: {1}")]
     Write(PathBuf, std::io::Error),
+    /// The backup copy could not be made, so the file was left untouched.
     #[error("cannot back up {0}: {1}")]
     Backup(PathBuf, std::io::Error),
+    /// The `tl/` directory could not be traversed.
     #[error("cannot walk {0}: {1}")]
     Walk(PathBuf, walkdir::Error),
 }
@@ -39,6 +44,7 @@ pub struct TranslateBlockWriter {
 }
 
 impl TranslateBlockWriter {
+    /// A writer for the `tl/<language>` folder `tl_dir`, backing files up under `backup_dir`.
     pub fn new(tl_dir: PathBuf, backup_dir: PathBuf) -> Self {
         Self { tl_dir, backup_dir }
     }
@@ -49,6 +55,12 @@ impl TranslateBlockWriter {
     /// validated text; `old_to_new` maps a `strings:` block's original
     /// text to its translation, since a strings block carries no header
     /// identifier to key on.
+    ///
+    /// # Errors
+    ///
+    /// [`WriteError::Walk`] when `tl_dir` cannot be traversed, otherwise the
+    /// [`WriteError::Read`], [`WriteError::Backup`] or [`WriteError::Write`]
+    /// of the first file that fails; files before it stay rewritten.
     pub fn write_all(
         &self,
         translations: &HashMap<String, String>,

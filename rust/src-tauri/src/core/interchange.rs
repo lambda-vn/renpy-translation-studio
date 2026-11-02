@@ -1,5 +1,4 @@
-//! Bilingual interchange files: CSV, XLIFF 1.2 and JSON round-trips. Port
-//! of `core/interchange.py`.
+//! Bilingual interchange files: CSV, XLIFF 1.2 and JSON round-trips.
 //!
 //! Translations leave the studio for a proofreader or a CAT tool (OmegaT,
 //! memoQ) and come back in the same file. Units travel keyed by their
@@ -32,8 +31,11 @@ mod plan;
 
 pub use plan::{apply_plan, plan_import, ImportPlan};
 
+/// XML namespace of the XLIFF 1.2 documents written and accepted.
 pub const XLIFF_NAMESPACE: &str = "urn:oasis:names:tc:xliff:document:1.2";
+/// Value of the `format` marker in JSON files.
 pub const JSON_FORMAT: &str = "renpy-translation-studio";
+/// Value of the `version` marker in JSON files.
 pub const JSON_VERSION: u32 = 1;
 
 const CSV_FIELDS: [&str; 7] = [
@@ -54,15 +56,23 @@ const STATUSES: [&str; 5] = [
     "human_validated",
 ];
 
+/// A bilingual file format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
+    /// Comma-separated values, for spreadsheets.
     Csv,
+    /// XLIFF 1.2, for CAT tools.
     Xliff,
+    /// The studio's own JSON layout.
     Json,
 }
 
 impl Format {
     /// The format a file's own extension names, whatever its case.
+    ///
+    /// # Errors
+    ///
+    /// [`InterchangeError::UnsupportedFormat`] for any other extension.
     pub fn of(path: &Path) -> Result<Self, InterchangeError> {
         let extension = path
             .extension()
@@ -77,22 +87,31 @@ impl Format {
     }
 }
 
+/// Why an interchange file could not be written or read.
 #[derive(Debug, thiserror::Error)]
 pub enum InterchangeError {
+    /// The extension is not `.csv`, `.xlf`, `.xliff` or `.json`.
     #[error("Unsupported interchange format: {0}")]
     UnsupportedFormat(String),
+    /// The file is not valid UTF-8.
     #[error("File is not encoded in UTF-8")]
     NotUtf8,
+    /// The CSV is malformed.
     #[error("Invalid CSV file: {0}")]
     Csv(String),
+    /// The CSV header has no `block_id` column.
     #[error("CSV file has no block_id column")]
     NoBlockIdColumn,
+    /// The JSON is malformed.
     #[error("Invalid JSON file: {0}")]
     Json(String),
+    /// The JSON is valid but holds no list of units.
     #[error("JSON file holds no unit list")]
     NoUnitList,
+    /// The XLIFF is malformed or declares an entity.
     #[error("Invalid XLIFF file: {0}")]
     Xliff(String),
+    /// The file could not be read or written.
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -100,6 +119,7 @@ pub enum InterchangeError {
 /// One translation read back from an interchange file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterchangeUnit {
+    /// The Ren'Py block id the unit is paired by.
     pub block_id: String,
     /// The source the file was written against, empty when the file
     /// carries no source column.
@@ -136,6 +156,12 @@ impl<'a> From<&'a TranslationUnit> for Row<'a> {
 }
 
 /// Write translation units to a file, in the format its extension names.
+///
+/// # Errors
+///
+/// [`InterchangeError::UnsupportedFormat`] for an unknown extension,
+/// [`InterchangeError::Io`] when the file cannot be written, or the
+/// format's own error when serializing fails.
 pub fn write_interchange(
     path: &Path,
     units: &[TranslationUnit],
@@ -151,6 +177,13 @@ pub fn write_interchange(
 
 /// Read back the translations held in an interchange file: one unit per
 /// row carrying a block id, in file order.
+///
+/// # Errors
+///
+/// [`InterchangeError::UnsupportedFormat`] for an unknown extension,
+/// [`InterchangeError::Io`] when the file cannot be read,
+/// [`InterchangeError::NotUtf8`] when it is not UTF-8, otherwise the
+/// malformed-file error of its format.
 pub fn read_interchange(path: &Path) -> Result<Vec<InterchangeUnit>, InterchangeError> {
     let format = Format::of(path)?;
     let bytes = std::fs::read(path)?;
@@ -510,7 +543,7 @@ fn attribute(start: &BytesStart, name: &str) -> Option<String> {
 /// Text is gathered from everything under `source` and `target`, so a CAT
 /// tool that wrapped segments in inline markup still yields the sentence
 /// instead of the text before its first tag. Only the direct children of a
-/// `trans-unit` count, as in the Python reader: an `alt-trans` carries its
+/// `trans-unit` count: an `alt-trans` carries its
 /// own source and target that are not this unit's.
 fn read_xliff(text: &str) -> Result<Vec<InterchangeUnit>, InterchangeError> {
     let fail = |message: String| InterchangeError::Xliff(message);
@@ -611,7 +644,7 @@ mod tests {
         dir
     }
 
-    /// A project of three units, as the Python suite's fixture holds.
+    /// A project of three units.
     fn project(name: &str) -> (Database, std::path::PathBuf) {
         let dir = scratch(name);
         let db = Database::open(&dir.join("test.db")).unwrap();

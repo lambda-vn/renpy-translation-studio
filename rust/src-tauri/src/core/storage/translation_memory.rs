@@ -1,7 +1,6 @@
-//! Translation memory shared by every project of this machine. Port of
-//! `core/storage/translation_memory.py`, reading and writing the same
-//! `<config_dir>/memory.db` the 1.0.0 application keeps: part of the
-//! frozen data contract, not a fresh format.
+//! Translation memory shared by every project of this machine. It reads
+//! and writes the `<config_dir>/memory.db` the 1.0.0 application keeps:
+//! part of the frozen data contract, not a fresh format.
 //!
 //! A source text is matched twice: on itself, and on a normalised key
 //! that ignores letter case, repeated whitespace and trailing
@@ -11,10 +10,9 @@
 //! which is what keeps `quality::check` from meeting a variable that
 //! belongs to another source.
 //!
-//! Python holds one lazily-opened connection behind a lock and swallows
-//! every `sqlite3.Error`; here each function takes the connection and
-//! returns the `Result`, and the callers that want Python's
-//! "convenience, never fatal" behaviour discard it themselves.
+//! Each function takes the connection and returns the `Result`: a caller
+//! treating the memory as a convenience, never fatal, discards the error
+//! itself.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -77,6 +75,10 @@ pub fn normalized_key(text: &str) -> String {
 
 /// Open the memory database, creating it on first use and adding the
 /// normalised-key column to a memory that predates it.
+///
+/// # Errors
+///
+/// Fails when the file cannot be opened or its schema cannot be created or upgraded.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -131,6 +133,10 @@ fn add_normalized_text(conn: &Connection) -> rusqlite::Result<()> {
 /// validation of the same source text replaces the earlier one: the
 /// memory holds what the translator settled on last. Pairs with an
 /// empty side are skipped.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn remember(
     conn: &Connection,
     entries: &[(String, String)],
@@ -168,6 +174,10 @@ pub fn remember(
 /// normalised key. An exact hit is never replaced by a normalised one.
 /// Queried in slices, since a whole game is asked at once and SQLite
 /// caps the number of bound parameters per statement.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn lookup(
     conn: &Connection,
     source_texts: &[String],
@@ -254,6 +264,10 @@ fn select(
 }
 
 /// How much is stored, per language pair, the largest pair first.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn stats(conn: &Connection) -> rusqlite::Result<Vec<(String, String, i64)>> {
     let mut stmt = conn.prepare(
         "SELECT source_language, target_language, COUNT(*) AS n FROM memory \
@@ -265,6 +279,10 @@ pub fn stats(conn: &Connection) -> rusqlite::Result<Vec<(String, String, i64)>> 
 
 /// Drop everything stored for one language pair; returns how many
 /// entries went.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn forget(
     conn: &Connection,
     source_language: &str,

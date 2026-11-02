@@ -66,6 +66,10 @@ impl ImportPlan {
 /// The exception is a translation adding an interpolation, refused under
 /// any status: a draft is written to the `.rpy` as surely as a validated
 /// line, and what it adds is code.
+///
+/// # Errors
+///
+/// A SQLite error when the project's units cannot be read.
 pub fn plan_import(units: &[InterchangeUnit], conn: &Connection) -> rusqlite::Result<ImportPlan> {
     let stored: HashMap<String, TranslationUnit> = repositories::get_all(conn, None, None)?
         .into_iter()
@@ -103,6 +107,10 @@ pub fn plan_import(units: &[InterchangeUnit], conn: &Connection) -> rusqlite::Re
 
 /// Write the translations a plan holds; returns how many units were
 /// actually updated.
+///
+/// # Errors
+///
+/// A SQLite error when the update fails.
 pub fn apply_plan(plan: &ImportPlan, conn: &Connection) -> rusqlite::Result<usize> {
     repositories::update_translations(conn, &plan.entries)
 }

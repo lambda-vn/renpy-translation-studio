@@ -1,5 +1,4 @@
-//! The listener an open review screen has for its project. Port of
-//! `_start_live` / `_stop_live` in `app/views/review_view.py`; the channel
+//! The listener an open review screen has for its project; the channel
 //! itself is `core::live`.
 //!
 //! Only while the review screen is up: it is the one that shows lines, and
@@ -15,10 +14,12 @@ use tauri::{AppHandle, Emitter, State};
 use crate::app_state::AppState;
 use crate::core::live::LiveServer;
 
+/// Name of the event relayed to the frontend.
 const LIVE_EVENT: &str = "live-changed";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload of the `live-changed` event.
 struct LiveChanged {
     /// The lines that changed, or `None` when too much did to name them
     /// and the screen should reload.
@@ -27,6 +28,11 @@ struct LiveChanged {
 
 /// Publish this project's endpoint and start relaying what other
 /// processes write to it as `live-changed` events.
+///
+/// # Errors
+///
+/// Fails only when no project is open; a failure to open the endpoint
+/// itself is deliberately not reported.
 #[tauri::command]
 pub async fn start_live(
     app: AppHandle,
@@ -51,6 +57,10 @@ pub async fn start_live(
 }
 
 /// Withdraw the endpoint on the way out of the review screen.
+///
+/// # Errors
+///
+/// Never fails; the `Result` is the command signature.
 #[tauri::command]
 pub async fn stop_live(state: State<'_, AppState>) -> Result<(), String> {
     if let Some(server) = state.live.lock().await.take() {

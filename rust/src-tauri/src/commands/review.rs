@@ -1,6 +1,6 @@
 //! The review screen's data commands: the file list, a filtered page of
 //! units, editing, validating, clearing and the small readings the panel
-//! needs. Port of the non-job slice of `app/views/review_view.py`.
+//! needs.
 
 use std::collections::HashMap;
 
@@ -21,6 +21,11 @@ use super::{require_session, CommandError};
 /// Most lines a client may ask for in one page.
 const MAX_PAGE_SIZE: i64 = 200;
 
+/// The project's source files with their per-status counts.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database cannot be read.
 #[tauri::command]
 pub async fn list_files(state: State<'_, AppState>) -> Result<Vec<FileEntry>, CommandError> {
     let guard = state.current.lock().await;
@@ -43,6 +48,10 @@ pub async fn list_files(state: State<'_, AppState>) -> Result<Vec<FileEntry>, Co
 /// One page of a file's lines under the review filters. `errorsOnly` is
 /// the "In error" filter; the other filters page in SQL. `duplicates`
 /// carries the occurrence counts of the page's repeated source texts.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database cannot be read.
 #[tauri::command]
 pub async fn list_units(
     state: State<'_, AppState>,
@@ -91,6 +100,10 @@ pub async fn list_units(
 /// without a match omitted. Empty when nothing narrows the project down.
 /// Turns the file panel into the map of a question the open page can only
 /// answer for its own file.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database cannot be read.
 #[tauri::command]
 pub async fn count_matches(
     state: State<'_, AppState>,
@@ -118,6 +131,10 @@ pub async fn count_matches(
 /// the glossary's display name when there is one. Project-wide and not
 /// per file, so a speaker silent in the open file is not mistaken for one
 /// who says nothing at all; empty when no line has a speaker.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database cannot be read.
 #[tauri::command]
 pub async fn list_speakers(state: State<'_, AppState>) -> Result<Vec<SpeakerEntry>, CommandError> {
     let guard = state.current.lock().await;
@@ -142,6 +159,10 @@ pub async fn list_speakers(state: State<'_, AppState>) -> Result<Vec<SpeakerEntr
 }
 
 /// Whole-project progress in lines and words (the bar and its tooltip).
+///
+/// # Errors
+///
+/// Fails when no project is open or the database cannot be read.
 #[tauri::command]
 pub async fn project_progress(state: State<'_, AppState>) -> Result<ProgressPayload, CommandError> {
     let guard = state.current.lock().await;
@@ -157,6 +178,12 @@ pub async fn project_progress(state: State<'_, AppState>) -> Result<ProgressPayl
 
 /// The lines around one line, itself included, in file order: what the
 /// row's context toggle shows. Ignores the page and the filter.
+/// `radius` (default 2, at most 20) is the number of lines kept on each side.
+///
+/// # Errors
+///
+/// Fails when no project is open, when `block_id` is unknown, or when
+/// the database cannot be read.
 #[tauri::command]
 pub async fn get_context(
     state: State<'_, AppState>,
@@ -182,6 +209,10 @@ pub async fn get_context(
 /// The units carrying these identifiers, as the review screen shows them.
 /// Unknown ids are skipped. Answers the live-refresh channel, which says
 /// which lines another process just wrote and nothing about their content.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database cannot be read.
 #[tauri::command]
 pub async fn get_units(
     state: State<'_, AppState>,
@@ -204,6 +235,11 @@ pub async fn get_units(
 /// survives navigating away before the user presses validate. An empty
 /// text resets the line to `not_translated`, which is also what the row's
 /// "erase" action does (flag and note untouched).
+///
+/// # Errors
+///
+/// Fails when no project is open, when `block_id` is unknown, or when
+/// the database write fails.
 #[tauri::command]
 pub async fn save_draft(
     state: State<'_, AppState>,
@@ -218,10 +254,18 @@ pub async fn save_draft(
 }
 
 /// Validate a unit: reject on a blocking quality issue, otherwise write
-/// `human_validated`. Mirrors the checks `submit_translations` runs for
-/// the MCP server and `review_view.py`'s own validate action. `duplicates`
-/// tells how many other lines share the source text and could receive the
-/// translation (1.0.0 offers that in a toast after every validation).
+/// `human_validated`. Runs the same checks as `submit_translations` of the
+/// MCP server. `duplicates` tells how many other lines share the source
+/// text and could receive the translation (1.0.0 offers that in a toast
+/// after every validation).
+///
+/// A refusal by the quality checks is not an error: it comes back in
+/// `blocking_issues`, with no unit.
+///
+/// # Errors
+///
+/// Fails when no project is open, when `block_id` is unknown, when the
+/// translation is empty, or when the database cannot be read or written.
 #[tauri::command]
 pub async fn validate_unit(
     state: State<'_, AppState>,
@@ -266,6 +310,14 @@ pub async fn validate_unit(
 /// refuse spreads nothing. Validated lines are never overwritten, whatever
 /// their text. Only the clicked line goes to the translation memory, as in
 /// 1.0.0. `propagated` lists the other lines written, possibly none.
+///
+/// A refusal by the quality checks is not an error: it comes back in
+/// `blocking_issues`, with no unit.
+///
+/// # Errors
+///
+/// Fails when no project is open, when `block_id` is unknown, when the
+/// translation is empty, or when the database cannot be read or written.
 #[tauri::command]
 pub async fn validate_and_propagate(
     state: State<'_, AppState>,
@@ -310,6 +362,12 @@ pub async fn validate_and_propagate(
 /// sharing its source text (the toast action after a plain validation).
 /// Refuses a line that is not `human_validated`, so what spreads has been
 /// through the quality gate. Returns the lines written.
+///
+/// # Errors
+///
+/// Fails with `errors.validate_first` when the line is not
+/// `human_validated`, and when no project is open, `block_id` is unknown or
+/// the database cannot be read or written.
 #[tauri::command]
 pub async fn spread_to_duplicates(
     state: State<'_, AppState>,
@@ -335,6 +393,11 @@ pub async fn spread_to_duplicates(
 /// `unvalidated` (suggestions, drafts, imports), `ai_suggested`, or `all`
 /// (validated lines too). Flags and notes are never touched. Returns how
 /// many lines were cleared. The confirmation belongs to the caller.
+///
+/// # Errors
+///
+/// Fails when no project is open, when `scope` is not one of the names
+/// above, or when the database write fails.
 #[tauri::command]
 pub async fn clear_translations(
     state: State<'_, AppState>,
@@ -350,6 +413,10 @@ pub async fn clear_translations(
 
 /// Lines edited since the last save to the `.rpy` files (every line
 /// carrying work when never saved): the "N lines not written" counter.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database cannot be read.
 #[tauri::command]
 pub async fn unwritten_count(state: State<'_, AppState>) -> Result<i64, CommandError> {
     let guard = state.current.lock().await;
@@ -362,6 +429,12 @@ pub async fn unwritten_count(state: State<'_, AppState>) -> Result<i64, CommandE
 /// opener permission over arbitrary paths. Copying the path is the
 /// frontend's (`FileEntry.path`), and "open" in 1.0.0 only selects the
 /// file in the panel.
+///
+/// # Errors
+///
+/// Fails when no project is open, when `source_file` is not a file of the
+/// project, when it no longer exists on disk, or when the file manager
+/// cannot be opened.
 #[tauri::command]
 pub async fn reveal_file(
     state: State<'_, AppState>,
@@ -386,6 +459,12 @@ pub async fn reveal_file(
     tauri_plugin_opener::reveal_item_in_dir(&path).map_err(|e| e.to_string().into())
 }
 
+/// Set or clear the "needs review" flag of a line.
+///
+/// # Errors
+///
+/// Fails when no project is open, when `block_id` is unknown, or when the
+/// database write fails.
 #[tauri::command]
 pub async fn set_needs_review(
     state: State<'_, AppState>,
@@ -400,6 +479,13 @@ pub async fn set_needs_review(
     refetch(session, &block_id)
 }
 
+/// Set the note of a line; a non-blank note also raises its "needs review"
+/// flag and a blank one lowers it.
+///
+/// # Errors
+///
+/// Fails when no project is open, when `block_id` is unknown, or when the
+/// database write fails.
 #[tauri::command]
 pub async fn set_note(
     state: State<'_, AppState>,
@@ -415,6 +501,7 @@ pub async fn set_note(
     refetch(session, &block_id)
 }
 
+/// Quality issues as wire payloads.
 fn issues_payload(issues: Vec<quality::QualityIssue>) -> Vec<QualityIssuePayload> {
     issues
         .into_iter()
@@ -442,6 +529,7 @@ fn remember(session: &ProjectSession, source_text: &str, translated: &str) {
     }
 }
 
+/// The current state of a line, read back after a change.
 fn refetch(session: &ProjectSession, block_id: &str) -> Result<UnitPayload, CommandError> {
     let unit = super::require_unit(session, block_id)?;
     Ok(UnitPayload::from_unit(session, &unit))

@@ -1,7 +1,6 @@
 //! What the review screen does to units, kept out of the Tauri commands so
-//! the MCP server and the tests reach the same code. Port of the logic
-//! that lives inside `app/views/review_view.py` in 1.0.0: bulk clear
-//! scopes, the filters (including the quality-error one), validation with
+//! the MCP server and the tests reach the same code: bulk clear scopes,
+//! the filters (including the quality-error one), validation with
 //! propagation to duplicates, and the maps the save action writes.
 
 use std::collections::{HashMap, HashSet};
@@ -17,8 +16,12 @@ use crate::core::translation::quality::{self, QualityIssue};
 /// dialog gives them. `unvalidated` is everything a person has not signed
 /// off on; `None` (or `all`) also reaches validated lines.
 ///
-/// Returns `Ok(None)` for "any translated line", an error for a name
-/// 1.0.0 does not have.
+/// Returns `Ok(None)` for "any translated line".
+///
+/// # Errors
+///
+/// `Unknown clear scope: <name>` for a name outside `all`, `unvalidated`
+/// and `ai_suggested`.
 pub fn clear_statuses(scope: Option<&str>) -> Result<Option<Vec<String>>, String> {
     match scope {
         None | Some("") | Some("all") => Ok(None),
@@ -38,14 +41,23 @@ pub fn clear_statuses(scope: Option<&str>) -> Result<Option<Vec<String>>, String
 /// translation, which no query can do.
 #[derive(Debug, Clone, Default)]
 pub struct UnitFilter {
+    /// Keep only this status.
     pub status: Option<String>,
+    /// Text searched in the source and the translation; empty keeps all.
     pub search: String,
+    /// Keep only lines spoken by this character variable.
     pub speaker: Option<String>,
+    /// Keep only lines flagged for review.
     pub needs_review: bool,
+    /// Keep only translated lines a quality check refuses.
     pub errors_only: bool,
 }
 
 /// Every line of a file the filter keeps, in file order.
+///
+/// # Errors
+///
+/// A SQLite error when the lines cannot be read.
 pub fn filtered_units(
     conn: &Connection,
     source_file: &str,
@@ -76,6 +88,10 @@ pub fn filtered_units(
 /// Plain filters page in SQL. The error filter reads the whole open file
 /// and slices it here, the one filter that costs a full quality pass of
 /// the file per call; only translated lines are checked.
+///
+/// # Errors
+///
+/// A SQLite error when the lines cannot be read.
 pub fn page_of_units(
     conn: &Connection,
     source_file: &str,
@@ -122,6 +138,11 @@ pub struct Validation {
 
 /// Validate a line: refuse on a blocking quality issue, otherwise write
 /// `human_validated`. Rejects an empty translation with an error.
+///
+/// # Errors
+///
+/// `Empty translation.` when nothing is left after trimming; the SQLite
+/// error text when the write fails.
 pub fn validate_translation(
     conn: &Connection,
     unit: &TranslationUnit,
@@ -149,6 +170,10 @@ pub fn validate_translation(
 ///
 /// The quality checks already passed on this exact source text when the
 /// line was validated, so they hold for these too and are not run again.
+///
+/// # Errors
+///
+/// A SQLite error when the duplicates cannot be found or updated.
 pub fn spread_to_duplicates(
     conn: &Connection,
     source_text: &str,

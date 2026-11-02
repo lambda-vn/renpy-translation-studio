@@ -1,4 +1,4 @@
-//! Wrapper for the Ren'Py command line. Port of `core/renpy/cli.py`.
+//! Wrapper for the Ren'Py command line.
 //!
 //! The executable it is handed is either the game's own engine or the
 //! configured SDK — both answer the same `<exe> <basedir> translate <lang>`
@@ -21,12 +21,16 @@ static ERROR_FILE: LazyLock<Regex> =
 /// folder left by a kill is why `delete_stale` distrusts a small parse.
 pub const TRANSLATE_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// Why a Ren'Py run did not produce its output.
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
+    /// The engine exited with a non-zero status (`code` is `None` when killed by a signal).
     #[error("Ren'Py exited with code {}{}", code_text(.code), output_suffix(.output))]
     Failed { code: Option<i32>, output: String },
+    /// The engine was still running after the timeout and was killed.
     #[error("Ren'Py did not finish within {} seconds{}", .seconds, output_suffix(.output))]
     TimedOut { seconds: u64, output: String },
+    /// The executable could not be started.
     #[error("cannot start Ren'Py: {0}")]
     Spawn(std::io::Error),
 }
@@ -75,6 +79,12 @@ pub fn parse_failed_files(output: &str) -> Vec<String> {
 ///
 /// stdout and stderr are drained on their own threads: a child that fills
 /// a pipe nobody reads blocks forever, and the engine is chatty.
+///
+/// # Errors
+///
+/// [`CliError::Spawn`] when the executable cannot be started,
+/// [`CliError::Failed`] on a non-zero exit, [`CliError::TimedOut`] when it
+/// is still running after `timeout`. The last two carry the captured output.
 pub fn translate(
     engine: &Path,
     project: &Path,

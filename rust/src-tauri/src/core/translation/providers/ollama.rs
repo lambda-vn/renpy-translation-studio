@@ -1,13 +1,11 @@
-//! Ollama LLM provider for context-aware translation. Port of
-//! `core/translation/providers/ollama.py`.
+//! Ollama LLM provider for context-aware translation.
 //!
 //! CLAUDE.md is explicit and this file exists to honor it: the
 //! JSON-schema-constrained request format, the loose response parsing,
 //! and the duplicate-content guard below are hard-won workarounds for
 //! bugs in small quantized models (premature stopping, padding by
 //! duplication, wrong key names, echoing the system prompt). None of it
-//! is simplified from the Python original, and none of it should be
-//! without a real test against a small model first.
+//! should be simplified without a real test against a small model first.
 
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -26,9 +24,12 @@ use crate::core::translation::context_builder::{
     MAX_UNITS_PER_BATCH,
 };
 
+/// Address of a default local Ollama installation.
 pub const DEFAULT_ENDPOINT: &str = "http://localhost:11434";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const DEFAULT_CONTEXT_LENGTH: i64 = 4096;
+/// Ceiling on the context window requested for a local model, protecting
+/// VRAM, see `resolve_num_ctx`.
 pub const MAX_NUM_CTX: i64 = 8192;
 const TRANSLATION_TEMPERATURE: f64 = 0.2;
 const COMPLETION_TEMPERATURE: f64 = 0.2;
@@ -258,8 +259,17 @@ pub struct OllamaProvider {
 }
 
 impl OllamaProvider {
+    /// The provider id used in settings.
     pub const ID: &'static str = "ollama";
 
+    /// A provider for `model` on the server at `endpoint`.
+    ///
+    /// `batch_size` caps the units per request, defaulting to
+    /// [`MAX_UNITS_PER_BATCH`].
+    ///
+    /// # Errors
+    ///
+    /// [`ProviderError::Network`] if the HTTP client cannot be built.
     pub fn new(
         endpoint: &str,
         model: String,
@@ -280,6 +290,7 @@ impl OllamaProvider {
         })
     }
 
+    /// Whether the server's `/api/tags` endpoint answers successfully.
     pub async fn test_connection(&self) -> bool {
         self.client
             .get(format!("{}/api/tags", self.endpoint))
@@ -290,6 +301,11 @@ impl OllamaProvider {
     }
 
     /// Names of all locally available models.
+    ///
+    /// # Errors
+    ///
+    /// [`ProviderError::Network`] on a transport error, an HTTP error
+    /// status or an unreadable response.
     pub async fn list_models(&self) -> Result<Vec<String>, ProviderError> {
         let resp: Value = self
             .client
@@ -313,7 +329,13 @@ impl OllamaProvider {
     }
 
     /// The maximum context length for the given model, via `/api/show`,
-    /// or [`DEFAULT_CONTEXT_LENGTH`] if it could not be determined.
+    /// or [`DEFAULT_CONTEXT_LENGTH`] if the response does not state it.
+    ///
+    /// # Errors
+    ///
+    /// [`ProviderError::Network`] on a transport error (`status` 404 when
+    /// the server has no such model), another HTTP error status or an
+    /// unreadable response.
     pub async fn get_context_length(&self, model: &str) -> Result<i64, ProviderError> {
         let resp: Value = self
             .client
@@ -450,6 +472,13 @@ impl OllamaProvider {
     /// reason [`Self::translate_single_batch`] pins its own: left to the
     /// model's default, one fixed prompt becomes a lottery, and an
     /// unbounded reply here is carried into every later batch prompt.
+    ///
+    /// # Errors
+    ///
+    /// [`ProviderError::OllamaModelMissing`] or
+    /// [`ProviderError::OllamaUnreachable`] when the context length
+    /// cannot be resolved; [`ProviderError::OllamaRequestFailed`] when the
+    /// chat request fails or its reply has no text.
     pub async fn complete(&mut self, prompt: &str) -> Result<String, ProviderError> {
         let num_ctx = self.ensure_num_ctx().await?;
         let resp = self
@@ -487,12 +516,17 @@ impl OllamaProvider {
 
     /// Translate all units using dynamic batching.
     ///
-    /// Errs when the server cannot be reached to determine the model's
-    /// context length — a hard precondition, checked once — or when it
-    /// answers a batch with a status retrying cannot fix (rejected
-    /// credentials of a cloud model, rate limit). A batch that otherwise
-    /// fails reports its own block_ids as failed instead of aborting the
-    /// rest.
+    /// A batch that fails reports its own block_ids as failed instead of
+    /// aborting the rest. A status retrying cannot fix (rejected
+    /// credentials of a cloud model, rate limit) ends the call early and
+    /// is reported through [`TranslateBatchResult::stopped`].
+    ///
+    /// # Errors
+    ///
+    /// [`ProviderError::OllamaModelMissing`] when the server has no such
+    /// model, [`ProviderError::OllamaUnreachable`] when the model's
+    /// context length cannot be determined — a hard precondition,
+    /// checked once.
     pub async fn translate_batch(
         &mut self,
         units: &[TranslationUnitPayload],

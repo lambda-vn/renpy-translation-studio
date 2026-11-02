@@ -1,5 +1,5 @@
 //! Tauri commands bridging the Svelte frontend to `core::`. Each module
-//! here mirrors one Python view's backend calls; the views themselves —
+//! groups the backend calls of one screen; the views themselves —
 //! layout, dialogs, keyboard handling — live entirely in `../../../src`
 //! (the SvelteKit frontend), nothing UI-specific belongs on this side.
 
@@ -27,10 +27,15 @@ use crate::core::translation::providers::base::ProviderError;
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum CommandError {
+    /// A technical message shown as is.
     Text(String),
+    /// A failure reported by a translation provider.
     Provider(ProviderError),
+    /// A catalog message the interface translates, with its placeholders.
     Message {
+        /// Key in the interface's message catalog.
         key: &'static str,
+        /// Values substituted into the message's placeholders.
         params: serde_json::Value,
     },
 }
@@ -57,6 +62,11 @@ impl From<ProviderError> for CommandError {
     }
 }
 
+/// The open session.
+///
+/// # Errors
+///
+/// Fails with `errors.no_project_open` when no project is open.
 pub(crate) fn require_session(
     guard: &Option<ProjectSession>,
 ) -> Result<&ProjectSession, CommandError> {
@@ -65,6 +75,12 @@ pub(crate) fn require_session(
         .ok_or_else(|| CommandError::message("errors.no_project_open"))
 }
 
+/// The unit stored under `block_id`.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read or when no unit has this
+/// `block_id`.
 pub(crate) fn require_unit(
     session: &ProjectSession,
     block_id: &str,
@@ -79,6 +95,11 @@ pub(crate) fn require_unit(
 /// The open session, provided it is still the project at `project`: for a
 /// command that let go of the lock during slow file work and must not write
 /// what it found into a project opened in the meantime.
+///
+/// # Errors
+///
+/// Fails with `errors.no_project_open` when no project is open, and with
+/// `errors.project_changed` when the open project is not the one at `project`.
 pub(crate) fn require_session_at<'a>(
     guard: &'a Option<ProjectSession>,
     project: &std::path::Path,

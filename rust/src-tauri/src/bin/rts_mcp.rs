@@ -1,4 +1,4 @@
-//! Command line starting the server. Port of `mcp_server/__main__.py`.
+//! Command line starting the server.
 //!
 //! One server serves every game the application has set up: the client
 //! asks for the list and picks one, so a user declares this command once
@@ -17,6 +17,7 @@ use rmcp::transport::stdio;
 use rmcp::ServiceExt;
 use rust_lib::mcp_server::{RtsServer, ServerState};
 
+/// The parsed command line.
 struct Args {
     project: Option<PathBuf>,
     allow_overwrite_validated: bool,
@@ -24,6 +25,11 @@ struct Args {
     allow_edit_glossary: bool,
 }
 
+/// Reads the process arguments; prints the help text and exits on `--help`.
+///
+/// # Errors
+///
+/// Fails when an argument is unknown or `--project` has no value.
 fn parse_args() -> Result<Args, String> {
     let mut project = None;
     let mut allow_overwrite_validated = false;

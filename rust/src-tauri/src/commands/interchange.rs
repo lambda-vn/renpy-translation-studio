@@ -1,7 +1,5 @@
-//! Bilingual files and the translation memory, from the review toolbar.
-//! Port of the interchange and memory handlers of
-//! `app/views/review_view.py`; the rules live in `core::interchange` and
-//! `core::project_actions`.
+//! Bilingual files and the translation memory, from the review toolbar;
+//! the rules live in `core::interchange` and `core::project_actions`.
 //!
 //! Importing is two calls on purpose: [`plan_interchange_import`] reads the
 //! file and says what it would do, [`apply_interchange_import`] does it.
@@ -21,6 +19,8 @@ use crate::core::storage::{repositories, translation_memory};
 
 use super::{require_session, CommandError};
 
+/// What importing a file would do, as counts: the fields mirror
+/// [`ImportPlan`], `applicable` being the number of translations written.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportPreview {
@@ -47,6 +47,8 @@ impl From<&ImportPlan> for ImportPreview {
     }
 }
 
+/// The result of an import: how many translations were written, and the
+/// plan that was followed.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportOutcome {
@@ -63,6 +65,11 @@ pub struct ImportOutcome {
 /// carrying the layout of this disk, and pairing is by block id anyway.
 ///
 /// Returns the number of units written.
+///
+/// # Errors
+///
+/// Fails when no project is open, when the database cannot be read, or
+/// when the file at `path` cannot be written.
 #[tauri::command]
 pub async fn export_interchange(
     state: State<'_, AppState>,
@@ -104,6 +111,11 @@ async fn read_units(path: String) -> Result<Vec<interchange::InterchangeUnit>, C
 }
 
 /// Read a file and report what importing it would change, writing nothing.
+///
+/// # Errors
+///
+/// Fails when the file at `path` cannot be read or parsed, when no project
+/// is open, or when the database cannot be read.
 #[tauri::command]
 pub async fn plan_interchange_import(
     state: State<'_, AppState>,
@@ -121,6 +133,11 @@ pub async fn plan_interchange_import(
 }
 
 /// Import a file, as [`plan_interchange_import`] described it.
+///
+/// # Errors
+///
+/// Fails when the file at `path` cannot be read or parsed, when no project
+/// is open, or when reading or writing the database fails.
 #[tauri::command]
 pub async fn apply_interchange_import(
     state: State<'_, AppState>,
@@ -143,6 +160,11 @@ pub async fn apply_interchange_import(
 
 /// Fill untranslated lines from the translation memory shared by every
 /// project on this machine. Returns the number of lines filled.
+///
+/// # Errors
+///
+/// Fails when no project is open or when the memory or the project
+/// database cannot be read or written.
 #[tauri::command]
 pub async fn fill_from_memory(state: State<'_, AppState>) -> Result<usize, CommandError> {
     let guard = state.current.lock().await;

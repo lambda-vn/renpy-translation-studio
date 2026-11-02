@@ -1,6 +1,5 @@
 //! Project-wide actions orchestrating a repository and another core
-//! module. Port of `core/project_actions.py`: `fill_from_memory` and
-//! `detect_and_store_characters`.
+//! module: `fill_from_memory` and `detect_and_store_characters`.
 
 use std::path::Path;
 
@@ -18,8 +17,13 @@ use crate::core::storage::{recent_projects, repositories, translation_memory, Da
 /// a single file: the memory answers for a language pair, not for a file.
 ///
 /// Returns the number of lines actually filled. A memory that cannot be
-/// opened or read answers nothing rather than failing, as in Python — it
+/// opened or read answers nothing rather than failing: it
 /// is a convenience shared by every project.
+///
+/// # Errors
+///
+/// A SQLite error when the project's untranslated units cannot be read or
+/// the filled lines cannot be written.
 pub fn fill_from_memory(
     conn: &Connection,
     memory_path: &Path,
@@ -57,6 +61,10 @@ pub fn fill_from_memory(
 ///
 /// Returns the number of characters the scan found, whether or not each
 /// was already stored.
+///
+/// # Errors
+///
+/// A SQLite error when a character cannot be stored.
 pub fn detect_and_store_characters(conn: &Connection, project: &Path) -> rusqlite::Result<usize> {
     store_characters(conn, &character_detector::detect(project))
 }
@@ -65,11 +73,17 @@ pub fn detect_and_store_characters(conn: &Connection, project: &Path) -> rusqlit
 /// database (the registry stores paths only).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResumeInfo {
+    /// Language of the game's own text (`english` when none is recorded).
     pub source_language: String,
+    /// Language folder under `game/tl/` being translated into.
     pub target_language: String,
+    /// Number of units in the database.
     pub total: i64,
+    /// Units with status `human_validated`.
     pub validated: i64,
+    /// Units with status `ai_suggested`.
     pub ai_suggested: i64,
+    /// Units with status `imported`.
     pub imported: i64,
 }
 
@@ -78,10 +92,9 @@ pub struct ResumeInfo {
 /// Resumable means the database exists and holds at least one unit, the
 /// target language is recorded, and `game/tl/<language>` is still on disk
 /// (it is needed to save and export without running the engine again).
-/// Read-only, so listing the registry never creates a table. The 1.0.0
-/// fallback that infers the language from the `tl/` folder for databases
-/// predating the metadata table is not ported: such a project reads as
-/// not resumable here.
+/// Read-only, so listing the registry never creates a table. A database
+/// predating the metadata table records no target language, and such a
+/// project reads as not resumable.
 pub fn read_resume_info(project: &Path) -> Option<ResumeInfo> {
     let db_path = Database::path_for(project);
     if !db_path.is_file() {
@@ -131,6 +144,10 @@ pub fn read_resume_info(project: &Path) -> Option<ResumeInfo> {
 ///
 /// Only a folder in the registry is touched, the path coming from the
 /// front end: anything else is left alone, as if already deleted.
+///
+/// # Errors
+///
+/// An I/O error when `.rts/` exists but cannot be removed.
 pub fn delete_project_data(registry: &Path, project: &Path) -> std::io::Result<()> {
     let project = recent_projects::resolve(project);
     if !recent_projects::all(registry).contains(&project) {
@@ -148,6 +165,10 @@ pub fn delete_project_data(registry: &Path, project: &Path) -> std::io::Result<(
 /// Save what [`character_detector::detect`] found, as
 /// [`detect_and_store_characters`] does: for a caller that scans the
 /// sources apart, without holding the project. Returns how many there were.
+///
+/// # Errors
+///
+/// A SQLite error when a character cannot be stored.
 pub fn store_characters(
     conn: &Connection,
     detected: &[character_detector::DetectedCharacter],

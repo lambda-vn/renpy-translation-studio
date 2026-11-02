@@ -1,5 +1,5 @@
 //! Starting, monitoring and cancelling a translation job, and translating
-//! one line. Port of the job-lifecycle slice of `app/views/review_view.py`.
+//! one line.
 //!
 //! Three scopes: the whole project, one file (both send the
 //! `not_translated` lines, plus the drafts when `includeDrafts` is set),
@@ -35,11 +35,14 @@ use crate::core::validators::is_recognized_language;
 use super::dto::{ListUnitsArgs, UnitPayload};
 use super::CommandError;
 
+/// Name of the event carrying the job's progress to the frontend.
 const JOB_EVENT_NAME: &str = "translation-job";
 
+/// Arguments of `start_translation_job`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartJobArgs {
+    /// Identifier of the provider that translates.
     pub provider_id: String,
     /// `Project` translates every `not_translated` unit in the project;
     /// `File` limits that to one source file (`source_file`, relative,
@@ -60,6 +63,7 @@ pub struct StartJobArgs {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum JobEventPayload {
+    /// The job's counters, sent when they change and at the end.
     Progress {
         total: usize,
         done: usize,
@@ -68,10 +72,10 @@ enum JobEventPayload {
         finished: bool,
         error: Option<ProviderError>,
     },
+    /// A translated chunk was stored; the review screen may refresh.
     ChunkPersisted,
-    Event {
-        message: JobMessage,
-    },
+    /// A message from the job for the status line.
+    Event { message: JobMessage },
 }
 
 impl From<&JobProgress> for JobEventPayload {
@@ -173,6 +177,17 @@ fn to_payloads(
     (units, symbol_only)
 }
 
+/// Start translating the lines of `args.scope` in the background and
+/// return once the job is running; progress comes as `translation-job`
+/// events.
+///
+/// # Errors
+///
+/// Fails with `translation.job_running` when a job already runs, when no
+/// project is open, when its target language is not recognised
+/// (`errors.unsupported_target_language`), when the scope selects nothing
+/// (`errors.nothing_to_translate`) or cannot be resolved, or when the
+/// provider cannot be built from the settings.
 #[tauri::command]
 pub async fn start_translation_job(
     app: AppHandle,
@@ -271,7 +286,9 @@ fn spawn_event_pump(
 
 /// What became of a translated chunk.
 enum Persisted {
+    /// The chunk is in the database.
     Stored,
+    /// The database write failed; the job goes on.
     Failed,
     /// The project the job was started on is no longer the open one.
     ProjectGone,
@@ -329,6 +346,15 @@ pub struct UnitTranslation {
 /// asking for one line is asking for that line. Resolves when the job
 /// ends, which can be long for a cold local model; no lock is held
 /// meanwhile.
+///
+/// A failure of the provider or of the quality gate is not an error: it
+/// is reported in the returned `failed` and `error`.
+///
+/// # Errors
+///
+/// Fails when no project is open, when its target language is not
+/// recognised, when `block_id` is unknown, or when the provider cannot be
+/// built from the settings.
 #[tauri::command]
 pub async fn translate_unit(
     state: State<'_, AppState>,
@@ -385,6 +411,11 @@ pub async fn translate_unit(
     })
 }
 
+/// Ask the running job, if any, to stop.
+///
+/// # Errors
+///
+/// Never fails; the `Result` is the command signature.
 #[tauri::command]
 pub async fn cancel_translation_job(state: State<'_, AppState>) -> Result<(), String> {
     if let Some(cancel) = state.job.lock().await.as_ref() {
@@ -393,6 +424,11 @@ pub async fn cancel_translation_job(state: State<'_, AppState>) -> Result<(), St
     Ok(())
 }
 
+/// Whether a translation job holds the job slot.
+///
+/// # Errors
+///
+/// Never fails; the `Result` is the command signature.
 #[tauri::command]
 pub async fn is_translation_job_running(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(state.job.lock().await.is_some())
@@ -426,6 +462,7 @@ impl JobSlot {
         Ok(JobSlot { slot: slot.clone() })
     }
 
+    /// Free the slot for the next job.
     async fn release(self) {
         *self.slot.lock().await = None;
     }

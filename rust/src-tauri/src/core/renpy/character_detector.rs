@@ -1,5 +1,4 @@
-//! Heuristic scanner for Ren'Py `Character()` definitions. Port of
-//! `core/renpy/character_detector.py`.
+//! Heuristic scanner for Ren'Py `Character()` definitions.
 //!
 //! Results are heuristic: the user reads them before relying on them.
 //! The `tl/` directory is not scanned, being generated output.
@@ -20,7 +19,9 @@ static ASSIGNMENT: LazyLock<Regex> = LazyLock::new(|| {
 /// A character definition found while scanning source files.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetectedCharacter {
+    /// The variable the character is bound to (`e` in `define e = Character(...)`).
     pub variable: String,
+    /// The name given to `Character()`.
     pub display_name: String,
     /// Path of the defining file, relative to the project root.
     pub source_file: String,

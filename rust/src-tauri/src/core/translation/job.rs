@@ -1,23 +1,18 @@
 //! Runs a translation batch to completion, in chunks, with retries.
-//! Port of `core/translation/job.py`.
 //!
-//! Python's `TranslationJob` starts a background `threading.Thread` and
-//! calls synchronous callbacks (`on_chunk`, `on_progress`, `on_complete`,
-//! `on_event`) from it. [`run_job`] is `async` instead and pushes one
-//! [`JobEvent`] per callback onto an unbounded channel — the caller
-//! decides whether to `tokio::spawn` it, await it inline, or forward
-//! events to a Tauri window; nothing here knows about a UI.
+//! [`run_job`] is `async` and pushes one [`JobEvent`] per notification
+//! onto an unbounded channel — the caller decides whether to
+//! `tokio::spawn` it, await it inline, or forward events to a Tauri
+//! window; nothing here knows about a UI.
 //!
-//! **Not ported**: `on_batch_start` and the fine-grained `is_cancelled`
-//! Python threads into every provider's own internal sub-batching, so a
-//! cancellation there takes effect after the request currently in
-//! flight rather than after the whole job chunk. `translation::providers`
-//! doesn't carry those hooks (see its `base` module docs), so
-//! cancellation here is checked at job-chunk boundaries
-//! ([`CHUNK_SIZE`], and the smaller retry chunk sizes) — coarser than
-//! Python, but bounded: a job chunk is at most 50 units, and a slow
-//! provider (Ollama) splits that into at most a handful of its own
-//! requests internally. Revisit if real use shows this matters.
+//! **Limitation**: cancellation is not threaded into each provider's own
+//! internal sub-batching, so it is only checked at job-chunk boundaries
+//! ([`CHUNK_SIZE`], and the smaller retry chunk sizes), never in the
+//! middle of a provider call. `translation::providers` carries no such
+//! hooks (see its `base` module docs). The delay is bounded: a job chunk
+//! is at most 50 units, and a slow provider (Ollama) splits that into at
+//! most a handful of its own requests internally. Revisit if real use
+//! shows this matters.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,6 +35,7 @@ const RETRY_CHUNK_SIZES: [usize; 2] = [8, 1];
 pub struct CancelToken(Arc<AtomicBool>);
 
 impl CancelToken {
+    /// A token that is not cancelled.
     pub fn new() -> Self {
         Self(Arc::new(AtomicBool::new(false)))
     }
@@ -50,6 +46,7 @@ impl CancelToken {
         self.0.store(true, Ordering::SeqCst);
     }
 
+    /// Whether [`Self::cancel`] was called on this token or any clone.
     pub fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::SeqCst)
     }
@@ -58,20 +55,27 @@ impl CancelToken {
 /// Snapshot of a translation job's progress.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct JobProgress {
+    /// Units handed to the job, including those that need no translation.
     pub total: usize,
+    /// Units translated so far, plus those copied as they are.
     pub done: usize,
+    /// Units left without a translation so far, retries not yet counted out.
     pub failed: usize,
+    /// Whether the job is still working.
     pub running: bool,
+    /// Whether the job has stopped, successfully or not.
     pub finished: bool,
+    /// The provider error that stopped the job early, if any.
     pub error: Option<ProviderError>,
 }
 
-/// One occurrence of what Python's four callbacks would have reported.
+/// One notification emitted by a running job.
 #[derive(Debug, Clone)]
 pub enum JobEvent {
     /// A chunk's translations/failures, already spread to every unit
     /// that shared a source text — persist these as they arrive.
     Chunk(TranslateBatchResult),
+    /// The counters after a chunk was handled.
     Progress(JobProgress),
     /// The job has stopped, successfully or not.
     Complete(JobProgress),
@@ -86,35 +90,30 @@ pub enum JobEvent {
 /// text, for logs and tests.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobMessage {
-    RejectedIdentical {
-        block_id: String,
-    },
+    /// The suggestion was the source text echoed back, and was dropped.
+    RejectedIdentical { block_id: String },
+    /// The suggestion has a blocking quality issue, and was dropped.
     Rejected {
         block_id: String,
         issues: Vec<QualityIssue>,
     },
+    /// The suggestion was kept despite non-blocking quality issues.
     AcceptedWithWarning {
         block_id: String,
         issues: Vec<QualityIssue>,
     },
-    Retrying {
-        n: usize,
-    },
-    SharedSource {
-        n: usize,
-    },
-    NothingToTranslate {
-        n: usize,
-    },
-    ProviderFailed {
-        n: usize,
-    },
+    /// `n` failed units are being sent again.
+    Retrying { n: usize },
+    /// `n` units repeat another source text and were not sent.
+    SharedSource { n: usize },
+    /// `n` units have no letters to translate and were copied as they are.
+    NothingToTranslate { n: usize },
+    /// The provider left `n` units of a chunk untranslated (before any retry).
+    ProviderFailed { n: usize },
     /// The provider is loading its model before the first batch.
     ModelLoading,
     /// The model runs partly on the CPU: `percent` of it is off the GPU.
-    CpuOffload {
-        percent: i64,
-    },
+    CpuOffload { percent: i64 },
 }
 
 impl JobMessage {
@@ -273,6 +272,9 @@ fn group_by_source(
 }
 
 /// Hand each answer (or failure) to every unit that was waiting on it.
+///
+/// `followers` maps a sent unit's `block_id` to the ids sharing its source
+/// text, as built when the job deduplicates its input.
 pub fn spread_to_followers(
     result: TranslateBatchResult,
     followers: &HashMap<String, Vec<String>>,
@@ -305,7 +307,7 @@ pub fn spread_to_followers(
 ///
 /// A provider (especially a small local LLM) can return a translation
 /// that has nothing to do with its source — a missing interpolated
-/// variable would break the game, an added one is Python the game would
+/// variable would break the game, an added one is Python code the game would
 /// run (see `quality`), and unexpected HTML markup is a
 /// reliable sign the model hallucinated instead of translating
 /// ([`IssueKind::blocks_suggestion`]). Those are rejected outright, as is a
@@ -472,6 +474,10 @@ async fn retry_failed_units(
 /// [`CHUNK_SIZE`], verify quality, retry what failed, and report
 /// throughout via `tx`. Returns the final [`JobProgress`] (also the
 /// last thing sent through `tx`, as [`JobEvent::Complete`]).
+///
+/// A provider failure does not return an error: it is stored in
+/// [`JobProgress::error`]. Cancelling through `cancel` stops the job at
+/// the next chunk boundary.
 pub async fn run_job(
     units: &[TranslationUnitPayload],
     provider: &mut dyn TranslationProvider,

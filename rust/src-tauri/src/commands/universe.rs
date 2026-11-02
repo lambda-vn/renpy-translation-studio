@@ -1,6 +1,5 @@
-//! The universe-summary screen. Port of `app/views/universe_summary_view.py`:
-//! the field is edited and saved by hand, or drafted from a sample of the
-//! game's dialogue by an LLM.
+//! The universe-summary screen: the field is edited and saved by hand, or drafted
+//! from a sample of the game's dialogue by an LLM.
 
 use tauri::State;
 
@@ -11,6 +10,11 @@ use crate::core::translation::universe_generator;
 
 use super::CommandError;
 
+/// The stored universe summary, `None` when none was written.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database cannot be read.
 #[tauri::command]
 pub async fn get_universe_summary(
     state: State<'_, AppState>,
@@ -21,6 +25,11 @@ pub async fn get_universe_summary(
         .map_err(|e| e.to_string().into())
 }
 
+/// Store `summary` as the project's universe summary.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database write fails.
 #[tauri::command]
 pub async fn set_universe_summary(
     state: State<'_, AppState>,
@@ -42,6 +51,13 @@ pub async fn set_universe_summary(
 /// The project and settings locks are released before the request, which
 /// can take a while on a small local model, so that the rest of the
 /// application stays usable meanwhile.
+///
+/// # Errors
+///
+/// Fails when no project is open, when it holds no unit
+/// (`universe.generate_no_units`), when the Ollama provider cannot be
+/// built from the settings, or when the generation request fails (a
+/// provider error).
 #[tauri::command]
 pub async fn generate_universe_summary(state: State<'_, AppState>) -> Result<String, CommandError> {
     let (units, target_language) = {

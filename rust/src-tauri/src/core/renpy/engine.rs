@@ -1,5 +1,4 @@
-//! Detection of the Ren'Py engine a game ships with. Port of
-//! `core/renpy/engine.py`.
+//! Detection of the Ren'Py engine a game ships with.
 //!
 //! A packaged Ren'Py game carries its own engine, and that engine answers
 //! the same `translate` command as the SDK. It is also the *right* engine
@@ -21,6 +20,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+/// A system Ren'Py ships runtimes for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Platform {
     Windows,
@@ -43,6 +43,7 @@ impl Platform {
         }
     }
 
+    /// The platform's display name, as shown in error messages.
     pub fn label(self) -> &'static str {
         match self {
             Self::Windows => "Windows",
@@ -70,6 +71,7 @@ impl Platform {
 
 const ALL_PLATFORMS: [Platform; 3] = [Platform::Windows, Platform::Linux, Platform::Mac];
 
+/// Why no engine can run the extraction.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum EngineError {
     /// The folder ships no engine and no usable SDK is configured.
@@ -159,6 +161,7 @@ pub fn can_use_game_engine_for(project: &Path, platform: Option<Platform>) -> bo
         && platform.is_some_and(|p| game_platforms(project).contains(&p))
 }
 
+/// [`can_use_game_engine_for`] for the running platform.
 pub fn can_use_game_engine(project: &Path) -> bool {
     can_use_game_engine_for(project, Platform::current())
 }
@@ -168,6 +171,12 @@ pub fn can_use_game_engine(project: &Path) -> bool {
 /// The game's own engine comes first, the configured SDK is the fallback,
 /// and the failure names which of the two situations was hit so the user
 /// knows whether selecting an SDK is what is missing.
+///
+/// # Errors
+///
+/// [`EngineError::WrongPlatform`] when the game ships an engine, but only
+/// for other systems; [`EngineError::NotFound`] when it ships none. Both
+/// only when no existing SDK file is configured.
 pub fn resolve_engine_for(
     project: &Path,
     sdk_path: Option<&Path>,
@@ -199,6 +208,11 @@ pub fn resolve_engine_for(
     Err(EngineError::NotFound)
 }
 
+/// [`resolve_engine_for`] for the running platform.
+///
+/// # Errors
+///
+/// Same as [`resolve_engine_for`].
 pub fn resolve_engine(project: &Path, sdk_path: Option<&Path>) -> Result<PathBuf, EngineError> {
     resolve_engine_for(project, sdk_path, Platform::current())
 }

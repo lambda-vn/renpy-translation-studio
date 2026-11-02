@@ -1,5 +1,5 @@
 //! Detects mismatches between the database and the `tl/` files before
-//! export. Port of `core/export_sync.py`.
+//! export.
 //!
 //! The markers live in the project's own `project_meta` table under the
 //! same two keys 1.0.0 uses, so a project saved by either version reads
@@ -11,14 +11,19 @@ use rusqlite::Connection;
 
 use crate::core::storage::repositories;
 
+/// `project_meta` key holding when translations were last written to `tl/`.
 pub const META_SAVED_AT: &str = "tl_saved_at";
+/// `project_meta` key holding the newest `.rpy` modification time at that save.
 pub const META_SAVED_MTIME: &str = "tl_saved_mtime";
 
 /// Discrepancies found between the `tl/` files and the database.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExportSyncState {
+    /// No save was ever recorded for this project.
     pub never_saved: bool,
+    /// Units edited since the last recorded save.
     pub unsaved_units: i64,
+    /// A `.rpy` file is newer than at the last recorded save.
     pub externally_modified: bool,
 }
 
@@ -47,6 +52,10 @@ pub fn latest_rpy_mtime(tl_dir: &Path) -> f64 {
 /// The timestamp is taken from SQLite itself, so it is formatted exactly
 /// like the `updated_at` column its trigger maintains (UTC, one second
 /// resolution) and both can later be compared as plain strings.
+///
+/// # Errors
+///
+/// A SQLite error when the clock query or a `project_meta` write fails.
 pub fn record_save(conn: &Connection, tl_dir: &Path) -> rusqlite::Result<()> {
     let saved_at: String = conn.query_row("SELECT datetime('now')", [], |row| row.get(0))?;
     repositories::set_project_meta(
@@ -60,6 +69,10 @@ pub fn record_save(conn: &Connection, tl_dir: &Path) -> rusqlite::Result<()> {
 /// Units still missing from the `.rpy` files: those edited since the last
 /// save, or every unit carrying work when the project was never saved.
 /// One count either way, since the answer the caller acts on is the same.
+///
+/// # Errors
+///
+/// A SQLite error when the metadata or the count cannot be read.
 pub fn count_unwritten(conn: &Connection) -> rusqlite::Result<i64> {
     let saved_at = repositories::get_project_meta(conn, META_SAVED_AT)?;
     repositories::count_modified_since(conn, saved_at.as_deref())
@@ -71,6 +84,10 @@ pub fn count_unwritten(conn: &Connection) -> rusqlite::Result<i64> {
 /// files never written to still export as a full archive, only in the
 /// source language. All three discrepancies are therefore silent without
 /// this check.
+///
+/// # Errors
+///
+/// A SQLite error when the metadata or the count cannot be read.
 pub fn check_sync(conn: &Connection, tl_dir: &Path) -> rusqlite::Result<ExportSyncState> {
     let Some(saved_at) =
         repositories::get_project_meta(conn, META_SAVED_AT)?.filter(|s| !s.is_empty())

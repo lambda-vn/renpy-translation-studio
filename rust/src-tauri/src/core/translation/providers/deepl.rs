@@ -1,7 +1,5 @@
-//! DeepL machine translation provider. Port of
-//! `core/translation/providers/deepl.py`, talking to the DeepL REST API
-//! v2 directly over `reqwest` — there is no official DeepL Rust SDK to
-//! wrap the way the Python provider wraps `deepl-python`.
+//! DeepL machine translation provider, talking to the DeepL REST API
+//! v2 directly over `reqwest` — there is no official DeepL Rust SDK.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -104,6 +102,8 @@ struct ListGlossariesResponse {
     glossaries: Vec<GlossaryInfo>,
 }
 
+/// Translates through the DeepL REST API, with a server-side glossary
+/// built from the character notes.
 pub struct DeepLProvider {
     api_key: String,
     client: reqwest::Client,
@@ -114,6 +114,7 @@ pub struct DeepLProvider {
 }
 
 impl DeepLProvider {
+    /// The provider id used in settings.
     pub const ID: &'static str = "deepl";
 
     /// # Errors
@@ -152,6 +153,11 @@ impl DeepLProvider {
     /// Upload term pairs as a DeepL glossary and return its ID. Deletes
     /// any existing glossary with the same name first, so stale
     /// glossaries never accumulate in the account.
+    ///
+    /// # Errors
+    ///
+    /// [`ProviderError::Network`] if listing, deleting or creating the
+    /// glossary fails (transport error or HTTP error status).
     pub async fn sync_glossary(
         &self,
         term_pairs: &HashMap<String, String>,
@@ -231,6 +237,7 @@ impl DeepLProvider {
         }
     }
 
+    /// Whether the DeepL usage endpoint answers successfully with this key.
     pub async fn test_connection(&self) -> bool {
         self.client
             .get(format!("{}/v2/usage", self.base_url))
@@ -243,6 +250,11 @@ impl DeepLProvider {
 
     /// Current character usage and monthly limit. Either may be `None`
     /// if the account has no applicable limit.
+    ///
+    /// # Errors
+    ///
+    /// [`ProviderError::Network`] on a transport error, an HTTP error
+    /// status (such as a rejected key) or an unreadable response.
     pub async fn character_usage(&self) -> Result<(Option<i64>, Option<i64>), ProviderError> {
         let usage: UsageResponse = self
             .client
@@ -261,10 +273,15 @@ impl DeepLProvider {
     /// A chunk that fails reports every one of its block_ids as failed
     /// rather than aborting the whole batch.
     ///
+    /// A status retrying cannot fix (rejected key, exhausted quota, rate
+    /// limit) ends the batch early: it is reported through
+    /// [`TranslateBatchResult::stopped`] so the job stops instead of
+    /// replaying the batch in ever smaller chunks.
+    ///
     /// # Errors
-    /// [`ProviderError::Network`] on a status retrying cannot fix
-    /// (rejected key, exhausted quota, rate limit): the job must stop
-    /// instead of replaying the batch in ever smaller chunks.
+    ///
+    /// Never fails today: every failure ends up in `failed_ids` or
+    /// `stopped`. The `Result` is kept to match [`TranslationProvider`].
     pub async fn translate_batch(
         &mut self,
         units: &[TranslationUnitPayload],

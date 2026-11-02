@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::review_actions::UnitFilter;
 use crate::core::storage::repositories;
 
+/// One translation unit as the review screen shows it; `source_file` is relative to the project.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnitPayload {
@@ -22,6 +23,7 @@ pub struct UnitPayload {
 }
 
 impl UnitPayload {
+    /// Build the payload of `unit`, its file made relative to the session's project.
     pub fn from_unit(
         session: &crate::core::project_session::ProjectSession,
         unit: &repositories::TranslationUnit,
@@ -40,6 +42,7 @@ impl UnitPayload {
     }
 }
 
+/// A project in the recent-projects list.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectEntry {
@@ -51,6 +54,7 @@ pub struct ProjectEntry {
     pub resume: Option<ProjectResume>,
 }
 
+/// Progress counters of a resumable project, for its recent-projects card.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectResume {
@@ -75,6 +79,7 @@ impl From<crate::core::project_actions::ResumeInfo> for ProjectResume {
     }
 }
 
+/// The open project: where it is, its languages and its unit counts per status.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectInfo {
@@ -85,6 +90,7 @@ pub struct ProjectInfo {
     pub by_status: HashMap<String, i64>,
 }
 
+/// A source file of the project with its per-status unit counts.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileEntry {
@@ -98,6 +104,7 @@ pub struct FileEntry {
     pub imported: i64,
 }
 
+/// One page of units matching a filter.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListUnitsResult {
@@ -105,11 +112,13 @@ pub struct ListUnitsResult {
     /// For the lines of this page whose source text occurs elsewhere too,
     /// keyed by `blockId`.
     pub duplicates: HashMap<String, DuplicatePayload>,
+    /// Matching units over all pages.
     pub total: i64,
     pub page: i64,
     pub page_size: i64,
 }
 
+/// How often a line's source text occurs in the project.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DuplicatePayload {
@@ -119,6 +128,7 @@ pub struct DuplicatePayload {
     pub other_files: i64,
 }
 
+/// Filter and paging arguments of `list_units`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListUnitsArgs {
@@ -141,6 +151,7 @@ pub struct ListUnitsArgs {
     pub page_size: i64,
 }
 
+/// Page size used when the frontend sends none.
 fn default_page_size() -> i64 {
     50
 }
@@ -158,13 +169,16 @@ impl ListUnitsArgs {
     }
 }
 
+/// A quality-check finding: its kind and a human-readable detail.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QualityIssuePayload {
+    /// Machine-readable identifier of the check.
     pub kind: &'static str,
     pub detail: String,
 }
 
+/// Outcome of validating one line.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidateResult {
@@ -176,6 +190,7 @@ pub struct ValidateResult {
     pub duplicates: usize,
 }
 
+/// Outcome of validating one line and copying it to its duplicates.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PropagateResult {
@@ -187,6 +202,7 @@ pub struct PropagateResult {
     pub propagated: Vec<String>,
 }
 
+/// Arguments of `clear_translations`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClearArgs {
@@ -199,6 +215,7 @@ pub struct ClearArgs {
     pub scope: Option<String>,
 }
 
+/// A speaker of the project, as offered in the speaker filter.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpeakerEntry {
@@ -207,6 +224,7 @@ pub struct SpeakerEntry {
     pub label: String,
 }
 
+/// Line and word counts of the project, total and validated.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProgressPayload {
@@ -216,6 +234,7 @@ pub struct ProgressPayload {
     pub validated_words: i64,
 }
 
+/// A source file and the number of lines a blocking quality check refuses in it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FailingFile {
@@ -223,6 +242,7 @@ pub struct FailingFile {
     pub count: i64,
 }
 
+/// How the database compares with the `tl/` files on disk.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncPayload {
@@ -232,6 +252,7 @@ pub struct SyncPayload {
     pub in_sync: bool,
 }
 
+/// What the export screen needs to know before writing the archive.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportInfo {
@@ -248,6 +269,7 @@ pub struct ExportInfo {
     pub sync: Option<SyncPayload>,
 }
 
+/// Entries the translation memory holds for one language pair.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryPair {
@@ -256,6 +278,7 @@ pub struct MemoryPair {
     pub entries: i64,
 }
 
+/// A character of the glossary.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterEntry {
@@ -274,6 +297,7 @@ impl From<repositories::Character> for CharacterEntry {
     }
 }
 
+/// The settings sent to the frontend; secrets are reduced to a "set" flag.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsPayload {
@@ -292,6 +316,7 @@ pub struct SettingsPayload {
     pub available_llm_providers: Vec<&'static str>,
 }
 
+/// Outcome of a successful provider connection test.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestConnectionResult {

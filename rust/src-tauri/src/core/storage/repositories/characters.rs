@@ -2,6 +2,7 @@
 
 use rusqlite::{params, Connection};
 
+/// A glossary entry: a Ren'Py character variable and how it is shown.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Character {
     pub id: i64,
@@ -11,6 +12,10 @@ pub struct Character {
 }
 
 /// Insert or update a character by its Ren'Py variable name.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn upsert_character(
     conn: &Connection,
     variable: &str,
@@ -25,6 +30,10 @@ pub fn upsert_character(
 }
 
 /// Update free-form notes (gender, register, remarks…) for a character.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn update_character_notes(
     conn: &Connection,
     variable: &str,
@@ -38,6 +47,10 @@ pub fn update_character_notes(
 }
 
 /// All characters, ordered by display name.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn get_all_characters(conn: &Connection) -> rusqlite::Result<Vec<Character>> {
     let mut stmt = conn.prepare(
         "SELECT id, variable, display_name, notes FROM characters ORDER BY display_name",
@@ -54,6 +67,10 @@ pub fn get_all_characters(conn: &Connection) -> rusqlite::Result<Vec<Character>>
 }
 
 /// Remove a character entry.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn delete_character(conn: &Connection, variable: &str) -> rusqlite::Result<()> {
     conn.execute(
         "DELETE FROM characters WHERE variable = ?1",

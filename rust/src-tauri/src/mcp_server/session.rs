@@ -1,5 +1,4 @@
 //! What the server holds: the permissions, and the project in hand.
-//! Port of `mcp_server/session.py`.
 //!
 //! One process serves whichever project the client asks for, chosen
 //! among the ones already set up in the application. The permissions
@@ -18,35 +17,47 @@ use std::path::{Path, PathBuf};
 use crate::core::project_session::{open_project, OpenError, ProjectSession};
 use crate::core::storage::recent_projects;
 
+/// Why the server refused to hand out a project.
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
+    /// No project has been opened with `use_project` yet.
     #[error(
         "No project open. Call list_projects to see the games set up in the application, \
          then use_project to pick one."
     )]
     NoProjectOpen,
+    /// The path is not in the registry of projects the application set up.
     #[error(
         "{0} is not a project this server can open. Set it up in the application first; \
          list_projects shows the ones it already knows."
     )]
     UnknownProject(String),
+    /// The server was started with `--project` and the path names another one.
     #[error(
         "This server was started pinned to {0}. Restart it without --project to reach \
          other projects."
     )]
     PinnedElsewhere(String),
+    /// The project is known but its database could not be opened.
     #[error(transparent)]
     Open(#[from] OpenError),
 }
 
 /// The permissions of the process and the project currently open.
 pub struct ServerState {
+    /// Lets `submit_translations` draft over a `human_validated` line (`--allow-overwrite-validated`).
     pub allow_overwrite_validated: bool,
+    /// Lets `clear_translations` run (`--allow-clear`).
     pub allow_clear: bool,
+    /// Lets the glossary and universe summary tools write (`--allow-edit-glossary`).
     pub allow_edit_glossary: bool,
+    /// The only project this server may open (`--project`), if any.
     pub pinned: Option<PathBuf>,
+    /// The project opened by `use_project`, if any.
     pub current: Option<ProjectSession>,
+    /// The registry file listing the projects the server may open.
     pub registry: PathBuf,
+    /// The machine-wide translation memory database.
     pub memory_path: PathBuf,
 }
 
@@ -75,7 +86,7 @@ impl ServerState {
     ///
     /// Re-resolved on every call, not just read back verbatim: a registry
     /// entry written before this run must still compare equal to a fresh
-    /// [`recent_projects::resolve`] of the same path in [`Self::use_project`],
+    /// `recent_projects::resolve` of the same path in [`Self::use_project`],
     /// whatever a platform's canonical form happens to look like (the
     /// `\\?\` prefix Windows adds, a symlink elsewhere).
     pub fn known_projects(&self) -> Vec<PathBuf> {
@@ -86,11 +97,21 @@ impl ServerState {
     }
 
     /// Return the open project.
+    ///
+    /// # Errors
+    ///
+    /// [`SessionError::NoProjectOpen`] when no project has been opened yet.
     pub fn require(&self) -> Result<&ProjectSession, SessionError> {
         self.current.as_ref().ok_or(SessionError::NoProjectOpen)
     }
 
     /// Open a project, closing the one held before it.
+    ///
+    /// # Errors
+    ///
+    /// [`SessionError::PinnedElsewhere`] when the server is pinned to another project,
+    /// [`SessionError::UnknownProject`] when the registry does not list the path,
+    /// [`SessionError::Open`] when the project has no database or it cannot be opened.
     pub fn use_project(&mut self, project: &Path) -> Result<&ProjectSession, SessionError> {
         let target = recent_projects::resolve(project);
         if let Some(pinned) = &self.pinned {
@@ -112,6 +133,11 @@ impl ServerState {
     /// the registry: `--project` is how a client reaches a game the
     /// application has not necessarily listed yet, as long as it has
     /// been extracted at least once.
+    ///
+    /// # Errors
+    ///
+    /// [`SessionError::Open`] when the project has no database or it cannot be opened;
+    /// the pin stays set in that case.
     pub fn pin(&mut self, project: &Path) -> Result<(), SessionError> {
         let resolved = recent_projects::resolve(project);
         self.pinned = Some(resolved.clone());

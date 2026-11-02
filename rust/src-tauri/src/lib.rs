@@ -1,3 +1,6 @@
+//! The desktop application's library crate: wires the Tauri commands to
+//! the shared `core` and exposes the MCP server.
+
 mod app_state;
 mod commands;
 #[cfg(test)]
@@ -7,6 +10,11 @@ pub mod mcp_server;
 
 use app_state::AppState;
 
+/// Starts the Tauri application and blocks until its window closes.
+///
+/// # Panics
+///
+/// Panics when Tauri fails to start.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     core::logging::init(

@@ -1,8 +1,6 @@
-//! Builds provider instances from current settings. Port of
-//! `core/translation/providers/registry.py`.
+//! Builds provider instances from current settings.
 //!
-//! Python's registry raises `ValueError` with an `i18n.t()`-translated
-//! message; nothing under `core::` carries UI strings (see
+//! Nothing under `core::` carries UI strings (see
 //! `core::translation::quality`'s own note on the same point), so these
 //! return a [`ProviderError`], a message key the interface translates.
 
@@ -13,9 +11,12 @@ use super::ollama::{OllamaProvider, DEFAULT_ENDPOINT};
 use crate::core::settings::Settings;
 use crate::core::storage::repositories::Character;
 
+/// Smallest `ollama_batch_size` setting accepted.
 pub const MIN_OLLAMA_BATCH_SIZE: i64 = 1;
+/// Largest `ollama_batch_size` setting accepted.
 pub const MAX_OLLAMA_BATCH_SIZE: i64 = 32;
 
+/// Ids of the providers able to answer free prompts, not only translate.
 pub const LLM_PROVIDER_IDS: [&str; 1] = ["ollama"];
 
 fn non_empty(value: Option<String>) -> Option<String> {
@@ -33,6 +34,11 @@ fn parse_ollama_batch_size(value: Option<String>) -> Option<usize> {
 
 /// The Ollama provider as the settings describe it. Kept apart from [`get`]
 /// for the callers that need what only an LLM does: `complete()`.
+///
+/// # Errors
+///
+/// [`ProviderError::NotConfigured`] if `ollama_model` is unset or empty;
+/// [`ProviderError::Network`] if the HTTP client cannot be built.
 pub fn ollama(
     settings: &mut Settings,
     universe_summary: Option<String>,
@@ -48,6 +54,13 @@ pub fn ollama(
 }
 
 /// Build a configured provider instance for `provider_id`.
+///
+/// # Errors
+///
+/// [`ProviderError::NotConfigured`] if the provider's required setting
+/// (`deepl_api_key`, `ollama_model`, `libretranslate_url`) is unset or
+/// empty; [`ProviderError::UnknownProvider`] for any other id;
+/// [`ProviderError::Network`] if the HTTP client cannot be built.
 pub fn get(
     settings: &mut Settings,
     provider_id: &str,

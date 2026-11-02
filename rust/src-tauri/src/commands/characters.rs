@@ -1,6 +1,5 @@
-//! The character glossary screen. Port of the CRUD slice of
-//! `app/views/character_glossary_view.py`: the glossary is edited by hand
-//! or filled by scanning the game's sources (`detect_characters`).
+//! The character glossary screen: the glossary is edited by hand or
+//! filled by scanning the game's sources (`detect_characters`).
 
 use tauri::State;
 
@@ -12,6 +11,7 @@ use crate::core::storage::repositories;
 use super::dto::CharacterEntry;
 use super::CommandError;
 
+/// The whole glossary as DTOs.
 fn characters(
     session: &crate::core::project_session::ProjectSession,
 ) -> Result<Vec<CharacterEntry>, CommandError> {
@@ -22,6 +22,11 @@ fn characters(
         .collect())
 }
 
+/// The glossary as it stands.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database cannot be read.
 #[tauri::command]
 pub async fn list_characters(
     state: State<'_, AppState>,
@@ -36,6 +41,12 @@ pub async fn list_characters(
 /// The scan walks every source file without holding the project, so a
 /// translation job's chunks keep landing meanwhile; storing then refuses a
 /// project opened in between.
+///
+/// # Errors
+///
+/// Fails when no project is open, when another project was opened during
+/// the scan (`errors.project_changed`), or when the scan task or the
+/// database fails.
 #[tauri::command]
 pub async fn detect_characters(
     state: State<'_, AppState>,
@@ -54,6 +65,12 @@ pub async fn detect_characters(
     characters(session)
 }
 
+/// Create or rename the character `variable`, and set its `notes` when
+/// given. Returns the glossary as it now stands.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database write fails.
 #[tauri::command]
 pub async fn upsert_character(
     state: State<'_, AppState>,
@@ -72,6 +89,11 @@ pub async fn upsert_character(
     characters(session)
 }
 
+/// Remove the character `variable`. Returns the glossary as it now stands.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database write fails.
 #[tauri::command]
 pub async fn delete_character(
     state: State<'_, AppState>,
@@ -85,6 +107,10 @@ pub async fn delete_character(
 
 /// Empty the glossary in one statement, so a failure leaves it whole
 /// rather than half deleted.
+///
+/// # Errors
+///
+/// Fails when no project is open or the database write fails.
 #[tauri::command]
 pub async fn delete_all_characters(
     state: State<'_, AppState>,

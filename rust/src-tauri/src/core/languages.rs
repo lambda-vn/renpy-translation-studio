@@ -1,6 +1,6 @@
 //! Central language list: the single place to add a supported language.
 //!
-//! Port of `core/languages.py`. Each [`Language`] entry drives the setup
+//! Each [`Language`] entry drives the setup
 //! dropdowns, the recognized-language check, and the codes sent to MT
 //! providers. To support a new language, append one entry to `LANGUAGES`
 //! — nothing else to change.
@@ -9,17 +9,21 @@
 //! variants (e.g. `english_us`) keep a distinct folder name but map to
 //! their base ISO code for MT providers, which mostly ignore regions.
 //!
-//! `localized_label()` (the UI-facing name in the interface's own
-//! language) is not ported here: it depends on i18n, which belongs to
-//! the UI phase. This module only carries the data and `label`, the
-//! English fallback every screen already falls back to when a locale
-//! doesn't translate a language yet.
+//! This module only carries the data and `label`, the English name shown
+//! when a locale doesn't translate a language; the name in the
+//! interface's own language is not computed here.
 
+/// A supported language and the identifiers each consumer expects for it.
 pub struct Language {
+    /// The Ren'Py `tl/<code>/` folder name.
     pub code: &'static str,
+    /// English display name.
     pub label: &'static str,
+    /// Short ISO 639-1 code, as sent to providers that ignore regions.
     pub iso: &'static str,
+    /// Regional BCP-47 tag, when the language has one.
     pub iso_long: Option<&'static str>,
+    /// DeepL code when it differs from `iso` uppercased.
     pub deepl: Option<&'static str>,
 }
 
@@ -30,6 +34,7 @@ impl Language {
     }
 }
 
+/// Every supported language, in the order the setup dropdowns list them.
 pub const LANGUAGES: &[Language] = &[
     Language {
         code: "english",

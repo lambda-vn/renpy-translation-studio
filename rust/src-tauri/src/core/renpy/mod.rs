@@ -1,6 +1,6 @@
 //! Running Ren'Py and reading and writing its generated translation
-//! files. Port of `core/renpy/`: the engine choice and subprocess wrapper
-//! (`engine`, `cli`, ported in `rc.2`), the parser and the writer.
+//! files: the engine choice and subprocess wrapper (`engine`, `cli`), the
+//! `.rpa` archive reader and unpacker, the parser and the writer.
 
 pub mod archive;
 pub mod character_detector;

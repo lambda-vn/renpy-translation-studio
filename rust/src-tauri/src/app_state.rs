@@ -19,10 +19,14 @@ use crate::core::project_session::ProjectSession;
 use crate::core::settings::Settings;
 use crate::core::translation::job::CancelToken;
 
+/// The state Tauri manages and hands to every command; cloning shares it.
 #[derive(Clone)]
 pub struct AppState {
+    /// The open project, if any.
     pub current: Arc<Mutex<Option<ProjectSession>>>,
+    /// The persistent application settings.
     pub settings: Arc<Mutex<Settings>>,
+    /// Cancel token of the running translation job, if any.
     pub job: Arc<Mutex<Option<CancelToken>>>,
     /// Set while an extraction runs, so a second one is refused rather
     /// than racing the first over the same `tl/` folder.
@@ -37,6 +41,7 @@ pub struct AppState {
 }
 
 impl Default for AppState {
+    /// Loads the settings from disk; no project is open and nothing runs.
     fn default() -> Self {
         let settings = Settings::load();
         let first_launch = settings.is_first_launch();

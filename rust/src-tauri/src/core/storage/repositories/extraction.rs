@@ -35,6 +35,10 @@ pub struct SourceResync {
 /// Must run before [`transfer_orphan_translations`], which pairs orphans
 /// by source text and would otherwise pair them on the text being
 /// corrected here.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read or written.
 pub fn resync_sources(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<SourceResync> {
     if units.is_empty() {
         return Ok(SourceResync::default());
@@ -120,6 +124,10 @@ pub fn resync_sources(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<
 /// would mark as reviewed lines nobody ever saw.
 ///
 /// Must run before [`delete_stale`], which removes the drained orphans.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read or written.
 pub fn transfer_orphan_translations(
     conn: &Connection,
     current_block_ids: &std::collections::HashSet<String>,
@@ -187,6 +195,10 @@ const MIN_PARSE_COVERAGE: f64 = 0.5;
 ///
 /// Returns the number of units deleted, zero when the parse was too small
 /// to be trusted.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read or written.
 pub fn delete_stale(
     conn: &Connection,
     current_block_ids: &std::collections::HashSet<String>,

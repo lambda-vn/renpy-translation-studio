@@ -1,8 +1,6 @@
 //! The extraction pipeline: run Ren'Py, read back what it generated, and
-//! bring the project database in line with it. Port of the logic that
-//! lived in `app/views/project_setup.py` (`_run_extraction`, `_init_db`
-//! and their helpers), moved out of the view so that nothing but a click
-//! is left in the interface.
+//! bring the project database in line with it. It is kept out of the
+//! interface layer so that nothing but a click is left there.
 //!
 //! Ren'Py only ever appends to an existing `tl/<language>/` folder, never
 //! prunes it, so rebuilding is the only way to learn what the game dropped
@@ -45,39 +43,57 @@ pub enum ExtractMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExtractionStage {
+    /// Copying the existing `tl/` folder into the backups.
     Archiving,
+    /// Extracting sources packed in `.rpa` archives.
     Unpacking,
+    /// Ren'Py is generating the translation files.
     Running,
+    /// Reading the generated files.
     Parsing,
+    /// Writing the result into the database.
     Syncing,
 }
 
+/// Why an extraction failed; [`ExtractionError::code`] gives the stable identifier.
 #[derive(Debug, thiserror::Error)]
 pub enum ExtractionError {
+    /// The folder has no `game/` subfolder.
     #[error("This folder is not a Ren'Py project: it holds no game/ folder")]
     InvalidProject,
+    /// The target language is not a valid code.
     #[error("'{0}' is not a valid language code")]
     InvalidLanguage(String),
+    /// No engine can run here.
     #[error(transparent)]
     Engine(#[from] EngineError),
+    /// The existing `tl/` folder could not be backed up.
     #[error("The existing translation folder could not be archived: {0}")]
     Archive(std::io::Error),
+    /// The Ren'Py run failed, timed out or could not start.
     #[error(transparent)]
     Cli(#[from] CliError),
+    /// The game's `.rpa` archives could not be read or unpacked.
     #[error("Cannot read the game's archives: {0}")]
     Unpack(#[from] ArchiveError),
+    /// The archives ship `.rpyc` bytecode only.
     #[error(
         "The game's archives hold only compiled scripts (.rpyc), with no .rpy source to extract"
     )]
     CompiledScriptsOnly,
+    /// The generated files could not be read.
     #[error(transparent)]
     Parse(#[from] ParseError),
+    /// The project database could not be opened or updated.
     #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
+    /// The `.rts` folder could not be created.
     #[error("Cannot prepare the project's .rts folder: {0}")]
     Io(#[from] std::io::Error),
+    /// The parse found no translatable text.
     #[error("Ren'Py generated no translatable text")]
     NoBlocks,
+    /// Only the engine's own `common.rpy` strings were generated; see [`only_common_rpy`].
     #[error(
         "Only the engine's own interface strings (common.rpy) were extracted: the game's \
          scripts were not read, usually because they are packed in an archive"
@@ -108,11 +124,17 @@ impl ExtractionError {
     }
 }
 
+/// What to extract, from where and how.
 pub struct ExtractionRequest<'a> {
+    /// The game folder.
     pub project: &'a Path,
+    /// Language of the game's own text.
     pub source_language: &'a str,
+    /// Language folder under `game/tl/` to generate and translate into.
     pub target_language: &'a str,
+    /// How the existing `tl/` folder is treated.
     pub mode: ExtractMode,
+    /// The configured SDK launcher, used when the game's own engine cannot run.
     pub sdk_path: Option<&'a Path>,
 }
 
@@ -133,6 +155,7 @@ pub struct ExtractionReport {
     pub repaired: usize,
 }
 
+/// The `game/tl/<language>` folder of a project.
 pub fn tl_dir(project: &Path, language: &str) -> PathBuf {
     project.join("game").join("tl").join(language)
 }
@@ -205,6 +228,11 @@ fn stamp_from_epoch(seconds: i64) -> String {
 ///
 /// The archive lives under `.rts/`, outside `game/`, so Ren'Py never picks
 /// it up as a second translation of the same language.
+///
+/// # Errors
+///
+/// An I/O error when the backup cannot be created, a file copied, or the
+/// folder emptied. `Ok(None)` when `tl_dir` does not exist.
 pub fn archive_tl_dir(project: &Path, tl_dir: &Path) -> std::io::Result<Option<PathBuf>> {
     if !tl_dir.is_dir() {
         return Ok(None);
@@ -314,6 +342,11 @@ fn translate_discarding_broken_sources(
 }
 
 /// Prepare the `tl/` folder, run Ren'Py when needed and parse the result.
+///
+/// # Errors
+///
+/// Any [`ExtractionError`] raised before the database step: an unusable
+/// engine, a failed archive backup, unpack, Ren'Py run or parse.
 pub fn run_extraction(
     request: &ExtractionRequest,
     progress: &mut dyn FnMut(ExtractionStage),
@@ -430,6 +463,11 @@ fn validate_symbol_only_units(conn: &Connection) -> rusqlite::Result<usize> {
 ///
 /// An empty parse must never reach this: it would make `delete_stale`
 /// wipe the whole project, which is why [`extract`] refuses one first.
+///
+/// # Errors
+///
+/// A SQLite error; when this call opened the transaction it is rolled
+/// back, leaving the database as it was.
 pub fn sync_database(
     conn: &Connection,
     extracted: &Extracted,
@@ -478,6 +516,13 @@ pub fn sync_database(
 
 /// Extract a project: validate the request, run Ren'Py, and write the
 /// result into `<project>/.rts/translations.db`.
+///
+/// # Errors
+///
+/// [`ExtractionError::InvalidProject`] or [`ExtractionError::InvalidLanguage`]
+/// for a bad request, [`ExtractionError::NoBlocks`] or
+/// [`ExtractionError::OnlyCommonRpy`] for an unusable parse, otherwise the
+/// error of the failing step.
 pub fn extract(
     request: &ExtractionRequest,
     progress: &mut dyn FnMut(ExtractionStage),

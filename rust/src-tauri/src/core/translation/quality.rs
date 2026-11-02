@@ -1,7 +1,6 @@
 //! Translation quality checks applied before validation.
 //!
-//! Port of `core/translation/quality.py`. `QualityIssue.detail` carries
-//! the raw matched text (a tag, a `[var]`, an HTML tag, or a length
+//! `QualityIssue.detail` carries the raw matched text (a tag, a `[var]`, an HTML tag, or a length
 //! percentage) rather than a localized sentence: the core stays free of
 //! UI strings, and whatever frontend eventually consumes this formats
 //! `detail` through its own i18n, keyed on `kind`.
@@ -20,11 +19,17 @@ use regex::Regex;
 /// What a quality check found, serialized as its snake-case name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IssueKind {
+    /// A `{tag}` of the source is absent from the translation.
     MissingTag,
+    /// The translation has a `{tag}` the source did not have.
     ExtraTag,
+    /// A `[variable]` of the source is absent from the translation.
     MissingVar,
+    /// The translation has a `[variable]` the source did not have.
     ExtraVar,
+    /// The translation contains HTML markup the source did not.
     UnexpectedHtml,
+    /// The translation is much longer than the source.
     LengthWarning,
 }
 
@@ -68,6 +73,7 @@ static HTMLTAG_PATTERN: LazyLock<Regex> =
 const LENGTH_RATIO_THRESHOLD: f64 = 1.3;
 const MIN_LENGTH_DIFF_FOR_WARNING: i64 = 15;
 
+/// One problem found by [`check`]; `detail` is the raw matched text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QualityIssue {
     pub kind: IssueKind,
@@ -153,10 +159,9 @@ pub fn check(source: &str, translation: &str) -> Vec<QualityIssue> {
         });
     }
 
-    // Python's len() on str counts Unicode code points, not bytes —
-    // chars().count() is the faithful match; translation.len() would
-    // over-count every non-ASCII character and drift from the Python
-    // application on any accented or CJK text.
+    // Length is measured in Unicode code points, not bytes:
+    // translation.len() would over-count every non-ASCII character on
+    // any accented or CJK text.
     let source_len = source.chars().count() as i64;
     let translation_len = translation.chars().count() as i64;
     let length_diff = translation_len - source_len;

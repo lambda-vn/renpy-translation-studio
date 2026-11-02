@@ -1,5 +1,4 @@
-//! LibreTranslate machine translation provider. Port of
-//! `core/translation/providers/libretranslate.py`.
+//! LibreTranslate machine translation provider.
 
 use std::time::Duration;
 
@@ -75,6 +74,7 @@ pub struct LibreTranslateProvider {
 }
 
 impl LibreTranslateProvider {
+    /// The provider id used in settings.
     pub const ID: &'static str = "libretranslate";
 
     /// # Errors
@@ -92,6 +92,7 @@ impl LibreTranslateProvider {
         })
     }
 
+    /// Whether the instance's `/languages` endpoint answers successfully.
     pub async fn test_connection(&self) -> bool {
         self.client
             .get(format!("{}/languages", self.endpoint))
@@ -105,10 +106,15 @@ impl LibreTranslateProvider {
     /// limitation). A unit that fails reports its own block_id as
     /// failed; the rest of the batch still proceeds.
     ///
-    /// # Errors
-    /// [`ProviderError::Network`] on a status retrying cannot fix
-    /// (rejected key, rate limit): the job must stop instead of
+    /// A status retrying cannot fix (rejected key, rate limit) ends the
+    /// batch early: it is reported through
+    /// [`TranslateBatchResult::stopped`] so the job stops instead of
     /// replaying the batch in ever smaller chunks.
+    ///
+    /// # Errors
+    ///
+    /// Never fails today: every failure ends up in `failed_ids` or
+    /// `stopped`. The `Result` is kept to match [`TranslationProvider`].
     pub async fn translate_batch(
         &self,
         units: &[TranslationUnitPayload],

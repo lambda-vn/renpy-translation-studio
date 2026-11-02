@@ -12,10 +12,15 @@ use super::{begin, commit, sql_placeholders};
 /// misspelled status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
+    /// Nothing translated yet.
     NotTranslated,
+    /// Text edited by hand but not validated.
     Draft,
+    /// Came from elsewhere (bilingual file, translation memory) and was not reviewed here.
     Imported,
+    /// Suggested by a provider or an MCP client.
     AiSuggested,
+    /// Validated by a human; never overwritten by an automatic write.
     HumanValidated,
 }
 
@@ -52,10 +57,15 @@ impl ToSql for Status {
     }
 }
 
+/// Stored name of [`Status::NotTranslated`].
 pub const STATUS_NOT_TRANSLATED: &str = Status::NotTranslated.as_str();
+/// Stored name of [`Status::Draft`].
 pub const STATUS_DRAFT: &str = Status::Draft.as_str();
+/// Stored name of [`Status::HumanValidated`].
 pub const STATUS_HUMAN_VALIDATED: &str = Status::HumanValidated.as_str();
+/// Stored name of [`Status::Imported`].
 pub const STATUS_IMPORTED: &str = Status::Imported.as_str();
+/// Stored name of [`Status::AiSuggested`].
 pub const STATUS_AI_SUGGESTED: &str = Status::AiSuggested.as_str();
 
 /// Every status a line can carry, in the order the review screen lists them.
@@ -67,6 +77,7 @@ pub const ALL_STATUSES: [&str; 5] = [
     STATUS_HUMAN_VALIDATED,
 ];
 
+/// The columns [`unit_from_row`] reads, in order.
 pub(super) const SELECT_COLUMNS: &str =
     "id, block_id, source_file, source_line, character_variable, \
      source_text, translated_text, status, needs_review, note";
@@ -75,20 +86,25 @@ pub(super) const SELECT_COLUMNS: &str =
 /// own limit so that a long list is split rather than refused.
 const MAX_IN_PARAMS: usize = 500;
 
+/// One row of `translation_units`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TranslationUnit {
     pub id: i64,
     pub block_id: String,
+    /// Absolute path the file had when the game was extracted.
     pub source_file: String,
     pub source_line: i64,
+    /// Ren'Py variable of the speaker, `None` for narration.
     pub character_variable: Option<String>,
     pub source_text: String,
     pub translated_text: String,
+    /// One of the stored status names, see [`ALL_STATUSES`].
     pub status: String,
     pub needs_review: bool,
     pub note: Option<String>,
 }
 
+/// Read a row selected with [`SELECT_COLUMNS`].
 pub(super) fn unit_from_row(row: &rusqlite::Row) -> rusqlite::Result<TranslationUnit> {
     Ok(TranslationUnit {
         id: row.get(0)?,
@@ -104,6 +120,7 @@ pub(super) fn unit_from_row(row: &rusqlite::Row) -> rusqlite::Result<Translation
     })
 }
 
+/// A unit freshly extracted from the game, not yet stored.
 pub struct NewUnit<'a> {
     pub block_id: &'a str,
     pub source_file: &'a str,
@@ -116,6 +133,10 @@ pub struct NewUnit<'a> {
 ///
 /// Uses `INSERT OR IGNORE` so that re-extraction never overwrites a
 /// validated or suggested translation.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn bulk_insert(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<()> {
     let tx = begin(conn)?;
     {
@@ -139,6 +160,10 @@ pub fn bulk_insert(conn: &Connection, units: &[NewUnit]) -> rusqlite::Result<()>
 
 /// Units ordered by file and line, optionally filtered by status and/or
 /// source file.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn get_all(
     conn: &Connection,
     status_filter: Option<&str>,
@@ -169,6 +194,10 @@ pub fn get_all(
 /// The units carrying these identifiers, in no particular order. Unknown
 /// ids are skipped. Answers the live-refresh channel, told exactly which
 /// `block_id`s another process just wrote.
+///
+/// # Errors
+///
+/// Fails when the database cannot be read.
 pub fn get_many(conn: &Connection, block_ids: &[String]) -> rusqlite::Result<Vec<TranslationUnit>> {
     let mut units = Vec::with_capacity(block_ids.len());
     for slice in block_ids.chunks(MAX_IN_PARAMS) {
@@ -191,6 +220,10 @@ pub fn get_many(conn: &Connection, block_ids: &[String]) -> rusqlite::Result<Vec
 /// is the one invariant CLAUDE.md calls out by name. The guard lives in
 /// the `UPDATE` itself: a separate read would let another process (the
 /// MCP server) validate the row in between.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn update_translation(
     conn: &Connection,
     block_id: &str,
@@ -214,6 +247,10 @@ pub fn update_translation(
 /// one unit at a time.
 ///
 /// Returns the number of units actually updated.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn update_translations(
     conn: &Connection,
     entries: &[(String, String, Status)],
@@ -237,6 +274,10 @@ pub fn update_translations(
 /// guard lives in the `UPDATE` itself.
 ///
 /// Returns the number of units actually updated.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn update_translations_unvalidated(
     conn: &Connection,
     entries: &[(String, String, Status)],
@@ -278,6 +319,10 @@ fn apply_translations(
 /// to `not_translated`.
 ///
 /// Returns the resulting status.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn mark_as_draft(
     conn: &Connection,
     block_id: &str,
@@ -297,6 +342,10 @@ pub fn mark_as_draft(
 
 /// Raise or clear the "look at this again" flag on a unit, independent
 /// of its status and translation.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn set_needs_review(
     conn: &Connection,
     block_id: &str,
@@ -314,6 +363,10 @@ pub fn set_needs_review(
 /// A non-empty note raises the review flag — an invariant, not a
 /// convenience: nothing lists notes on their own, so one sitting on an
 /// unflagged line could only be found again by whoever remembered it.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn set_note(conn: &Connection, block_id: &str, note: &str) -> rusqlite::Result<()> {
     let stored = if note.is_empty() { None } else { Some(note) };
     conn.execute(
@@ -335,6 +388,10 @@ pub fn set_note(conn: &Connection, block_id: &str, note: &str) -> rusqlite::Resu
 /// work.
 ///
 /// Returns the number of units actually cleared.
+///
+/// # Errors
+///
+/// Fails when the database cannot be written.
 pub fn clear_translations(
     conn: &Connection,
     source_file: Option<&str>,

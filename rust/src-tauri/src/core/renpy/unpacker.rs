@@ -1,5 +1,4 @@
-//! Selective extraction of `.rpy` sources from `.rpa` archives. Port of
-//! `core/renpy/unpacker.py`.
+//! Selective extraction of `.rpy` sources from `.rpa` archives.
 //!
 //! The translate command only sees files that exist on disk: a script
 //! packed inside an `.rpa` is invisible to it. Writing the `.rpy` members
@@ -16,8 +15,8 @@
 //! holds.
 //!
 //! What this module created is recorded in `.rts/unpacked_sources.json`,
-//! in the same shape the Python application writes, so that each side can
-//! clean up after the other.
+//! in the shape the 1.x application also writes, so that a project can be
+//! cleaned up by either version.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -44,14 +43,18 @@ fn manifest_path(project: &Path) -> PathBuf {
 /// A single source file extracted from an `.rpa` archive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnpackedEntry {
+    /// Path relative to `game/`, with forward slashes.
     pub path: String,
+    /// Whether a compiled `.rpyc` already sat next to the source before extraction.
     pub rpyc_preexisted: bool,
 }
 
 /// An archive temporarily renamed out of Ren'Py's search path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DisabledArchive {
+    /// The archive's name in `game/`.
     pub archive: String,
+    /// The temporary name it carries while disabled.
     pub temp_name: String,
 }
 
@@ -62,8 +65,8 @@ struct Manifest {
 }
 
 /// Read a previously written manifest, an empty one if absent or unreadable.
-/// Entries of an unexpected shape are dropped one by one, as the Python
-/// reader does, rather than failing the whole file.
+/// Entries of an unexpected shape are dropped one by one rather than failing
+/// the whole file.
 fn read_manifest(project: &Path) -> Manifest {
     let Ok(text) = std::fs::read_to_string(manifest_path(project)) else {
         return Manifest::default();
@@ -207,6 +210,13 @@ fn try_unlink(path: &Path) -> bool {
 ///
 /// Returns every entry known after this run, including ones created by a
 /// previous run.
+///
+/// # Errors
+///
+/// [`ArchiveError::Io`] on a filesystem failure, the index errors for a
+/// malformed archive, [`ArchiveError::UnsafePath`] for a member that would
+/// land outside `game/`, [`ArchiveError::ExtractionLimit`] when an archive
+/// would write more than the ceilings allow.
 pub fn unpack_archived_sources(project: &Path) -> Result<Vec<UnpackedEntry>, ArchiveError> {
     restore_disabled_archives(project)?;
 
@@ -310,6 +320,10 @@ fn extract_within(
 /// where extraction has nothing to do, from one shipping only bytecode: no
 /// amount of extraction recovers a source from a `.rpyc`, a decompiler
 /// would be needed instead.
+///
+/// # Errors
+///
+/// The errors of [`RpaArchive::open`] for an archive that cannot be read.
 pub fn archives_contain_compiled_scripts(project: &Path) -> Result<bool, ArchiveError> {
     for archive_path in rpa_files(&project.join("game")) {
         let archive = RpaArchive::open(&archive_path)?;
@@ -337,6 +351,11 @@ pub fn archives_contain_compiled_scripts(project: &Path) -> Result<bool, Archive
 /// discard-and-retry an unparseable source already goes through.
 ///
 /// Returns the archive names (relative to `game/`) that were renamed.
+///
+/// # Errors
+///
+/// [`ArchiveError::Io`] when an archive cannot be read or renamed,
+/// [`ArchiveError::Manifest`] when the manifest cannot be written.
 pub fn disable_extracted_archives(project: &Path) -> Result<Vec<String>, ArchiveError> {
     let game_dir = project.join("game");
     let mut manifest = read_manifest(project);
@@ -380,6 +399,11 @@ pub fn disable_extracted_archives(project: &Path) -> Result<Vec<String>, Archive
 /// game itself reads these archives too, and nothing outside this
 /// application knows to look for the temporary name. Safe to call when
 /// nothing is disabled.
+///
+/// # Errors
+///
+/// [`ArchiveError::Io`] when an archive cannot be renamed back or the
+/// manifest written, [`ArchiveError::Manifest`] when it cannot be serialized.
 pub fn restore_disabled_archives(project: &Path) -> Result<(), ArchiveError> {
     let game_dir = project.join("game");
     let mut manifest = read_manifest(project);
@@ -416,6 +440,11 @@ pub fn restore_disabled_archives(project: &Path) -> Result<(), ArchiveError> {
 /// `names` are paths as Ren'Py reports them, relative to the project root
 /// (`game/x.rpy`) or to `game/` (`x.rpy`). Returns the manifest-relative
 /// paths actually removed.
+///
+/// # Errors
+///
+/// [`ArchiveError::Io`] or [`ArchiveError::Manifest`] when the manifest
+/// cannot be written back.
 pub fn discard_unpacked_files(
     project: &Path,
     names: &[String],
@@ -471,6 +500,12 @@ pub fn discard_unpacked_files(
 /// A file that cannot be deleted (open elsewhere) stays in the manifest
 /// instead of being silently forgotten, so a later call can still find and
 /// remove it.
+///
+/// # Errors
+///
+/// [`ArchiveError::Io`] when an archive cannot be restored or the
+/// manifest cannot be updated; [`ArchiveError::Manifest`] when it cannot
+/// be serialized.
 pub fn remove_unpacked_sources(project: &Path) -> Result<(), ArchiveError> {
     restore_disabled_archives(project)?;
 

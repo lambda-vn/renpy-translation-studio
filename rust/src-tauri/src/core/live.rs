@@ -1,5 +1,5 @@
 //! How a running application tells whoever else writes its project, and
-//! how it hears back. Port of `core/live.py` and `app/live_server.py`.
+//! how it hears back.
 //!
 //! The MCP server writes a project whether or not the application is open,
 //! so the notification is a bonus and never a dependency: it is sent when
@@ -10,7 +10,7 @@
 //! by its client on demand and dying with it, so it has no address
 //! anybody could keep. It publishes where it listens in the project
 //! itself, beside the database it is showing, in the same
-//! `.rts/live.json` the Python application writes.
+//! `.rts/live.json` the 1.x application also writes.
 //!
 //! The token is what a browser cannot have. A server bound to 127.0.0.1 is
 //! reachable by any page open in a browser, a plain POST not being held
@@ -35,6 +35,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
+/// Request header carrying the endpoint's token.
 pub const AUTH_HEADER: &str = "X-Rts-Token";
 
 const FILE_NAME: &str = "live.json";
@@ -48,7 +49,9 @@ const MAX_CONNECTIONS: usize = 8;
 /// Where a running application listens for change notifications.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LiveEndpoint {
+    /// Loopback port the application listens on.
     pub port: u16,
+    /// Secret a request must present in [`AUTH_HEADER`].
     pub token: String,
 }
 
@@ -68,6 +71,10 @@ pub fn new_token() -> std::io::Result<String> {
 }
 
 /// Announce where this application is listening.
+///
+/// # Errors
+///
+/// An I/O error when `.rts/` cannot be created or `live.json` written.
 pub fn publish(project: &Path, endpoint: &LiveEndpoint) -> std::io::Result<()> {
     let path = endpoint_path(project);
     if let Some(parent) = path.parent() {
@@ -167,6 +174,11 @@ impl LiveServer {
     /// An error here costs live refresh and nothing else: a caller should
     /// log it and carry on, refusing to open a project over it would cost
     /// the session.
+    ///
+    /// # Errors
+    ///
+    /// An I/O error when the socket cannot be bound, randomness is
+    /// unavailable or the endpoint file cannot be written.
     pub async fn start(project: &Path, on_changed: OnChanged) -> std::io::Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let port = listener.local_addr()?.port();

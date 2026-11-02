@@ -1,4 +1,4 @@
-//! Reader for Ren'Py `.rpa` archive files. Port of `core/renpy/archive.py`.
+//! Reader for Ren'Py `.rpa` archive files.
 //!
 //! An archive ends with a zlib-compressed Python pickle: its index. The
 //! pickle is untrusted, so it is not run. [`pickle`] below understands the
@@ -24,26 +24,36 @@ const MAX_INDEX_SIZE: usize = 64 * 1024 * 1024;
 /// and `read_until` would otherwise buffer a file without any newline.
 const MAX_HEADER_SIZE: u64 = 256;
 
+/// Why an archive could not be read, unpacked or restored.
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
     #[error("cannot read the archive: {0}")]
     Io(#[from] std::io::Error),
+    /// The first line is not an `RPA-2.0`, `RPA-3.0` or `RPA-3.2` header.
     #[error("Unsupported archive header: {0}")]
     UnsupportedHeader(String),
+    /// The compressed index cannot be inflated or decoded.
     #[error("Corrupt archive index: {0}")]
     CorruptIndex(String),
+    /// The index pickle uses an opcode that could resolve or call something.
     #[error("Refused to unpickle {0}")]
     Refused(String),
+    /// An index entry has the wrong shape or points outside the file.
     #[error("Malformed archive index entry: {0}")]
     MalformedEntry(String),
+    /// A member name is absolute, carries a drive letter or traverses upward.
     #[error("Unsafe member name ({reason}): {name}")]
     UnsafeName { name: String, reason: &'static str },
+    /// The requested member is not in the archive index.
     #[error("No such member in {archive}: {name}")]
     NoSuchMember { archive: String, name: String },
+    /// A member would be written outside the game folder.
     #[error("Unsafe member path: {0}")]
     UnsafePath(String),
+    /// The unpack manifest cannot be serialized.
     #[error("{0}")]
     Manifest(String),
+    /// Unpacking would exceed the member count or total size ceilings.
     #[error("Archive content too large to extract: {0}")]
     ExtractionLimit(String),
 }
@@ -53,6 +63,11 @@ pub enum ArchiveError {
 /// Member names come straight from the archive's index, an untrusted third
 /// party, so nothing here may be interpreted as an absolute path or a
 /// traversal outside the extraction target.
+///
+/// # Errors
+///
+/// [`ArchiveError::UnsafeName`] when the name is absolute, starts with a
+/// drive letter or contains a `..` component.
 pub fn validate_member_name(name: &str) -> Result<String, ArchiveError> {
     let normalized = name.replace('\\', "/");
     let refuse = |reason| ArchiveError::UnsafeName {
@@ -71,13 +86,18 @@ pub fn validate_member_name(name: &str) -> Result<String, ArchiveError> {
     Ok(normalized)
 }
 
+/// Where a member lives in the archive file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveMember {
+    /// Byte offset of the member's data in the file.
     pub offset: u64,
+    /// Total length, the stored prefix included.
     pub length: u64,
+    /// Bytes the index stores inline, in front of the data at `offset`.
     pub prefix: Vec<u8>,
 }
 
+/// An open `.rpa` archive: its index in memory, its data read on demand.
 pub struct RpaArchive {
     path: PathBuf,
     file: File,
@@ -87,6 +107,11 @@ pub struct RpaArchive {
 
 impl RpaArchive {
     /// Open an `.rpa` archive and read its index.
+    ///
+    /// # Errors
+    ///
+    /// [`ArchiveError::Io`] when the file cannot be read, the header and
+    /// index errors when it is not a well-formed, safe archive.
     pub fn open(path: &Path) -> Result<Self, ArchiveError> {
         let mut file = File::open(path)?;
         let (names, index) = read_index(&mut file)?;
@@ -104,6 +129,12 @@ impl RpaArchive {
     }
 
     /// The raw bytes of a single member.
+    ///
+    /// # Errors
+    ///
+    /// [`ArchiveError::NoSuchMember`] for an unknown name,
+    /// [`ArchiveError::MalformedEntry`] when the stored prefix exceeds the
+    /// length, [`ArchiveError::Io`] on a read failure.
     pub fn read(&mut self, name: &str) -> Result<Vec<u8>, ArchiveError> {
         let member = self
             .index
@@ -250,6 +281,7 @@ fn normalize_index(
 pub mod pickle {
     use super::ArchiveError;
 
+    /// A decoded pickle value.
     #[derive(Debug, Clone, PartialEq)]
     pub enum Value {
         None,
@@ -558,7 +590,7 @@ pub mod pickle {
                     array.copy_from_slice(cursor.take(8)?);
                     Ok(Value::Float(f64::from_be_bytes(array)))
                 }
-                // Python 2 `str`, decoded as latin-1 like the Python reader.
+                // Byte strings of a Python 2 pickle, decoded as latin-1.
                 b'T' | b'U' => {
                     let length = if opcode == b'T' {
                         cursor.length(4)?
@@ -694,6 +726,12 @@ pub mod pickle {
     }
 
     /// Decode a pickle made only of plain containers and scalars.
+    ///
+    /// # Errors
+    ///
+    /// [`ArchiveError::Refused`] for any other opcode,
+    /// [`ArchiveError::CorruptIndex`] for truncated, malformed or too deeply
+    /// nested input.
     pub fn load(data: &[u8]) -> Result<Value, ArchiveError> {
         let mut decoder = Decoder::new(data);
         loop {
