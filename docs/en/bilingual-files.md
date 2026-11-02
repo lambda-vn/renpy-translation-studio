@@ -42,24 +42,22 @@ Each line also carries the source text it was exported with. If the game
 text changed since the export, the line is skipped rather than paired with
 a text it was not written for.
 
-What status a line gets depends on what comes back:
+Every translation that comes back changed is written as **imported**,
+whatever status the file gives it: the *status* column in CSV and JSON
+or the XLIFF `state` is not taken into account. A file comes from
+outside and nobody has read it *here*, so it can neither validate a line
+nor turn a proofreader's text into an *AI suggestion*.
 
-- A line the file marks as validated comes back **validated**: the
-  *status* column in CSV and JSON, the `final` or `signed-off` state in
-  XLIFF. This is how a file that left the application and returned
-  untouched is restored as it was.
-- Any other text a proofreader rewrote, or a status the application does
-  not know, comes back **imported**, because it has not been read *here*.
-  An *AI suggestion* that was rewritten in the file is no longer one.
-- A line you already validated is left alone, unless the file marks that
-  same line as validated.
-- A rewritten line marked validated that fails a quality check (a lost
-  `{tag}` or `[variable]`) is written as a **draft** instead.
+- A line you already validated is never replaced by an import. Edit it
+  in the review screen if the proofreader is right.
+- A translation identical to the one the project holds changes nothing,
+  so a file exported and imported back untouched leaves the project as it
+  was.
 
-> An imported file is untrusted input. Every line goes through the same
-> quality checks as a provider's answer, and one that adds a Ren'Py
-> `[interpolation]` the source did not have is refused outright, whatever
-> its status: Ren'Py would run it as code. See
+> An imported file is untrusted input. A line that adds a Ren'Py
+> `[interpolation]` the source did not have is refused outright: Ren'Py
+> would run it as code. The other quality checks (a lost `{tag}` or
+> `[variable]`) run when you validate the line, as for any other. See
 > [Troubleshooting](troubleshooting.md).
 
 The confirmation dialog and the summary that follows name each case:
@@ -69,8 +67,7 @@ The confirmation dialog and the summary that follows name each case:
 | *unknown in this project* | The block identifier is not in this project (typically a file from another game). Ignored. |
 | *whose source text has changed since the export* | Skipped. |
 | *without a translation* | The row came back empty. Ignored: what the project holds is not cleared. |
-| *already validated, left untouched* | A validated line the file does not validate. |
-| *written as drafts, refused by a quality check* | Written, but as drafts. |
+| *already validated, left untouched* | A validated line the file would have changed. Not written. |
 | *refused, adding an interpolation absent from the source* | Not written. |
 
 ### Spreadsheet precautions

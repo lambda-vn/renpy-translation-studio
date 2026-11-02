@@ -145,6 +145,8 @@ validated are never touched, and lines with nothing to translate (only
 symbols or punctuation) are copied and validated without being sent. While a
 job runs, the other screens of the application are disabled.
 
+![A translation job in progress](../images/08-job-en.png)
+
 **More actions** opens a menu with three entries:
 
 - *Memory* fills the untranslated lines of the whole project from the
@@ -156,6 +158,8 @@ job runs, the other screens of the application are disabled.
   human, AI suggestions only, or everything including validated work. It
   shows how many lines will go and cannot be undone. Flags and notes are
   kept.
+
+![The Clear translations dialog](../images/03-clear-en.png)
 
 **Write to .rpy** (`Ctrl+S`) writes everything back into
 `game/tl/<language>/`. The counter beside it — *72 lines not written to

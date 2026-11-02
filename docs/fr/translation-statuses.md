@@ -29,9 +29,9 @@ automatiquement, puisqu'il n'y a rien à relire.
 ## Les règles qui comptent
 
 **Une ligne validée est protégée.** Un travail de traduction, la mémoire de
-traduction, la propagation aux lignes identiques et une soumission du
-serveur MCP la laissent intacte. Un import ne la remplace que par une ligne
-elle-même marquée validée dans le fichier. Un serveur lancé avec
+traduction, la propagation aux lignes identiques, l'import d'un fichier
+bilingue et une soumission du serveur MCP la laissent intacte. Un serveur
+lancé avec
 `--allow-overwrite-validated` peut la remplacer, et la ligne devient alors
 un brouillon. Pour le reste, ce qui dévalide une ligne, c'est vous : taper
 dans son champ la passe en brouillon, le bouton d'effacement la

@@ -461,7 +461,6 @@
     "confirm_action": "Import",
     "confirm_applicable": "{n} translations will be written into the project.",
     "confirm_applicable_one": "{n} translation will be written into the project.",
-    "confirm_flagged": "{n} of them fail a quality check (missing tag or variable) and will be written as drafts, not validated.",
     "confirm_protected": "{n} lines already validated will be left untouched.",
     "confirm_protected_one": "{n} line already validated will be left untouched.",
     "confirm_stale": "{n} lines whose source text changed since the export will be skipped.",
@@ -473,7 +472,6 @@
     "confirm_refused_one": "{n} line adds an interpolation [...] absent from the source and will be refused: Ren'Py would run it as code.",
     "import_applied": "{n} translations imported",
     "import_applied_one": "{n} translation imported",
-    "import_flagged": "{n} written as drafts, refused by a quality check",
     "import_protected": "{n} already validated, left untouched",
     "import_stale": "{n} whose source text has changed since the export",
     "import_unknown": "{n} unknown in this project",
@@ -574,11 +572,6 @@
     "korean": "Korean",
     "schinese": "Chinese (Simplified)",
     "tchinese": "Chinese (Traditional)"
-  },
-  "startup": {
-    "long_path_title": "Path too long",
-    "long_path_body": "Windows refuses a path longer than 260 characters, and this folder leaves the application too little room to reach its own files. It will not start from here:",
-    "long_path_fix": "Move the folder somewhere shorter, such as your Downloads folder. Characters to cut:"
   },
   "extraction": {
     "stage_archiving": "Archiving the existing translation folder…",

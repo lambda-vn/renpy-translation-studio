@@ -99,7 +99,6 @@
 	}
 
 	const COUNTS = [
-		['flagged', 'flagged'],
 		['protected', 'protected'],
 		['stale', 'stale'],
 		['unknown', 'unknown'],

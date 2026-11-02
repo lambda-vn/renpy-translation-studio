@@ -28,9 +28,8 @@ automatically, since there is nothing for a human to review.
 ## The rules that matter
 
 **A validated line is protected.** A translation job, the translation
-memory, the propagation to identical lines and a submission from the MCP
-server all leave it alone. An import only replaces it with a line that is
-itself marked validated in the file. A server started with
+memory, the propagation to identical lines, a bilingual file import and a
+submission from the MCP server all leave it alone. A server started with
 `--allow-overwrite-validated` may replace it, and the line then becomes a
 draft. What un-validates a line otherwise is you: typing in its field turns
 it into a draft, the erase button resets it, and the *Clear* dialog can

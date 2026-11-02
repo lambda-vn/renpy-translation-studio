@@ -270,7 +270,6 @@ export interface ImportPreview {
 	stale: number;
 	empty: number;
 	protected: number;
-	flagged: number;
 	refused: number;
 }
 

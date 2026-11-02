@@ -150,6 +150,8 @@ n'ont rien à traduire (uniquement des symboles ou de la ponctuation) sont
 copiées et validées sans être envoyées. Tant qu'un travail tourne, les
 autres écrans de l'application sont désactivés.
 
+![Un travail de traduction en cours](../images/08-job-fr.png)
+
 **Plus d'actions** ouvre un menu de trois entrées :
 
 - *Mémoire* remplit les lignes non traduites de tout le projet depuis la
@@ -161,6 +163,8 @@ autres écrans de l'application sont désactivés.
   pas validé par un humain, les suggestions IA uniquement, ou tout, travail
   validé compris. Il indique combien de lignes seront effacées et l'action
   est irréversible. Les drapeaux et les notes sont conservés.
+
+![Le dialogue Effacer les traductions](../images/03-clear-fr.png)
 
 **Écrire dans les .rpy** (`Ctrl+S`) réécrit tout dans `game/tl/<langue>/`.
 Le compteur à côté — *72 lignes non écrites dans les .rpy* — indique combien

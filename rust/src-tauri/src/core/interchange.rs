@@ -925,13 +925,13 @@ mod tests {
         let (_, applied) = run_import(
             &[
                 incoming("strings_ccc", "Start", "Commencer", "imported"),
-                incoming("start_aaa", "Hello.", "Bonjour.", "human_validated"),
+                incoming("start_aaa", "Hello.", "Bonjour.", "ai_suggested"),
             ],
             &db,
         );
         assert_eq!(applied, 2);
-        assert_eq!(stored(&db, "start_aaa").status, "human_validated");
-        assert_eq!(stored(&db, "strings_ccc").status, "imported");
+        assert_eq!(stored(&db, "start_aaa").translated_text, "Bonjour.");
+        assert_eq!(stored(&db, "strings_ccc").translated_text, "Commencer");
     }
 
     #[test]
@@ -1019,75 +1019,50 @@ mod tests {
     }
 
     #[test]
-    fn a_translation_that_lost_a_variable_lands_as_a_draft() {
-        let (db, _) = project("lost-variable");
-        bulk_insert(
-            db.conn(),
-            &[NewUnit {
-                block_id: "start_ddd",
-                source_file: "game/script.rpy",
-                source_line: 20,
-                character_variable: None,
-                source_text: "Hi [player_name].",
-            }],
-        )
-        .unwrap();
-
-        let (plan, applied) = run_import(
+    fn a_file_never_validates_a_line() {
+        let (db, _) = project("never-validates");
+        let (_, applied) = run_import(
             &[incoming(
-                "start_ddd",
-                "Hi [player_name].",
-                "Salut toi.",
+                "start_aaa",
+                "Hello.",
+                "Bonjour.",
                 "human_validated",
             )],
             &db,
         );
-
-        assert_eq!((plan.flagged, applied), (1, 1));
-        assert_eq!(stored(&db, "start_ddd").translated_text, "Salut toi.");
-        assert_eq!(stored(&db, "start_ddd").status, "draft");
+        assert_eq!(applied, 1);
+        assert_eq!(stored(&db, "start_aaa").status, "imported");
     }
 
     #[test]
-    fn an_unchanged_translation_is_never_flagged() {
-        let (db, dir) = project("unchanged");
-        bulk_insert(
-            db.conn(),
-            &[NewUnit {
-                block_id: "start_ddd",
-                source_file: "game/script.rpy",
-                source_line: 20,
-                character_variable: None,
-                source_text: "Hi [player_name].",
-            }],
-        )
-        .unwrap();
-        update_translation(db.conn(), "start_ddd", "Salut toi.", Status::HumanValidated).unwrap();
-        let path = export(&db, &dir, "export.csv");
-
-        let (plan, _) = run_import(&read_interchange(&path).unwrap(), &db);
-
-        assert_eq!(plan.flagged, 0);
-        assert_eq!(stored(&db, "start_ddd").status, "human_validated");
-    }
-
-    #[test]
-    fn a_merely_long_translation_is_accepted_and_untouched_suggestions_keep_their_status() {
-        let (db, dir) = project("long");
+    fn a_validated_line_is_never_replaced_whatever_the_file_claims() {
+        let (db, _) = project("validated-kept");
+        update_translation(db.conn(), "start_bbb", "Il pleut.", Status::HumanValidated).unwrap();
         let (plan, applied) = run_import(
             &[incoming(
                 "start_bbb",
                 "It rains.",
-                "Il pleut des cordes depuis ce matin.",
+                "Il pleuvine.",
                 "human_validated",
             )],
             &db,
         );
-        assert_eq!((plan.flagged, applied), (0, 1));
+        assert_eq!((plan.protected, applied), (1, 0));
+        assert_eq!(stored(&db, "start_bbb").translated_text, "Il pleut.");
+        assert_eq!(stored(&db, "start_bbb").status, "human_validated");
+    }
 
+    #[test]
+    fn an_unchanged_file_changes_nothing() {
+        let (db, dir) = project("unchanged");
+        update_translation(db.conn(), "start_bbb", "Il pleut.", Status::HumanValidated).unwrap();
         update_translation(db.conn(), "strings_ccc", "Démarrer.", Status::AiSuggested).unwrap();
         let path = export(&db, &dir, "export.csv");
-        run_import(&read_interchange(&path).unwrap(), &db);
+
+        let (plan, applied) = run_import(&read_interchange(&path).unwrap(), &db);
+
+        assert_eq!((plan.applicable(), plan.protected, applied), (0, 0, 0));
+        assert_eq!(stored(&db, "start_bbb").status, "human_validated");
         assert_eq!(stored(&db, "strings_ccc").status, "ai_suggested");
     }
 

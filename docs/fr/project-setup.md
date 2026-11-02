@@ -102,6 +102,8 @@ demande quoi faire :
   actuels sont d'abord archivés dans `.rts/backups`. Les notes et les
   drapeaux sont conservés.
 
+![Le choix proposé quand le dossier de traduction contient déjà des fichiers](../images/02-setup-existing-fr.png)
+
 ### Ce qui peut mal se passer
 
 - **Un fichier source est refusé.** Ren'Py signale une erreur d'analyse et

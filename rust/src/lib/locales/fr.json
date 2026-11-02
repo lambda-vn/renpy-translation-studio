@@ -464,7 +464,6 @@
     "confirm_action": "Importer",
     "confirm_applicable": "{n} traductions vont être écrites dans le projet.",
     "confirm_applicable_one": "{n} traduction va être écrite dans le projet.",
-    "confirm_flagged": "{n} d'entre elles échouent à un contrôle qualité (balise ou variable manquante) et seront écrites en brouillon, non validées.",
     "confirm_protected": "{n} lignes déjà validées seront laissées intactes.",
     "confirm_protected_one": "{n} ligne déjà validée sera laissée intacte.",
     "confirm_stale": "{n} lignes dont le texte source a changé depuis l'export seront ignorées.",
@@ -476,8 +475,6 @@
     "confirm_refused_one": "{n} ligne ajoute une interpolation [...] absente de la source et sera refusée : Ren'Py l'exécuterait comme du code.",
     "import_applied": "{n} traductions importées",
     "import_applied_one": "{n} traduction importée",
-    "import_flagged": "{n} écrites en brouillon, refusées par un contrôle qualité",
-    "import_flagged_one": "{n} écrite en brouillon, refusée par un contrôle qualité",
     "import_protected": "{n} déjà validées, laissées intactes",
     "import_protected_one": "{n} déjà validée, laissée intacte",
     "import_stale": "{n} dont le texte source a changé depuis l'export",
@@ -581,11 +578,6 @@
     "korean": "Coréen",
     "schinese": "Chinois (simplifié)",
     "tchinese": "Chinois (traditionnel)"
-  },
-  "startup": {
-    "long_path_title": "Chemin trop long",
-    "long_path_body": "Windows refuse un chemin de plus de 260 caractères, et ce dossier laisse à l'application trop peu de place pour atteindre ses propres fichiers. Elle ne démarrera pas d'ici :",
-    "long_path_fix": "Déplacez le dossier dans un emplacement plus court, vos téléchargements par exemple. Caractères à retirer :"
   },
   "extraction": {
     "stage_archiving": "Archivage du dossier de traduction existant…",

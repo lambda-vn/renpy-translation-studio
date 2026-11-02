@@ -45,25 +45,24 @@ Chaque ligne emporte aussi le texte source avec lequel elle a été exportée.
 Si le texte du jeu a changé depuis l'export, la ligne est ignorée plutôt
 qu'appariée à un texte pour lequel elle n'a pas été écrite.
 
-Le statut d'une ligne dépend de ce qui revient :
+Toute traduction qui revient modifiée est écrite en **importé**, quel que
+soit le statut que lui donne le fichier : la colonne *status* en CSV et en
+JSON, ou l'état `state` en XLIFF, n'est pas prise en compte. Un fichier
+vient de l'extérieur et personne ne l'a relu *ici* : il ne peut donc ni
+valider une ligne, ni faire passer le texte d'un relecteur pour une
+*suggestion IA*.
 
-- Une ligne que le fichier marque comme validée revient **validée** : la
-  colonne *status* en CSV et en JSON, l'état `final` ou `signed-off` en
-  XLIFF. C'est ainsi qu'un fichier sorti de l'application et revenu intact
-  est rétabli tel qu'il était.
-- Tout autre texte qu'un relecteur a réécrit, ou un statut que l'application
-  ne connaît pas, revient **importé**, parce que cela n'a pas été relu
-  *ici*. Une *suggestion IA* réécrite dans le fichier n'en est plus une.
-- Une ligne que vous aviez validée est laissée telle quelle, sauf si le
-  fichier marque cette même ligne comme validée.
-- Une ligne réécrite et marquée validée qui échoue à un contrôle qualité
-  (une `{balise}` ou une `[variable]` perdue) est écrite en **brouillon**.
+- Une ligne que vous avez validée n'est jamais remplacée par un import.
+  Corrigez-la dans l'écran de révision si le relecteur a raison.
+- Une traduction identique à celle du projet ne change rien : un fichier
+  exporté puis réimporté sans modification laisse le projet tel qu'il
+  était.
 
-> Un fichier importé est une entrée non fiable. Chaque ligne passe par les
-> mêmes contrôles qualité que la réponse d'un fournisseur, et celle qui
-> ajoute une `[interpolation]` Ren'Py absente de la source est refusée
-> d'emblée, quel que soit son statut : Ren'Py l'exécuterait comme du code.
-> Voir [Dépannage](troubleshooting.md).
+> Un fichier importé est une entrée non fiable. Une ligne qui ajoute une
+> `[interpolation]` Ren'Py absente de la source est refusée d'emblée :
+> Ren'Py l'exécuterait comme du code. Les autres contrôles qualité (une
+> `{balise}` ou une `[variable]` perdue) s'appliquent quand vous validez la
+> ligne, comme pour toute autre. Voir [Dépannage](troubleshooting.md).
 
 Le dialogue de confirmation et le récapitulatif qui suit nomment chaque cas :
 
@@ -72,8 +71,7 @@ Le dialogue de confirmation et le récapitulatif qui suit nomment chaque cas :
 | *inconnues dans ce projet* | L'identifiant de bloc n'existe pas dans ce projet (typiquement un fichier venu d'un autre jeu). Ignorées. |
 | *dont le texte source a changé depuis l'export* | Ignorées. |
 | *sans traduction* | La ligne est revenue vide. Ignorée : ce que le projet contient n'est pas effacé. |
-| *déjà validées, laissées intactes* | Une ligne validée que le fichier ne valide pas. |
-| *écrites en brouillon, refusées par un contrôle qualité* | Écrites, mais en brouillon. |
+| *déjà validées, laissées intactes* | Une ligne validée que le fichier aurait modifiée. Non écrites. |
 | *refusées, ajoutant une interpolation absente de la source* | Non écrites. |
 
 ### Précautions pour les tableurs

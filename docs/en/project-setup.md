@@ -96,6 +96,8 @@ what to do:
   translation stored in the project is cleared. The current files are
   archived under `.rts/backups` first. Notes and flags are kept.
 
+![The choice offered when the translation folder already holds files](../images/02-setup-existing-en.png)
+
 ### What can go wrong
 
 - **A source file is rejected.** Ren'Py reports a parse error and the
