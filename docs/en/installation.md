@@ -50,7 +50,6 @@ repository). One artifact per system:
 | System  | Artifact  | What it contains                           |
 |---------|-----------|--------------------------------------------|
 | Windows | `windows` | an NSIS installer (`.exe`)                 |
-| macOS   | `macos`   | a disk image (`.dmg`)                      |
 | Linux   | `linux`   | a Debian package (`.deb`) and an AppImage |
 
 The installed application is called **Renpy Translation Studio** (the

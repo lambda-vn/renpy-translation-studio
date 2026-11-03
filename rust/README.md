@@ -182,10 +182,11 @@ en sidecar Tauri (`src-tauri/binaries/rts-mcp-<triple>`) et lance
 `tauri build` avec `tauri.bundle.conf.json` — le sidecar n'est pas
 déclaré dans `tauri.conf.json`, sinon `tauri dev` ne compile plus.
 Formats : NSIS sous Windows (**pas de MSI** : WiX n'accepte qu'un
-identifiant de pré-version numérique, `rc.1` n'en est pas un), `.app` +
-`.dmg` sous macOS, `.deb` + AppImage sous Linux. Le binaire principal
-s'appelle `renpy-translation-studio` ; `rust.yml` construit les trois
-systèmes, rejoue `fmt`/`clippy`/`test`/`npm run check` et refuse un tag
+identifiant de pré-version numérique, `rc.1` n'en est pas un), `.deb` +
+AppImage sous Linux. Le binaire principal s'appelle
+`renpy-translation-studio` ; `rust.yml` construit Windows et Linux
+(macOS retiré, ses runners restant introuvables), rejoue
+`fmt`/`clippy`/`test`/`npm run check` et refuse un tag
 `v2.*` qui ne correspond pas à la version de `Cargo.toml`,
 `tauri.conf.json` et `package.json`. `build.yml` (Python) ignore
 désormais les tags `v2.*`.

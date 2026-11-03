@@ -50,7 +50,6 @@ Actions du dépôt). Un artefact par système :
 | Système | Artefact  | Contenu                                   |
 |---------|-----------|-------------------------------------------|
 | Windows | `windows` | un installateur NSIS (`.exe`)             |
-| macOS   | `macos`   | une image disque (`.dmg`)                 |
 | Linux   | `linux`   | un paquet Debian (`.deb`) et une AppImage |
 
 L'application installée s'appelle **Renpy Translation Studio** (le titre

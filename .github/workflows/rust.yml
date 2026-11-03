@@ -3,7 +3,7 @@ name: Rust
 # The 2.x rewrite on the `rust` branch, under rust/. CI covers the Python
 # code on main and Build packages it with flet; neither looks at this
 # directory, so this workflow does both jobs for it: check on every push,
-# and package on the three systems when a version is tagged. A release
+# and package on Linux and Windows when a version is tagged. A release
 # build takes ten minutes per system; a push only needs to know the code
 # is sound, so it gets the checks alone.
 #
@@ -59,7 +59,7 @@ jobs:
           fi
           exit "$status"
 
-  # Lint and tests on the three systems: paths, the keyring and the
+  # Lint and tests on both systems: paths, the keyring and the
   # engine lookup differ between them, and a test passing on one says
   # nothing of the others. Not on a tag: the tagged commit was pushed to
   # the branch first and already went through this.
@@ -75,8 +75,6 @@ jobs:
             runner: ubuntu-latest
           - target: windows
             runner: windows-latest
-          - target: macos
-            runner: macos-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -147,8 +145,6 @@ jobs:
             runner: ubuntu-latest
           - target: windows
             runner: windows-latest
-          - target: macos
-            runner: macos-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -204,13 +200,6 @@ jobs:
         with:
           name: windows
           path: rust/src-tauri/target/release/bundle/nsis/*.exe
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v7
-        if: matrix.target == 'macos'
-        with:
-          name: macos
-          path: rust/src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v7
