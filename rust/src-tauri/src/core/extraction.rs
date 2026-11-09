@@ -366,7 +366,7 @@ pub fn run_extraction(
         archive_tl_dir(request.project, &dir).map_err(ExtractionError::Archive)?;
         progress(ExtractionStage::Unpacking);
         let unpacked = unpacker::unpack_archived_sources(request.project)?;
-        if unpacked.is_empty() && unpacker::archives_contain_compiled_scripts(request.project)? {
+        if unpacked.is_empty() && unpacker::archives_hold_only_compiled_scripts(request.project)? {
             return Err(ExtractionError::CompiledScriptsOnly);
         }
         if let Err(error) = unpacker::disable_extracted_archives(request.project) {

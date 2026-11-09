@@ -18,7 +18,7 @@
 //! in the shape the 1.x application also writes, so that a project can be
 //! cleaned up by either version.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,7 @@ use crate::core::validators::resolve_safe_path;
 const DISABLED_SUFFIX: &str = ".disabled";
 const EXTRACTABLE_SUFFIXES: [&str; 2] = ["rpy", "rpym"];
 const SCRIPT_SUFFIXES: [&str; 4] = ["rpy", "rpym", "rpyc", "rpymc"];
+const COMPILED_SUFFIXES: [&str; 2] = ["rpyc", "rpymc"];
 
 /// Ceilings on what one run writes to disk. Index entries may overlap and
 /// point at the same block, so a few megabytes of archive can describe far
@@ -314,28 +315,43 @@ fn extract_within(
     Ok(())
 }
 
-/// Whether `game/`'s archives hold a compiled script (`.rpyc`) outside `tl/`.
+/// Whether `game/`'s archives hold compiled scripts (`.rpyc`, `.rpymc`)
+/// outside `tl/` and none of them has its source, neither archived nor
+/// on disk.
 ///
 /// Tells apart a game with no archived scripts at all, the common case
 /// where extraction has nothing to do, from one shipping only bytecode: no
 /// amount of extraction recovers a source from a `.rpyc`, a decompiler
 /// would be needed instead.
 ///
+/// A source already on disk counts: an earlier extraction leaves the
+/// sources it unpacked in `game/`, and when its manifest is gone (the
+/// project's `.rts/` deleted) nothing is unpacked again, although every
+/// source is there to translate.
+///
 /// # Errors
 ///
 /// The errors of [`RpaArchive::open`] for an archive that cannot be read.
-pub fn archives_contain_compiled_scripts(project: &Path) -> Result<bool, ArchiveError> {
-    for archive_path in rpa_files(&project.join("game")) {
+pub fn archives_hold_only_compiled_scripts(project: &Path) -> Result<bool, ArchiveError> {
+    let game_dir = project.join("game");
+    let mut archived_sources: HashSet<String> = HashSet::new();
+    let mut compiled: Vec<String> = Vec::new();
+    for archive_path in rpa_files(&game_dir) {
         let archive = RpaArchive::open(&archive_path)?;
-        if archive
-            .names()
-            .iter()
-            .any(|name| first_segment(name) != "tl" && has_suffix(name, &["rpyc"]))
-        {
-            return Ok(true);
+        for name in archive.names() {
+            if is_extractable(name) {
+                archived_sources.insert(name.clone());
+            } else if first_segment(name) != "tl" && has_suffix(name, &COMPILED_SUFFIXES) {
+                compiled.push(name.clone());
+            }
         }
     }
-    Ok(false)
+    let has_source = |name: &String| {
+        let source = name.strip_suffix('c').unwrap_or(name);
+        archived_sources.contains(source)
+            || resolve_target(&game_dir, source).is_ok_and(|path| path.is_file())
+    };
+    Ok(!compiled.is_empty() && !compiled.iter().any(has_source))
 }
 
 /// Rename each script-only archive whose sources were unpacked.
@@ -735,12 +751,46 @@ mod tests {
     fn detects_an_archive_holding_only_bytecode() {
         let project = game("bytecode");
         archive_in(&project, "scripts.rpa", &[("script.rpyc", b"bytes")]);
-        assert!(archives_contain_compiled_scripts(&project).unwrap());
+        assert!(archives_hold_only_compiled_scripts(&project).unwrap());
         assert!(unpack_archived_sources(&project).unwrap().is_empty());
 
         let other = game("no-bytecode");
         archive_in(&other, "images.rpa", &[("bg.png", b"png")]);
-        assert!(!archives_contain_compiled_scripts(&other).unwrap());
+        assert!(!archives_hold_only_compiled_scripts(&other).unwrap());
+    }
+
+    #[test]
+    fn bytecode_whose_source_is_archived_is_not_compiled_only() {
+        let project = game("bytecode-with-source");
+        archive_in(
+            &project,
+            "scripts.rpa",
+            &[("script.rpy", b"x"), ("script.rpyc", b"bytes")],
+        );
+        assert!(!archives_hold_only_compiled_scripts(&project).unwrap());
+    }
+
+    #[test]
+    fn a_source_left_on_disk_without_its_manifest_counts() {
+        let project = game("source-on-disk");
+        archive_in(
+            &project,
+            "scripts.rpa",
+            &[("script.rpy", b"x"), ("script.rpyc", b"bytes")],
+        );
+        unpack_archived_sources(&project).unwrap();
+        std::fs::remove_dir_all(project.join(".rts")).unwrap();
+
+        assert!(unpack_archived_sources(&project).unwrap().is_empty());
+        assert!(!archives_hold_only_compiled_scripts(&project).unwrap());
+    }
+
+    #[test]
+    fn bytecode_with_only_its_source_on_disk_is_not_compiled_only() {
+        let project = game("bytecode-source-on-disk");
+        archive_in(&project, "scripts.rpa", &[("script.rpyc", b"bytes")]);
+        std::fs::write(project.join("game").join("script.rpy"), "x").unwrap();
+        assert!(!archives_hold_only_compiled_scripts(&project).unwrap());
     }
 
     #[test]
