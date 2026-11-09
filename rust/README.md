@@ -19,6 +19,7 @@ Des correctifs après la rc.5, sans nouvelle fonction.
 - Données :
   - l'export, les fichiers bilingues et la détection des personnages ne bloquent plus le projet pendant le travail sur les fichiers ;
   - les plafonds d'extraction des `.rpa` comptent ce que les extractions précédentes ont déjà sorti ;
+  - un jeu n'est plus refusé comme ne contenant que des `.rpyc` quand ses sources, sorties par une extraction précédente, sont toujours dans `game/` sans manifeste ;
   - un `.rpy.tmp` n'est plus laissé dans `tl/` quand l'écriture échoue.
 - Interface : le modèle Ollama se choisit dans une liste, le chemin du SDK s'efface depuis la configuration du projet, les menus déroulants sont des `listbox` accessibles.
 - CI : le runner macOS est retiré, seuls Linux et Windows sont construits.
