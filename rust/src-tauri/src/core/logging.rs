@@ -42,6 +42,7 @@ pub fn init(verbose: bool) {
     .is_ok()
     {
         set_verbose(verbose);
+        install_panic_hook();
     }
 }
 
@@ -128,6 +129,39 @@ fn utc_timestamp(now: SystemTime) -> String {
     )
 }
 
+/// Write every panic to the log before the process goes down.
+///
+/// The release build sets `panic = "abort"`: a panic in any task, even a
+/// spawned one whose `JoinHandle` is awaited, kills the whole application
+/// at once, and the default hook prints to a stderr that a packaged
+/// application does not have. Without this, a crash leaves no trace at all.
+/// The log file is unbuffered, so the line is on disk before the abort.
+/// The default hook still runs afterwards.
+fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let location = info
+            .location()
+            .map_or_else(|| "unknown location".to_string(), ToString::to_string);
+        let thread = std::thread::current();
+        log::error!(
+            "panic in thread '{}' at {location}: {}",
+            thread.name().unwrap_or("unnamed"),
+            panic_message(info.payload())
+        );
+        previous(info);
+    }));
+}
+
+/// The text a panic was raised with, when it is a string.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("non-string panic payload")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,5 +205,15 @@ mod tests {
             MAX_SIZE + 1
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn panic_message_reads_both_string_payloads() {
+        let literal: Box<dyn std::any::Any + Send> = Box::new("key not found");
+        let formatted: Box<dyn std::any::Any + Send> = Box::new(format!("index {}", 3));
+        let other: Box<dyn std::any::Any + Send> = Box::new(42_u8);
+        assert_eq!(panic_message(literal.as_ref()), "key not found");
+        assert_eq!(panic_message(formatted.as_ref()), "index 3");
+        assert_eq!(panic_message(other.as_ref()), "non-string panic payload");
     }
 }

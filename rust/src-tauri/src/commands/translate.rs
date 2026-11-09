@@ -227,9 +227,11 @@ pub async fn start_translation_job(
     tauri::async_runtime::spawn(async move {
         let receiver = spawn_event_pump(app, rx, current, project, Arc::new(symbol_only), stop);
 
-        // The job runs in its own task so that a panic in it or in a
-        // provider ends up in the join result instead of skipping the
-        // release of the job slot below.
+        // The job runs in its own task so that, in a debug build, a panic
+        // in it or in a provider ends up in the join result instead of
+        // skipping the release of the job slot below. The release build
+        // sets `panic = "abort"`: there a panic ends the process, after
+        // `core::logging` has written it to the log.
         let worker = tokio::spawn(async move {
             job::run_job(
                 &units,

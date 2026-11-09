@@ -9,7 +9,23 @@ compatibles avec la 1.0.0 Python, MCP sur
 `main` n'est remplacé qu'à la sortie de la 2.0.0 — cette branche coexiste
 avec le code Python (`../src/`) le temps du chantier.
 
-## Actuel : `2.0.0-rc.5`
+## Actuel : `2.0.0-rc.6`
+
+Des correctifs après la rc.5, sans nouvelle fonction.
+
+- Diagnostic : une panique est écrite dans le journal avant l'arrêt de l'application. La release s'arrête net sur une panique, qui ne laissait jusqu'ici aucune trace.
+- Jobs : un 429 est attendu (`Retry-After`, sinon 2, 4 puis 8 s, 30 s au plus) et retenté jusqu'à 3 fois avant d'arrêter le job.
+- Import bilingue : une ligne importée arrive toujours en `imported`, une ligne validée n'est jamais remplacée, une traduction identique est ignorée.
+- Données :
+  - l'export, les fichiers bilingues et la détection des personnages ne bloquent plus le projet pendant le travail sur les fichiers ;
+  - les plafonds d'extraction des `.rpa` comptent ce que les extractions précédentes ont déjà sorti ;
+  - un `.rpy.tmp` n'est plus laissé dans `tl/` quand l'écriture échoue.
+- Interface : le modèle Ollama se choisit dans une liste, le chemin du SDK s'efface depuis la configuration du projet, les menus déroulants sont des `listbox` accessibles.
+- CI : le runner macOS est retiré, seuls Linux et Windows sont construits.
+
+Non vérifié : Linux.
+
+## Précédemment : `2.0.0-rc.5`
 
 Les corrections de deux revues de code, sans nouvelle fonction.
 
